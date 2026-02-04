@@ -1,0 +1,304 @@
+/**
+ * LINBO Docker - Validation Middleware
+ * Zod schemas for request validation
+ */
+
+const { z } = require('zod');
+
+// =============================================================================
+// Common Schemas
+// =============================================================================
+
+const uuidSchema = z.string().uuid();
+
+const paginationSchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  sortBy: z.string().optional(),
+  sortOrder: z.enum(['asc', 'desc']).default('asc'),
+});
+
+const macAddressSchema = z.string().regex(
+  /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/,
+  'Invalid MAC address format (expected XX:XX:XX:XX:XX:XX)'
+);
+
+const ipAddressSchema = z.string().regex(
+  /^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}$/,
+  'Invalid IP address format'
+);
+
+// =============================================================================
+// Auth Schemas
+// =============================================================================
+
+const loginSchema = z.object({
+  username: z.string().min(1, 'Username is required'),
+  password: z.string().min(1, 'Password is required'),
+});
+
+// =============================================================================
+// Host Schemas
+// =============================================================================
+
+const createHostSchema = z.object({
+  hostname: z.string().min(1).max(255),
+  macAddress: macAddressSchema,
+  ipAddress: ipAddressSchema.optional(),
+  roomId: uuidSchema.optional().nullable(),
+  groupId: uuidSchema.optional().nullable(),
+  configId: uuidSchema.optional().nullable(),
+  status: z.enum(['online', 'offline', 'syncing', 'error']).default('offline'),
+  bootMode: z.string().max(50).optional(),
+  hardware: z.record(z.any()).optional(),
+  metadata: z.record(z.any()).optional(),
+});
+
+const updateHostSchema = createHostSchema.partial();
+
+const hostQuerySchema = paginationSchema.extend({
+  roomId: uuidSchema.optional(),
+  groupId: uuidSchema.optional(),
+  status: z.enum(['online', 'offline', 'syncing', 'error']).optional(),
+  search: z.string().optional(),
+});
+
+// =============================================================================
+// Room Schemas
+// =============================================================================
+
+const createRoomSchema = z.object({
+  name: z.string().min(1).max(255),
+  description: z.string().optional(),
+  location: z.string().max(255).optional(),
+});
+
+const updateRoomSchema = createRoomSchema.partial();
+
+// =============================================================================
+// Group Schemas
+// =============================================================================
+
+const createGroupSchema = z.object({
+  name: z.string().min(1).max(255),
+  description: z.string().optional(),
+  defaultConfigId: uuidSchema.optional().nullable(),
+  defaults: z.record(z.any()).default({}),
+});
+
+const updateGroupSchema = createGroupSchema.partial();
+
+// =============================================================================
+// Config Schemas
+// =============================================================================
+
+const partitionSchema = z.object({
+  position: z.number().int().min(0),
+  device: z.string().max(50),
+  label: z.string().max(255).optional(),
+  size: z.string().max(50).optional(),
+  partitionId: z.number().int().optional(),
+  fsType: z.string().max(50).optional(),
+  bootable: z.boolean().default(false),
+});
+
+const osSchema = z.object({
+  position: z.number().int().min(0),
+  name: z.string().min(1).max(255),
+  description: z.string().optional(),
+  osType: z.string().max(50).optional(),
+  iconName: z.string().max(255).optional(),
+  baseImage: z.string().max(255).optional(),
+  differentialImage: z.string().max(255).optional(),
+  rootDevice: z.string().max(50).optional(),
+  kernel: z.string().max(255).optional(),
+  initrd: z.string().max(255).optional(),
+  append: z.array(z.string()).default([]),
+  startEnabled: z.boolean().default(true),
+  syncEnabled: z.boolean().default(true),
+  newEnabled: z.boolean().default(true),
+  autostart: z.boolean().default(false),
+  autostartTimeout: z.number().int().min(0).default(0),
+  defaultAction: z.string().max(50).optional(),
+  prestartScript: z.string().optional(),
+  postsyncScript: z.string().optional(),
+});
+
+const createConfigSchema = z.object({
+  name: z.string().min(1).max(255),
+  description: z.string().optional(),
+  version: z.string().max(50).default('1.0.0'),
+  status: z.enum(['draft', 'active', 'archived']).default('draft'),
+  linboSettings: z.record(z.any()).default({}),
+  partitions: z.array(partitionSchema).optional(),
+  osEntries: z.array(osSchema).optional(),
+});
+
+const updateConfigSchema = createConfigSchema.partial();
+
+// =============================================================================
+// Image Schemas
+// =============================================================================
+
+const createImageSchema = z.object({
+  filename: z.string().min(1).max(255),
+  type: z.enum(['base', 'differential', 'torrent']),
+  path: z.string().max(1024),
+  size: z.number().optional(),
+  checksum: z.string().max(64).optional(),
+  backingImage: z.string().max(255).optional(),
+  description: z.string().optional(),
+  status: z.enum(['available', 'uploading', 'error']).default('available'),
+});
+
+const updateImageSchema = createImageSchema.partial().omit({ filename: true });
+
+// =============================================================================
+// Operation Schemas
+// =============================================================================
+
+const createOperationSchema = z.object({
+  targetHosts: z.array(uuidSchema).min(1, 'At least one target host required'),
+  commands: z.array(z.string()).min(1, 'At least one command required'),
+  options: z.record(z.any()).default({}),
+});
+
+const sendCommandSchema = z.object({
+  targetHosts: z.array(uuidSchema).min(1),
+  command: z.enum(['sync', 'start', 'reboot', 'shutdown', 'wake']),
+  osName: z.string().optional(), // For start command
+  forceNew: z.boolean().default(false), // For sync command
+});
+
+// =============================================================================
+// User Schemas
+// =============================================================================
+
+const createUserSchema = z.object({
+  username: z.string().min(1).max(255),
+  email: z.string().email().optional(),
+  password: z.string().min(6),
+  role: z.enum(['admin', 'operator', 'viewer']).default('viewer'),
+});
+
+const updateUserSchema = z.object({
+  email: z.string().email().optional(),
+  password: z.string().min(6).optional(),
+  role: z.enum(['admin', 'operator', 'viewer']).optional(),
+  active: z.boolean().optional(),
+});
+
+// =============================================================================
+// Validation Middleware Factory
+// =============================================================================
+
+/**
+ * Create validation middleware for request body
+ * @param {z.ZodSchema} schema - Zod schema to validate against
+ */
+function validateBody(schema) {
+  return (req, res, next) => {
+    try {
+      req.body = schema.parse(req.body);
+      next();
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Request validation failed',
+            details: error.errors.map(e => ({
+              field: e.path.join('.'),
+              message: e.message,
+            })),
+          },
+        });
+      }
+      next(error);
+    }
+  };
+}
+
+/**
+ * Create validation middleware for query parameters
+ * @param {z.ZodSchema} schema - Zod schema to validate against
+ */
+function validateQuery(schema) {
+  return (req, res, next) => {
+    try {
+      req.query = schema.parse(req.query);
+      next();
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Query validation failed',
+            details: error.errors.map(e => ({
+              field: e.path.join('.'),
+              message: e.message,
+            })),
+          },
+        });
+      }
+      next(error);
+    }
+  };
+}
+
+/**
+ * Create validation middleware for URL parameters
+ * @param {z.ZodSchema} schema - Zod schema to validate against
+ */
+function validateParams(schema) {
+  return (req, res, next) => {
+    try {
+      req.params = schema.parse(req.params);
+      next();
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Parameter validation failed',
+            details: error.errors.map(e => ({
+              field: e.path.join('.'),
+              message: e.message,
+            })),
+          },
+        });
+      }
+      next(error);
+    }
+  };
+}
+
+module.exports = {
+  // Schemas
+  uuidSchema,
+  paginationSchema,
+  macAddressSchema,
+  ipAddressSchema,
+  loginSchema,
+  createHostSchema,
+  updateHostSchema,
+  hostQuerySchema,
+  createRoomSchema,
+  updateRoomSchema,
+  createGroupSchema,
+  updateGroupSchema,
+  partitionSchema,
+  osSchema,
+  createConfigSchema,
+  updateConfigSchema,
+  createImageSchema,
+  updateImageSchema,
+  createOperationSchema,
+  sendCommandSchema,
+  createUserSchema,
+  updateUserSchema,
+  // Middleware factories
+  validateBody,
+  validateQuery,
+  validateParams,
+};

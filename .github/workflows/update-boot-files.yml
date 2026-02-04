@@ -1,0 +1,190 @@
+# GitHub Actions Workflow: Update LINBO Boot Files
+#
+# This workflow:
+# 1. Checks weekly for new linuxmuster-linbo7 releases
+# 2. Downloads the latest version
+# 3. Extracts boot files
+# 4. Creates a new release with linbo-boot-files.tar.gz
+#
+# Can also be triggered manually via workflow_dispatch
+
+name: Update Boot Files
+
+on:
+  # Run weekly on Sunday at 2:00 AM UTC
+  schedule:
+    - cron: '0 2 * * 0'
+
+  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      force_update:
+        description: 'Force update even if version unchanged'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  LINBO_REPO: "linuxmuster/linuxmuster-linbo7"
+  LINBO_ARCHIVE_URL: "https://archive.linuxmuster.net/lmn73"
+
+jobs:
+  check-and-update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get latest LINBO version
+        id: linbo-version
+        run: |
+          # Get latest version from linuxmuster archive
+          LATEST_DEB=$(curl -sL "${LINBO_ARCHIVE_URL}/" | grep -oP 'linuxmuster-linbo7_[0-9.]+-[0-9]+_all\.deb' | sort -V | tail -1)
+
+          if [ -z "$LATEST_DEB" ]; then
+            echo "ERROR: Could not find LINBO package"
+            exit 1
+          fi
+
+          VERSION=$(echo "$LATEST_DEB" | grep -oP '[0-9.]+-[0-9]+')
+          echo "Latest LINBO version: $VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "deb_file=$LATEST_DEB" >> $GITHUB_OUTPUT
+
+      - name: Check current version
+        id: current-version
+        run: |
+          # Check if we already have this version
+          CURRENT_VERSION=""
+          if [ -f "boot-files/VERSION" ]; then
+            CURRENT_VERSION=$(cat boot-files/VERSION)
+          fi
+
+          echo "Current version: $CURRENT_VERSION"
+          echo "current=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+
+          if [ "$CURRENT_VERSION" = "${{ steps.linbo-version.outputs.version }}" ] && [ "${{ inputs.force_update }}" != "true" ]; then
+            echo "needs_update=false" >> $GITHUB_OUTPUT
+            echo "Version unchanged, skipping update"
+          else
+            echo "needs_update=true" >> $GITHUB_OUTPUT
+            echo "Update needed"
+          fi
+
+      - name: Download and extract LINBO package
+        if: steps.current-version.outputs.needs_update == 'true'
+        run: |
+          mkdir -p work boot-files
+          cd work
+
+          # Download the deb package
+          echo "Downloading ${{ steps.linbo-version.outputs.deb_file }}..."
+          wget -q "${LINBO_ARCHIVE_URL}/${{ steps.linbo-version.outputs.deb_file }}"
+
+          # Extract deb
+          echo "Extracting package..."
+          dpkg-deb -x "${{ steps.linbo-version.outputs.deb_file }}" extracted/
+
+          # Copy boot files
+          echo "Copying boot files..."
+
+          # Kernel and initramfs
+          cp extracted/srv/linbo/linbo64 ../boot-files/
+          cp extracted/srv/linbo/linbofs64 ../boot-files/
+
+          # GRUB files
+          mkdir -p ../boot-files/boot/grub
+          cp -r extracted/srv/linbo/boot/grub/* ../boot-files/boot/grub/
+
+          # Icons
+          mkdir -p ../boot-files/icons
+          cp -r extracted/srv/linbo/icons/* ../boot-files/icons/ 2>/dev/null || true
+
+          # Write version file
+          echo "${{ steps.linbo-version.outputs.version }}" > ../boot-files/VERSION
+
+          # Cleanup
+          cd ..
+          rm -rf work
+
+          echo "Boot files extracted successfully"
+          ls -la boot-files/
+
+      - name: Create boot files archive
+        if: steps.current-version.outputs.needs_update == 'true'
+        run: |
+          cd boot-files
+          tar -czvf ../linbo-boot-files.tar.gz .
+          cd ..
+
+          # Calculate checksum
+          sha256sum linbo-boot-files.tar.gz > linbo-boot-files.tar.gz.sha256
+
+          echo "Archive created:"
+          ls -lh linbo-boot-files.tar.gz*
+
+      - name: Create Release
+        if: steps.current-version.outputs.needs_update == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: boot-files-${{ steps.linbo-version.outputs.version }}
+          name: LINBO Boot Files ${{ steps.linbo-version.outputs.version }}
+          body: |
+            ## LINBO Boot Files
+
+            Based on linuxmuster-linbo7 version **${{ steps.linbo-version.outputs.version }}**
+
+            ### Contents
+            - `linbo64` - LINBO Linux kernel
+            - `linbofs64` - LINBO initramfs
+            - `boot/grub/` - GRUB bootloader files
+            - `icons/` - OS icons for LINBO GUI
+
+            ### Usage
+            These files are automatically downloaded by the linbo-init container on first start.
+
+            Manual download:
+            ```bash
+            wget https://github.com/${{ github.repository }}/releases/download/boot-files-${{ steps.linbo-version.outputs.version }}/linbo-boot-files.tar.gz
+            tar -xzf linbo-boot-files.tar.gz -C /srv/linbo/
+            ```
+
+            ### Source
+            Original package: [linuxmuster-linbo7](https://github.com/linuxmuster/linuxmuster-linbo7)
+            License: GPL-3.0
+          files: |
+            linbo-boot-files.tar.gz
+            linbo-boot-files.tar.gz.sha256
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update latest release pointer
+        if: steps.current-version.outputs.needs_update == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: latest
+          name: Latest Boot Files
+          body: |
+            Latest LINBO boot files (version ${{ steps.linbo-version.outputs.version }})
+
+            This release always points to the most recent boot files.
+          files: |
+            linbo-boot-files.tar.gz
+            linbo-boot-files.tar.gz.sha256
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          echo "## Boot Files Update Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **LINBO Version:** ${{ steps.linbo-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Previous Version:** ${{ steps.current-version.outputs.current }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Update Performed:** ${{ steps.current-version.outputs.needs_update }}" >> $GITHUB_STEP_SUMMARY
