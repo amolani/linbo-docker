@@ -4,6 +4,58 @@ Dieses Dokument enthält eine chronologische Historie aller Entwicklungs-Session
 
 ---
 
+## Session 5 - 2026-02-04 (09:30 Uhr)
+
+### Ziel
+GitHub Repository aufsetzen und Boot-Files Standalone-Lösung implementieren
+
+### Durchgeführt
+
+1. **GitHub Repository erstellt**
+   - URL: https://github.com/amolani/linbo-docker
+   - SSH-Key auf Server hinterlegt
+   - Initial Commit mit allen Dateien
+
+2. **Init-Container implementiert** (`containers/init/`)
+   - Dockerfile (Alpine + curl)
+   - entrypoint.sh mit Download-Logik
+   - Prüft ob Boot-Files existieren
+   - Lädt von GitHub Release herunter
+
+3. **GitHub Actions Workflow** (`.github/workflows/update-boot-files.yml`)
+   - Wöchentlicher Check auf neue linuxmuster-linbo7 Releases
+   - Automatische Erstellung neuer Boot-Files Releases
+   - Manueller Trigger möglich
+
+4. **docker-compose.yml aktualisiert**
+   - Init-Container als erster Service
+   - Alle anderen Services abhängig von Init
+   - Named Volumes statt Host-Mounts
+   - `version:` entfernt (obsolet)
+
+5. **GitHub Releases erstellt**
+   - `boot-files-4.3.29-0` (186 MB) - Versioniert
+   - `latest` - Zeigt auf aktuelle Version
+   - Boot-Files aus /srv/linbo extrahiert
+
+6. **Dokumentation aktualisiert**
+   - README.md komplett überarbeitet
+   - .gitignore erweitert
+   - 10-boot-files-problem.md erstellt
+
+### Ergebnis
+- **Status:** ✅ ERFOLGREICH
+- **GitHub:** Repository live und funktional
+- **Releases:** Boot-Files verfügbar (186 MB)
+- **Init-Container:** Implementiert, noch nicht auf Test-VM getestet
+
+### Offene Punkte
+1. Test-VM mit neuem Setup (GitHub Clone) deployen
+2. Init-Container Download testen
+3. PXE-Boot Test mit echtem Client
+
+---
+
 ## Session 4 - 2026-02-03 (16:00 Uhr)
 
 ### Ziel
