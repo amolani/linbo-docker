@@ -1,0 +1,244 @@
+# LINBO Docker - Standalone Network Boot & Imaging Solution
+# https://github.com/amolani/linbo-docker
+
+services:
+  # =============================================================================
+  # Init Container - Downloads boot files on first start
+  # =============================================================================
+  init:
+    build:
+      context: ./containers/init
+      dockerfile: Dockerfile
+    container_name: linbo-init
+    volumes:
+      - linbo_srv_data:/srv/linbo
+    environment:
+      - BOOT_FILES_URL=${BOOT_FILES_URL:-https://github.com/amolani/linbo-docker/releases/latest/download/linbo-boot-files.tar.gz}
+      - FORCE_UPDATE=${FORCE_BOOT_UPDATE:-false}
+    networks:
+      - linbo-net
+    restart: "no"
+
+  # =============================================================================
+  # TFTP Server - PXE Boot Files
+  # =============================================================================
+  tftp:
+    build:
+      context: ./containers/tftp
+      dockerfile: Dockerfile
+    container_name: linbo-tftp
+    ports:
+      - "69:69/udp"
+    volumes:
+      - linbo_srv_data:/srv/linbo:ro
+    networks:
+      - linbo-net
+    restart: unless-stopped
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "pgrep", "in.tftpd"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =============================================================================
+  # RSYNC Server - Image Synchronization
+  # =============================================================================
+  rsync:
+    build:
+      context: ./containers/rsync
+      dockerfile: Dockerfile
+    container_name: linbo-rsync
+    ports:
+      - "873:873"
+    volumes:
+      - linbo_srv_data:/srv/linbo
+      - ./config/rsyncd.conf:/etc/rsyncd.conf:ro
+      - ./config/rsyncd.secrets:/etc/rsyncd.secrets:ro
+    networks:
+      - linbo-net
+    restart: unless-stopped
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "pgrep", "rsync"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =============================================================================
+  # SSH Server - Remote Commands to Clients
+  # =============================================================================
+  ssh:
+    build:
+      context: ./containers/ssh
+      dockerfile: Dockerfile
+    container_name: linbo-ssh
+    ports:
+      - "2222:2222"
+    volumes:
+      - linbo_srv_data:/srv/linbo
+      - linbo_config:/etc/linuxmuster/linbo
+      - ./scripts/server:/usr/share/linuxmuster/linbo
+      - linbo_log:/var/log/linuxmuster/linbo
+    environment:
+      - LINBO_SERVER_IP=${LINBO_SERVER_IP:-10.0.0.1}
+    networks:
+      - linbo-net
+    restart: unless-stopped
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "pgrep", "sshd"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =============================================================================
+  # PostgreSQL Database
+  # =============================================================================
+  db:
+    image: postgres:15-alpine
+    container_name: linbo-db
+    volumes:
+      - linbo_postgres_data:/var/lib/postgresql/data
+      - ./config/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    environment:
+      - POSTGRES_DB=linbo
+      - POSTGRES_USER=linbo
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-linbo_secret_password}
+    networks:
+      - linbo-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U linbo"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =============================================================================
+  # Redis Cache
+  # =============================================================================
+  cache:
+    image: redis:7-alpine
+    container_name: linbo-cache
+    volumes:
+      - linbo_redis_data:/data
+    networks:
+      - linbo-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =============================================================================
+  # API Backend (Node.js)
+  # =============================================================================
+  api:
+    build:
+      context: ./containers/api
+      dockerfile: Dockerfile
+    container_name: linbo-api
+    ports:
+      - "${API_PORT:-3000}:3000"
+    volumes:
+      - linbo_srv_data:/srv/linbo
+      - linbo_config:/etc/linuxmuster/linbo
+      - linbo_log:/var/log/linuxmuster/linbo
+    environment:
+      # Server
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=3000
+      - HOST=0.0.0.0
+      # Database (Prisma)
+      - DATABASE_URL=postgresql://linbo:${DB_PASSWORD:-linbo_secret_password}@linbo-db:5432/linbo?schema=public
+      # Redis
+      - REDIS_HOST=linbo-cache
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_DB=${REDIS_DB:-0}
+      # Authentication
+      - JWT_SECRET=${JWT_SECRET:-your_jwt_secret_here_change_in_production}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-24h}
+      # SSH (for remote commands)
+      - SSH_HOST=linbo-ssh
+      - SSH_PORT=22
+      - SSH_USER=root
+      - SSH_PRIVATE_KEY=/etc/linuxmuster/linbo/ssh_host_rsa_key
+      - SSH_TIMEOUT=${SSH_TIMEOUT:-10000}
+      # Storage paths
+      - LINBO_DATA_DIR=/srv/linbo
+      - LINBO_IMAGE_DIR=/srv/linbo/images
+      - LINBO_CONFIG_DIR=/etc/linuxmuster/linbo
+      - LINBO_LOG_DIR=/var/log/linuxmuster/linbo
+      # Server IP (for clients)
+      - LINBO_SERVER_IP=${LINBO_SERVER_IP:-10.0.0.1}
+      # Features
+      - ENABLE_AUDIT_LOG=${ENABLE_AUDIT_LOG:-true}
+      # CORS
+      - CORS_ORIGIN=${CORS_ORIGIN:-*}
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+      ssh:
+        condition: service_started
+      init:
+        condition: service_completed_successfully
+    networks:
+      - linbo-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # =============================================================================
+  # Web Frontend (Placeholder - Phase 5)
+  # =============================================================================
+  # web:
+  #   build:
+  #     context: ./containers/web
+  #     dockerfile: Dockerfile
+  #   container_name: linbo-web
+  #   ports:
+  #     - "8080:80"
+  #   depends_on:
+  #     - api
+  #   networks:
+  #     - linbo-net
+  #   restart: unless-stopped
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  linbo_srv_data:
+    name: linbo_srv_data
+  linbo_config:
+    name: linbo_config
+  linbo_log:
+    name: linbo_log
+  linbo_postgres_data:
+    name: linbo_postgres_data
+  linbo_redis_data:
+    name: linbo_redis_data
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  linbo-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

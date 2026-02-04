@@ -1,0 +1,26 @@
+# =============================================================================
+# LINBO Docker - RSYNC Server
+# Provides image synchronization for LINBO clients
+# =============================================================================
+FROM ubuntu:24.04
+
+LABEL maintainer="LINBO Docker Project"
+LABEL description="RSYNC Server for LINBO Image Sync"
+
+# Prevent interactive prompts during installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install rsync
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    rsync \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /srv/linbo /var/log
+
+# Create rsync log directory
+RUN mkdir -p /var/log && touch /var/log/rsyncd.log
+
+# RSYNC uses TCP port 873
+EXPOSE 873
+
+# Run rsync daemon in foreground
+CMD ["rsync", "--daemon", "--no-detach", "--config=/etc/rsyncd.conf", "-v"]

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LINBO Docker</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #1e3a5f 0%, #0d1b2a 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+        }
+        .container {
+            text-align: center;
+            padding: 2rem;
+        }
+        .logo {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(90deg, #4fc3f7, #29b6f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .subtitle {
+            font-size: 1.2rem;
+            color: #90caf9;
+            margin-bottom: 2rem;
+        }
+        .status {
+            background: rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-top: 2rem;
+            max-width: 500px;
+        }
+        .status h2 {
+            color: #4fc3f7;
+            margin-bottom: 1rem;
+        }
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .status-item:last-child {
+            border-bottom: none;
+        }
+        .status-ok {
+            color: #81c784;
+        }
+        .status-pending {
+            color: #ffb74d;
+        }
+        .api-link {
+            margin-top: 2rem;
+        }
+        .api-link a {
+            color: #4fc3f7;
+            text-decoration: none;
+            padding: 0.75rem 1.5rem;
+            border: 2px solid #4fc3f7;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+        .api-link a:hover {
+            background: #4fc3f7;
+            color: #0d1b2a;
+        }
+        .info {
+            margin-top: 2rem;
+            font-size: 0.9rem;
+            color: #78909c;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">🖥️</div>
+        <h1>LINBO Docker</h1>
+        <p class="subtitle">Standalone Network Boot & Imaging Solution</p>
+
+        <div class="status">
+            <h2>System Status</h2>
+            <div class="status-item">
+                <span>TFTP Server</span>
+                <span class="status-ok">● Running</span>
+            </div>
+            <div class="status-item">
+                <span>RSYNC Server</span>
+                <span class="status-ok">● Running</span>
+            </div>
+            <div class="status-item">
+                <span>SSH Server</span>
+                <span class="status-ok">● Running</span>
+            </div>
+            <div class="status-item">
+                <span>API Backend</span>
+                <span class="status-ok">● Running</span>
+            </div>
+            <div class="status-item">
+                <span>Web Frontend</span>
+                <span class="status-pending">● Placeholder</span>
+            </div>
+        </div>
+
+        <div class="api-link">
+            <a href="/api/v1" target="_blank">API Documentation</a>
+        </div>
+
+        <p class="info">
+            React Frontend is under development.<br>
+            This is a placeholder page.
+        </p>
+    </div>
+
+    <script>
+        // Check API health
+        fetch('/api/v1')
+            .then(res => res.json())
+            .then(data => console.log('API Status:', data))
+            .catch(err => console.error('API Error:', err));
+    </script>
+</body>
+</html>

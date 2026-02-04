@@ -1,0 +1,283 @@
+// =============================================================================
+// LINBO Docker - Prisma Schema
+// Maps to PostgreSQL tables from init.sql
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// Rooms
+// =============================================================================
+model Room {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique @db.VarChar(255)
+  description String?  @db.Text
+  location    String?  @db.VarChar(255)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  hosts Host[]
+
+  @@map("rooms")
+}
+
+// =============================================================================
+// Host Groups
+// =============================================================================
+model HostGroup {
+  id              String   @id @default(uuid()) @db.Uuid
+  name            String   @unique @db.VarChar(255)
+  description     String?  @db.Text
+  defaultConfigId String?  @map("default_config_id") @db.Uuid
+  defaults        Json     @default("{}")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  defaultConfig Config? @relation("DefaultConfig", fields: [defaultConfigId], references: [id], onDelete: SetNull)
+  hosts         Host[]
+
+  @@map("host_groups")
+}
+
+// =============================================================================
+// Configurations (start.conf)
+// =============================================================================
+model Config {
+  id            String    @id @default(uuid()) @db.Uuid
+  name          String    @db.VarChar(255)
+  description   String?   @db.Text
+  version       String    @default("1.0.0") @db.VarChar(50)
+  status        String    @default("draft") @db.VarChar(50)
+  linboSettings Json      @default("{}") @map("linbo_settings")
+  createdBy     String?   @map("created_by") @db.VarChar(255)
+  approvedBy    String?   @map("approved_by") @db.VarChar(255)
+  approvedAt    DateTime? @map("approved_at") @db.Timestamptz
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  partitions ConfigPartition[]
+  osEntries  ConfigOs[]
+  hosts      Host[]
+  hostGroups HostGroup[]       @relation("DefaultConfig")
+
+  @@map("configs")
+}
+
+// =============================================================================
+// Hosts (Clients)
+// =============================================================================
+model Host {
+  id         String    @id @default(uuid()) @db.Uuid
+  hostname   String    @unique @db.VarChar(255)
+  macAddress String    @unique @map("mac_address") @db.VarChar(17)
+  ipAddress  String?   @map("ip_address") @db.Inet
+  roomId     String?   @map("room_id") @db.Uuid
+  groupId    String?   @map("group_id") @db.Uuid
+  configId   String?   @map("config_id") @db.Uuid
+  status     String    @default("offline") @db.VarChar(50)
+  lastSeen   DateTime? @map("last_seen") @db.Timestamptz
+  bootMode   String?   @map("boot_mode") @db.VarChar(50)
+  hardware   Json?
+  cacheInfo  Json?     @map("cache_info")
+  metadata   Json?
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  room     Room?      @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  group    HostGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  config   Config?    @relation(fields: [configId], references: [id], onDelete: SetNull)
+  sessions Session[]
+
+  @@index([status], map: "idx_hosts_status")
+  @@index([roomId], map: "idx_hosts_room")
+  @@index([groupId], map: "idx_hosts_group")
+  @@index([macAddress], map: "idx_hosts_mac")
+  @@map("hosts")
+}
+
+// =============================================================================
+// Config Partitions
+// =============================================================================
+model ConfigPartition {
+  id          String   @id @default(uuid()) @db.Uuid
+  configId    String?  @map("config_id") @db.Uuid
+  position    Int
+  device      String   @db.VarChar(50)
+  label       String?  @db.VarChar(255)
+  size        String?  @db.VarChar(50)
+  partitionId Int?     @map("partition_id")
+  fsType      String?  @map("fs_type") @db.VarChar(50)
+  bootable    Boolean  @default(false)
+
+  config Config? @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  @@map("config_partitions")
+}
+
+// =============================================================================
+// Config OS Definitions
+// =============================================================================
+model ConfigOs {
+  id                String   @id @default(uuid()) @db.Uuid
+  configId          String?  @map("config_id") @db.Uuid
+  position          Int
+  name              String   @db.VarChar(255)
+  description       String?  @db.Text
+  osType            String?  @map("os_type") @db.VarChar(50)
+  iconName          String?  @map("icon_name") @db.VarChar(255)
+  baseImage         String?  @map("base_image") @db.VarChar(255)
+  differentialImage String?  @map("differential_image") @db.VarChar(255)
+  rootDevice        String?  @map("root_device") @db.VarChar(50)
+  kernel            String?  @db.VarChar(255)
+  initrd            String?  @db.VarChar(255)
+  append            String[] @db.Text
+  startEnabled      Boolean  @default(true) @map("start_enabled")
+  syncEnabled       Boolean  @default(true) @map("sync_enabled")
+  newEnabled        Boolean  @default(true) @map("new_enabled")
+  autostart         Boolean  @default(false)
+  autostartTimeout  Int      @default(0) @map("autostart_timeout")
+  defaultAction     String?  @map("default_action") @db.VarChar(50)
+  prestartScript    String?  @map("prestart_script") @db.Text
+  postsyncScript    String?  @map("postsync_script") @db.Text
+
+  config Config? @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  @@map("config_os")
+}
+
+// =============================================================================
+// Images
+// =============================================================================
+model Image {
+  id           String    @id @default(uuid()) @db.Uuid
+  filename     String    @unique @db.VarChar(255)
+  type         String    @db.VarChar(50)
+  path         String    @db.VarChar(1024)
+  size         BigInt?
+  checksum     String?   @db.VarChar(64)
+  backingImage String?   @map("backing_image") @db.VarChar(255)
+  description  String?   @db.Text
+  status       String    @default("available") @db.VarChar(50)
+  torrentFile  String?   @map("torrent_file") @db.VarChar(1024)
+  createdBy    String?   @map("created_by") @db.VarChar(255)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  uploadedAt   DateTime? @map("uploaded_at") @db.Timestamptz
+  lastUsedAt   DateTime? @map("last_used_at") @db.Timestamptz
+  lastUsedBy   String?   @map("last_used_by") @db.VarChar(255)
+
+  @@map("images")
+}
+
+// =============================================================================
+// Operations
+// =============================================================================
+model Operation {
+  id          String    @id @default(uuid()) @db.Uuid
+  targetHosts String[]  @map("target_hosts") @db.Uuid
+  commands    String[]  @db.Text
+  options     Json      @default("{}")
+  status      String    @default("pending") @db.VarChar(50)
+  progress    Int       @default(0)
+  stats       Json?
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  startedAt   DateTime? @map("started_at") @db.Timestamptz
+  completedAt DateTime? @map("completed_at") @db.Timestamptz
+
+  sessions Session[]
+
+  @@map("operations")
+}
+
+// =============================================================================
+// Sessions
+// =============================================================================
+model Session {
+  id             String    @id @default(uuid()) @db.Uuid
+  operationId    String?   @map("operation_id") @db.Uuid
+  hostId         String?   @map("host_id") @db.Uuid
+  hostname       String?   @db.VarChar(255)
+  tmuxSessionId  String?   @map("tmux_session_id") @db.VarChar(255)
+  status         String    @default("pending") @db.VarChar(50)
+  progress       Int       @default(0)
+  logFile        String?   @map("log_file") @db.VarChar(1024)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  startedAt      DateTime? @map("started_at") @db.Timestamptz
+  completedAt    DateTime? @map("completed_at") @db.Timestamptz
+
+  operation Operation? @relation(fields: [operationId], references: [id], onDelete: Cascade)
+  host      Host?      @relation(fields: [hostId], references: [id])
+
+  @@index([operationId], map: "idx_sessions_operation")
+  @@index([hostId], map: "idx_sessions_host")
+  @@map("sessions")
+}
+
+// =============================================================================
+// Users
+// =============================================================================
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  username     String    @unique @db.VarChar(255)
+  email        String?   @db.VarChar(255)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  role         String    @default("viewer") @db.VarChar(50)
+  active       Boolean   @default(true)
+  lastLogin    DateTime? @map("last_login") @db.Timestamptz
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  apiKeys ApiKey[]
+
+  @@map("users")
+}
+
+// =============================================================================
+// API Keys
+// =============================================================================
+model ApiKey {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String    @db.VarChar(255)
+  keyHash     String    @map("key_hash") @db.VarChar(255)
+  permissions Json      @default("[]")
+  rateLimit   Int?      @map("rate_limit")
+  createdById String?   @map("created_by") @db.Uuid
+  expiresAt   DateTime? @map("expires_at") @db.Timestamptz
+  lastUsedAt  DateTime? @map("last_used_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  createdBy User? @relation(fields: [createdById], references: [id])
+
+  @@map("api_keys")
+}
+
+// =============================================================================
+// Audit Logs
+// =============================================================================
+model AuditLog {
+  id           String    @id @default(uuid()) @db.Uuid
+  timestamp    DateTime  @default(now()) @db.Timestamptz
+  actor        String    @db.VarChar(255)
+  actorType    String?   @map("actor_type") @db.VarChar(50)
+  action       String    @db.VarChar(100)
+  targetType   String?   @map("target_type") @db.VarChar(50)
+  targetId     String?   @map("target_id") @db.Uuid
+  targetName   String?   @map("target_name") @db.VarChar(255)
+  changes      Json?
+  status       String?   @db.VarChar(50)
+  errorMessage String?   @map("error_message") @db.Text
+  ipAddress    String?   @map("ip_address") @db.Inet
+  userAgent    String?   @map("user_agent") @db.Text
+  requestId    String?   @map("request_id") @db.VarChar(255)
+
+  @@index([timestamp], map: "idx_audit_timestamp")
+  @@index([actor], map: "idx_audit_actor")
+  @@index([targetType, targetId], map: "idx_audit_target")
+  @@map("audit_logs")
+}
