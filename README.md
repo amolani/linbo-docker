@@ -8,11 +8,12 @@ LINBO Docker is a containerized version of [LINBO](https://github.com/linuxmuste
 
 ## Features
 
+- **Web Interface** - Modern React-based management UI
 - **PXE Network Boot** - Boot clients over the network
 - **Image Management** - Create, sync, and deploy disk images (qcow2)
 - **Remote Control** - Execute commands on clients via SSH
 - **REST API** - Modern API for integration and automation
-- **Web Interface** - Browser-based management (coming soon)
+- **Real-time Updates** - WebSocket for live status updates
 - **Standalone** - No linuxmuster.net server required
 - **Auto-Updates** - Boot files automatically updated via GitHub Actions
 
@@ -57,6 +58,54 @@ curl -X POST http://localhost:3000/api/v1/auth/login \
   -d '{"username":"admin","password":"admin"}'
 ```
 
+### Access Web Interface
+
+Open http://localhost:8080 in your browser.
+
+**Default Login:**
+- Username: `admin`
+- Password: `admin`
+
+## Web Interface
+
+The web frontend provides a modern, responsive interface for managing your LINBO environment.
+
+### Features
+
+- **Dashboard** - Overview with host statistics, storage info, and recent operations
+- **Host Management** - View, filter, sort, and manage clients with bulk actions
+- **Rooms & Groups** - Organize hosts by location and function
+- **Configuration Editor** - Create and edit LINBO configurations with live preview
+- **Image Management** - Track and verify disk images
+- **Operations Monitor** - Real-time progress tracking for sync operations
+- **WebSocket Updates** - Live status updates without page refresh
+
+### Screenshots
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ LINBO Docker                              admin ▼               │
+├─────────────┬───────────────────────────────────────────────────┤
+│ Dashboard   │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐│
+│ Hosts       │  │ 24      │ │ 18      │ │ 3       │ │ 156 GB  ││
+│ Räume       │  │ Hosts   │ │ Online  │ │ Syncing │ │ Storage ││
+│ Gruppen     │  └─────────┘ └─────────┘ └─────────┘ └─────────┘│
+│ Configs     │                                                   │
+│ Images      │  Recent Operations                                │
+│ Operations  │  ─────────────────────────────────────────────── │
+│             │  Sync PC-01..PC-10 ████████████████░░░ 85%       │
+│             │  WoL Room A         ✓ Completed                   │
+└─────────────┴───────────────────────────────────────────────────┘
+```
+
+### Tech Stack
+
+- React 18 + TypeScript
+- Vite (Build)
+- Tailwind CSS + Headless UI
+- Zustand (State)
+- React Router v6
+
 ## Architecture
 
 ```
@@ -64,23 +113,24 @@ curl -X POST http://localhost:3000/api/v1/auth/login \
 │                        Docker Host                               │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐        │
-│  │   TFTP   │  │  RSYNC   │  │   SSH    │  │   API    │        │
-│  │  :69/udp │  │  :873    │  │  :2222   │  │  :3000   │        │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘        │
-│       │             │             │             │               │
-│       └─────────────┴─────────────┴─────────────┘               │
-│                           │                                      │
-│                    ┌──────┴──────┐                              │
-│                    │ linbo_srv   │  Boot files, Images          │
-│                    │   Volume    │  Configurations              │
-│                    └─────────────┘                              │
-│                                                                  │
-│  ┌──────────┐  ┌──────────┐                                     │
-│  │ PostgreSQL│  │  Redis   │                                     │
-│  │  Database │  │  Cache   │                                     │
-│  └──────────┘  └──────────┘                                     │
-│                                                                  │
+│  ┌────────────────────────────────────────────────────────┐    │
+│  │              linbo-web :8080 (React Frontend)          │    │
+│  │  Dashboard │ Hosts │ Rooms │ Groups │ Configs │ Images │    │
+│  └─────────────────────────┬──────────────────────────────┘    │
+│                            │ /api/* proxy                       │
+│                            ▼                                    │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐       │
+│  │   TFTP   │  │  RSYNC   │  │   SSH    │  │   API    │       │
+│  │  :69/udp │  │  :873    │  │  :2222   │  │  :3000   │       │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘       │
+│       │             │             │             │              │
+│       └─────────────┴─────────────┴─────────────┘              │
+│                           │                                     │
+│                    ┌──────┴──────┐      ┌──────────┐           │
+│                    │ linbo_srv   │      │PostgreSQL│           │
+│                    │   Volume    │      │  Redis   │           │
+│                    └─────────────┘      └──────────┘           │
+│                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -88,11 +138,12 @@ curl -X POST http://localhost:3000/api/v1/auth/login \
 
 | Service | Port | Description |
 |---------|------|-------------|
+| **Web** | **8080** | **React Web Frontend** |
+| API | 3000 | REST API + WebSocket |
 | Init | - | Downloads boot files on first start |
 | TFTP | 69/udp | PXE boot file server |
 | RSYNC | 873 | Image synchronization |
 | SSH | 2222 | Remote command execution |
-| API | 3000 | REST API backend |
 | PostgreSQL | 5432 (internal) | Database |
 | Redis | 6379 (internal) | Cache |
 
@@ -205,14 +256,29 @@ docker exec -it linbo-api sh
 ```
 linbo-docker/
 ├── docker-compose.yml          # Container orchestration
-├── .env.example                 # Environment template
+├── .env.example                # Environment template
 ├── containers/
 │   ├── init/                   # Boot files downloader
 │   ├── tftp/                   # TFTP server
 │   ├── rsync/                  # RSYNC daemon
 │   ├── ssh/                    # SSH server
 │   ├── api/                    # Node.js REST API
-│   └── web/                    # Web frontend (Phase 5)
+│   │   └── src/
+│   │       ├── routes/         # API endpoints
+│   │       ├── services/       # Business logic
+│   │       ├── middleware/     # Auth, validation
+│   │       └── lib/            # Prisma, Redis, WebSocket
+│   └── web/                    # React Web Frontend
+│       ├── Dockerfile          # Multi-stage build
+│       ├── nginx.conf          # Nginx + API proxy
+│       └── frontend/
+│           └── src/
+│               ├── api/        # API client modules
+│               ├── stores/     # Zustand state
+│               ├── hooks/      # Custom React hooks
+│               ├── components/ # UI components
+│               ├── pages/      # Page components
+│               └── types/      # TypeScript interfaces
 ├── config/
 │   ├── init.sql                # Database schema
 │   └── rsyncd.conf             # RSYNC config

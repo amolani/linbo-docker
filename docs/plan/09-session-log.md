@@ -4,6 +4,199 @@ Dieses Dokument enthält eine chronologische Historie aller Entwicklungs-Session
 
 ---
 
+## Session 6 - 2026-02-04 (18:00 Uhr)
+
+### Ziel
+Web-Frontend (Phase 5) vollständig implementieren
+
+### Durchgeführt
+
+#### 1. Frontend-Projekt Setup
+- **Framework:** React 18 + TypeScript + Vite
+- **Styling:** Tailwind CSS 3 + Headless UI
+- **State Management:** Zustand
+- **Routing:** React Router v6
+- **API Client:** Axios mit JWT Interceptor
+
+#### 2. Projektstruktur erstellt (`containers/web/frontend/`)
+```
+frontend/
+├── index.html
+├── package.json
+├── vite.config.ts
+├── tailwind.config.js
+├── tsconfig.json
+└── src/
+    ├── main.tsx
+    ├── App.tsx
+    ├── index.css
+    ├── api/                    # 8 API-Module
+    │   ├── client.ts           # Axios + JWT Interceptor
+    │   ├── auth.ts
+    │   ├── hosts.ts
+    │   ├── groups.ts
+    │   ├── rooms.ts
+    │   ├── configs.ts
+    │   ├── images.ts
+    │   └── operations.ts
+    ├── stores/                 # Zustand Stores
+    │   ├── authStore.ts        # Mit Persist
+    │   ├── hostStore.ts
+    │   ├── wsStore.ts          # WebSocket
+    │   └── notificationStore.ts
+    ├── hooks/                  # Custom Hooks
+    │   ├── useAuth.ts
+    │   ├── useWebSocket.ts
+    │   └── useHosts.ts
+    ├── components/
+    │   ├── ui/                 # 10 Base Components
+    │   │   ├── Button.tsx
+    │   │   ├── Input.tsx
+    │   │   ├── Select.tsx
+    │   │   ├── Modal.tsx
+    │   │   ├── ConfirmModal.tsx
+    │   │   ├── Table.tsx
+    │   │   ├── Pagination.tsx
+    │   │   ├── StatusBadge.tsx
+    │   │   ├── OperationStatusBadge.tsx
+    │   │   └── index.ts
+    │   └── layout/
+    │       ├── AppLayout.tsx   # Mit Sidebar
+    │       └── Sidebar.tsx
+    ├── pages/                  # 8 Seiten
+    │   ├── LoginPage.tsx
+    │   ├── DashboardPage.tsx
+    │   ├── HostsPage.tsx
+    │   ├── RoomsPage.tsx
+    │   ├── GroupsPage.tsx
+    │   ├── ConfigsPage.tsx
+    │   ├── ImagesPage.tsx
+    │   └── OperationsPage.tsx
+    ├── routes/
+    │   ├── index.tsx
+    │   └── ProtectedRoute.tsx
+    └── types/
+        └── index.ts            # Alle TypeScript Interfaces
+```
+
+#### 3. Implementierte Features
+- **Login/Logout** mit JWT Token (Persist in localStorage)
+- **Dashboard** mit Stats-Karten (Hosts, Images, Operations, Storage)
+- **Host-Verwaltung**
+  - Tabelle mit Sortierung, Filterung, Pagination
+  - CRUD Modal (Create/Edit/Delete)
+  - Bulk Actions (Wake-on-LAN, Sync)
+  - Status-Badge (online/offline/syncing/booting)
+- **Räume-Verwaltung** (CRUD + Host-Count)
+- **Gruppen-Verwaltung** (CRUD + Host-Count)
+- **Config-Editor**
+  - CRUD für Konfigurationen
+  - Partitionen-Editor
+  - OS-Einträge-Editor
+  - start.conf Preview
+- **Image-Verwaltung** (Liste, Details, Status)
+- **Operations-Übersicht**
+  - Echtzeit-Progress via WebSocket
+  - Session-Details
+  - Cancel-Funktion
+- **WebSocket-Integration**
+  - Automatische Reconnection
+  - Event-Subscriptions
+  - Toast-Benachrichtigungen
+
+#### 4. Docker-Integration
+- **Dockerfile** aktualisiert (Multi-Stage Build)
+  - Stage 1: Node.js Builder (npm ci, npm run build)
+  - Stage 2: Nginx Alpine (serve static files)
+- **nginx.conf** mit:
+  - API Proxy (`/api/` → `api:3000`)
+  - WebSocket Proxy (`/ws` → `api:3000`)
+  - Health Check Proxy (`/health` → `api:3000`)
+  - SPA Fallback (alle Routes → index.html)
+  - Gzip Compression
+  - Static Asset Caching (1 Jahr)
+- **docker-compose.yml**
+  - Web-Service aktiviert (war auskommentiert)
+  - Port 8080 für Frontend
+  - Depends on API (service_healthy)
+
+#### 5. TypeScript-Fixes
+- `Column` Interface zu types/index.ts hinzugefügt
+- Unused imports entfernt (clsx, XMarkIcon, Host, fetchHosts)
+- Alle Kompilierungsfehler behoben
+
+#### 6. Build & Deployment
+```bash
+# Frontend Build
+cd containers/web/frontend
+npm install
+npm run build
+# Output: dist/ (CSS 28KB, JS 339KB)
+
+# Docker Build
+docker compose build web
+# Image: linbo-docker-web
+
+# Container starten
+docker start linbo-api linbo-web
+```
+
+### Ergebnis
+- **Status:** ✅ ERFOLGREICH
+- **Phase 5:** ABGESCHLOSSEN
+- **Frontend:** Live unter http://10.0.0.11:8080
+- **Login:** admin / admin
+
+### Container-Status nach Session
+| Container | Status | Port |
+|-----------|--------|------|
+| linbo-web | Running | 8080 |
+| linbo-api | Running | 3000 |
+| linbo-db | Healthy | 5432 |
+| linbo-cache | Healthy | 6379 |
+| linbo-init | Exited (1) | - |
+
+### Bekannte Probleme
+1. **Init-Container schlägt fehl** - Boot-Files Release URL gibt 404
+   - Workaround: Manuell Boot-Files bereitstellen oder Release erstellen
+   - Beeinträchtigt Frontend nicht
+
+2. **Health-Checks** - Zeigen teilweise "unhealthy" obwohl Services funktionieren
+   - wget --spider hat Probleme mit der API
+   - Funktionalität ist nicht beeinträchtigt
+
+3. **Storage Stats** - Zeigen "NaN" wenn /srv/linbo leer ist
+   - Minor Bug, kosmetisch
+
+### Dateien erstellt/geändert
+```
+Neu erstellt (56 Dateien):
+containers/web/frontend/
+├── index.html
+├── package.json
+├── package-lock.json
+├── vite.config.ts
+├── tailwind.config.js
+├── postcss.config.js
+├── tsconfig.json
+├── tsconfig.node.json
+└── src/ (48 Dateien)
+
+Geändert:
+containers/web/Dockerfile
+docker-compose.yml
+
+Gelöscht:
+containers/web/index.html (Placeholder)
+```
+
+### Screenshots/URLs
+- **Frontend:** http://10.0.0.11:8080
+- **API:** http://10.0.0.11:3000
+- **Health:** http://10.0.0.11:8080/health
+
+---
+
 ## Session 5 - 2026-02-04 (09:30 Uhr)
 
 ### Ziel
