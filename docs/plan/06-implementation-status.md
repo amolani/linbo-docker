@@ -1,6 +1,6 @@
 # LINBO Docker - Implementierungsstatus
 
-**Letzte Aktualisierung:** 2026-02-04 (Session 5)
+**Letzte Aktualisierung:** 2026-02-04 (Session 6)
 
 ---
 
@@ -8,7 +8,8 @@
 
 ### Aktueller Stand
 - **Phase 4 (REST-API):** ✅ ABGESCHLOSSEN
-- **Phase 5 (Web-Frontend):** ⏳ NICHT GESTARTET
+- **Phase 5 (Web-Frontend):** ✅ ABGESCHLOSSEN
+- **Phase 6 (Integration):** 🔄 IN ARBEIT
 - **GitHub Repository:** https://github.com/amolani/linbo-docker ✅
 - **Boot-Files Release:** https://github.com/amolani/linbo-docker/releases/tag/boot-files-4.3.29-0 ✅
 - **Init-Container:** ✅ Implementiert (lädt Boot-Files automatisch)
@@ -18,8 +19,9 @@
 |---------|-----|--------|
 | GitHub Repo | https://github.com/amolani/linbo-docker | ✅ |
 | Boot-Files Release | /releases/tag/boot-files-4.3.29-0 | ✅ |
+| **Web-Frontend** | http://10.0.0.11:8080 | ✅ Live |
+| API (Hauptserver) | http://10.0.0.11:3000 | ✅ Healthy |
 | API (Test-VM) | http://10.0.10.1:3000 | ✅ Healthy |
-| API (Hauptserver) | http://10.0.0.1:3000 | ✅ Healthy |
 
 ### Standard-Login
 ```
@@ -51,13 +53,62 @@ curl -sI https://github.com/amolani/linbo-docker/releases/download/boot-files-4.
 | Phase 1 | Docker-Grundstruktur | ✅ Abgeschlossen | 100% |
 | Phase 2 | Core Services (TFTP/RSYNC) | ✅ Abgeschlossen | 100% |
 | Phase 3 | SSH & Remote-Steuerung | ✅ Abgeschlossen | 100% |
-| **Phase 4** | **REST-API Backend** | **✅ Abgeschlossen** | **100%** |
+| Phase 4 | REST-API Backend | ✅ Abgeschlossen | 100% |
 | Phase 4.5 | GitHub + Auto-Updates | ✅ Abgeschlossen | 100% |
-| Phase 5 | Web-Frontend MVP | ⏳ Offen | 0% |
-| Phase 6 | Integration & Testing | 🔄 Teilweise | 30% |
+| **Phase 5** | **Web-Frontend MVP** | **✅ Abgeschlossen** | **100%** |
+| Phase 6 | Integration & Testing | 🔄 In Arbeit | 50% |
 | Phase 7 | Erweiterungen (Optional) | ⏳ Offen | 0% |
 
-**Gesamt-Fortschritt: ~65%**
+**Gesamt-Fortschritt: ~80%**
+
+---
+
+## Was wurde in Session 6 erledigt (AKTUELL)
+
+### Web-Frontend vollständig implementiert ✅
+
+#### Tech Stack
+- **React 18** + TypeScript + Vite
+- **Tailwind CSS 3** + Headless UI
+- **Zustand** (State Management mit Persist)
+- **React Router v6** (Protected Routes)
+- **Axios** (API Client mit JWT Interceptor)
+
+#### Komponenten erstellt (56 Dateien)
+```
+containers/web/frontend/
+├── src/
+│   ├── api/           # 8 API-Module (auth, hosts, rooms, groups, configs, images, operations, stats)
+│   ├── stores/        # 4 Zustand Stores (auth, host, ws, notification)
+│   ├── hooks/         # 3 Custom Hooks (useAuth, useWebSocket, useHosts)
+│   ├── components/
+│   │   ├── ui/        # 10 Base Components (Button, Input, Modal, Table, etc.)
+│   │   └── layout/    # 2 Layout Components (AppLayout, Sidebar)
+│   ├── pages/         # 8 Seiten (Login, Dashboard, Hosts, Rooms, Groups, Configs, Images, Operations)
+│   ├── routes/        # Router Setup + ProtectedRoute
+│   └── types/         # TypeScript Interfaces
+```
+
+#### Features
+- ✅ Login/Logout mit JWT Authentifizierung
+- ✅ Dashboard mit Stats-Karten
+- ✅ Host-Verwaltung (CRUD, Bulk Actions, Filter, Sortierung)
+- ✅ Räume/Gruppen-Verwaltung
+- ✅ Config-Editor (Partitionen, OS-Einträge, Preview)
+- ✅ Image-Verwaltung
+- ✅ Operations-Übersicht mit Echtzeit-Progress
+- ✅ WebSocket für Live-Updates
+- ✅ Toast-Benachrichtigungen
+
+#### Docker-Integration
+- **Dockerfile** aktualisiert (Multi-Stage Build: Node Builder → Nginx)
+- **nginx.conf** mit API/WebSocket Proxy
+- **docker-compose.yml** Web-Service aktiviert (Port 8080)
+
+#### Live-URLs
+- **Frontend:** http://10.0.0.11:8080
+- **API:** http://10.0.0.11:3000
+- **Login:** admin / admin
 
 ---
 
@@ -92,60 +143,74 @@ curl -sI https://github.com/amolani/linbo-docker/releases/download/boot-files-4.
 
 ## Offene Probleme
 
-### PROBLEM-001: Boot-Files Download URL
-**Status:** Zu prüfen
-**Beschreibung:** Der `/releases/latest/download/` Link gibt möglicherweise 404 zurück.
-**Workaround:** Direkter Link zum versionierten Release verwenden:
-```
+### PROBLEM-001: Boot-Files Download URL (Init-Container)
+**Status:** ⚠️ Bestätigt
+**Beschreibung:** Der `/releases/latest/download/` Link gibt 404 zurück.
+**Auswirkung:** Init-Container schlägt fehl, aber Web-Frontend funktioniert trotzdem.
+**Workaround:** Boot-Files manuell bereitstellen oder Release-URL korrigieren:
+```bash
+# Option A: Direkten Release-Link verwenden
 https://github.com/amolani/linbo-docker/releases/download/boot-files-4.3.29-0/linbo-boot-files.tar.gz
+
+# Option B: Boot-Files manuell kopieren
+scp -r /srv/linbo/* root@target:/srv/linbo/
 ```
-**TODO:** Init-Container URL anpassen falls nötig
+**TODO:** Init-Container entrypoint.sh URL anpassen
 
-### PROBLEM-002: Test-VM noch nicht mit neuem Setup getestet
-**Status:** Offen
-**Beschreibung:** Die Test-VM (10.0.10.1) läuft noch mit der alten Version ohne Init-Container.
-**TODO:** Test-VM mit neuem GitHub-Code neu deployen und testen
+### PROBLEM-002: Health-Checks zeigen "unhealthy"
+**Status:** ⚠️ Kosmetisch
+**Beschreibung:** Docker Health-Checks für web/api zeigen manchmal "unhealthy" obwohl Services funktionieren.
+**Ursache:** `wget --spider` hat Probleme mit der Health-API Antwort.
+**Auswirkung:** Keine funktionale Beeinträchtigung.
+**TODO:** Health-Check Command auf `curl` umstellen
 
-### PROBLEM-003: PXE-Boot noch nicht getestet
+### PROBLEM-003: Storage Stats zeigen "NaN"
+**Status:** ⚠️ Minor Bug
+**Beschreibung:** Dashboard zeigt "NaN undefined" für Storage wenn /srv/linbo leer ist.
+**TODO:** API stats.js korrigieren für leere Verzeichnisse
+
+### PROBLEM-004: PXE-Boot noch nicht getestet
 **Status:** Offen
 **Beschreibung:** Kein echter PXE-Client-Test durchgeführt.
-**TODO:** Nach erfolgreichem Deployment einen PXE-Client booten
+**TODO:** Nach Boot-Files-Fix einen PXE-Client booten
 
 ---
 
 ## Nächste Schritte (Priorität)
 
-### 1. HOCH: Test-VM mit neuem Setup deployen
+### 1. HOCH: Boot-Files Release Fix
+```bash
+# Init-Container URL korrigieren
+# containers/init/entrypoint.sh
+# Zeile ändern von:
+DOWNLOAD_URL="${BOOT_FILES_URL:-https://github.com/amolani/linbo-docker/releases/latest/download/linbo-boot-files.tar.gz}"
+# zu:
+DOWNLOAD_URL="${BOOT_FILES_URL:-https://github.com/amolani/linbo-docker/releases/download/boot-files-4.3.29-0/linbo-boot-files.tar.gz}"
+```
+
+### 2. HOCH: Test-VM mit Web-Frontend deployen
 ```bash
 # Auf Test-VM (10.0.10.1)
-cd /opt/linbo-docker && docker compose down -v
-rm -rf /opt/linbo-docker
-
-# Vom Hauptserver
-git clone https://github.com/amolani/linbo-docker.git /tmp/linbo-docker-new
-scp -r /tmp/linbo-docker-new root@10.0.10.1:/opt/linbo-docker
-
-# Auf Test-VM
-cd /opt/linbo-docker
-cp .env.example .env
-# .env anpassen (SERVER_IP, Passwörter)
+cd /opt/linbo-docker && docker compose down
+git pull origin main
+docker compose build web
 docker compose up -d
 ```
 
-### 2. HOCH: Init-Container testen
-- Prüfen ob Boot-Files automatisch heruntergeladen werden
-- Download-URL verifizieren
-- Logs prüfen: `docker compose logs init`
-
 ### 3. MITTEL: PXE-Boot Test
 - DHCP konfigurieren (next-server auf Test-VM)
+- Boot-Files manuell bereitstellen falls Init fehlschlägt
 - Test-Client booten
 - LINBO GUI prüfen
 
-### 4. NIEDRIG: Phase 5 - Web-Frontend
-- Framework entscheiden (React vs Vue.js)
-- Projekt aufsetzen
-- Login-Page implementieren
+### 4. MITTEL: Minor Bugs beheben
+- Storage Stats NaN-Bug in API
+- Health-Check Commands optimieren
+
+### 5. NIEDRIG: Production-Deployment
+- SSL/TLS mit Let's Encrypt
+- Backup-Strategie
+- Monitoring einrichten
 
 ---
 
@@ -166,26 +231,35 @@ docker compose up -d
 │                    Docker Host                                   │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
-│  ┌────────────┐                                                 │
-│  │ linbo-init │ ──► Download boot-files.tar.gz beim 1. Start   │
-│  └─────┬──────┘                                                 │
-│        │ service_completed_successfully                         │
-│        ▼                                                        │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐       │
-│  │   TFTP   │  │  RSYNC   │  │   SSH    │  │   API    │       │
-│  │  :69/udp │  │  :873    │  │  :2222   │  │  :3000   │       │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘       │
-│       │             │             │             │              │
-│       └─────────────┴─────────────┴─────────────┘              │
-│                           │                                     │
-│                    ┌──────┴──────┐                             │
-│                    │linbo_srv_data│  Boot files, Images        │
-│                    │   (Volume)   │  Configurations            │
-│                    └─────────────┘                             │
-│                                                                 │
-│  ┌──────────┐  ┌──────────┐                                    │
-│  │PostgreSQL│  │  Redis   │                                    │
-│  └──────────┘  └──────────┘                                    │
+│  ┌────────────────────────────────────────────────────────┐    │
+│  │                   linbo-web :8080                       │    │
+│  │              React Frontend (Nginx)                     │    │
+│  │  ┌──────────────────────────────────────────────────┐  │    │
+│  │  │  Dashboard │ Hosts │ Rooms │ Groups │ Configs    │  │    │
+│  │  │  Images │ Operations │ Login                     │  │    │
+│  │  └────────────────────┬─────────────────────────────┘  │    │
+│  └───────────────────────┼────────────────────────────────┘    │
+│                          │ /api/* proxy                         │
+│                          ▼                                      │
+│  ┌────────────┐    ┌──────────┐    ┌──────────┐              │
+│  │ linbo-init │    │   API    │◄──►│PostgreSQL│              │
+│  │ (einmalig) │    │  :3000   │    │  :5432   │              │
+│  └─────┬──────┘    │          │◄──►┌──────────┐              │
+│        │           │ REST+WS  │    │  Redis   │              │
+│        │           └────┬─────┘    │  :6379   │              │
+│        │                │          └──────────┘              │
+│        ▼                ▼                                      │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐                    │
+│  │   TFTP   │  │  RSYNC   │  │   SSH    │                    │
+│  │  :69/udp │  │  :873    │  │  :2222   │                    │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘                    │
+│       │             │             │                           │
+│       └─────────────┴─────────────┘                           │
+│                     │                                          │
+│              ┌──────┴──────┐                                  │
+│              │linbo_srv_data│  Boot files, Images             │
+│              │   (Volume)   │  Configurations                 │
+│              └─────────────┘                                  │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -194,7 +268,61 @@ docker compose up -d
 
 ## Wichtige Dateien
 
-### Neu erstellt (Session 5)
+### Neu erstellt (Session 6) - Web-Frontend
+```
+/root/linbo-docker/containers/web/frontend/
+├── index.html                   # HTML Entry Point
+├── package.json                 # Dependencies
+├── vite.config.ts               # Vite Build Config
+├── tailwind.config.js           # Tailwind CSS Config
+├── tsconfig.json                # TypeScript Config
+└── src/
+    ├── main.tsx                 # React Entry Point
+    ├── App.tsx                  # Root Component + Router
+    ├── index.css                # Tailwind Imports
+    ├── api/                     # 8 API-Module
+    │   ├── client.ts            # Axios + JWT Interceptor
+    │   ├── auth.ts              # Login, Logout, Register
+    │   ├── hosts.ts             # CRUD + WoL, Sync, Start
+    │   ├── groups.ts            # CRUD + Apply Config
+    │   ├── rooms.ts             # CRUD + Wake All
+    │   ├── configs.ts           # CRUD + Preview, Clone
+    │   ├── images.ts            # CRUD + Verify
+    │   └── operations.ts        # CRUD + Cancel
+    ├── stores/                  # 4 Zustand Stores
+    │   ├── authStore.ts         # JWT Token, User, Persist
+    │   ├── hostStore.ts         # Hosts, Pagination, Filters
+    │   ├── wsStore.ts           # WebSocket Connection
+    │   └── notificationStore.ts # Toast Messages
+    ├── hooks/                   # 3 Custom Hooks
+    ├── components/
+    │   ├── ui/                  # 10 Base Components
+    │   └── layout/              # AppLayout, Sidebar
+    ├── pages/                   # 8 Pages
+    │   ├── LoginPage.tsx
+    │   ├── DashboardPage.tsx
+    │   ├── HostsPage.tsx
+    │   ├── RoomsPage.tsx
+    │   ├── GroupsPage.tsx
+    │   ├── ConfigsPage.tsx
+    │   ├── ImagesPage.tsx
+    │   └── OperationsPage.tsx
+    ├── routes/                  # Router + Protected Route
+    └── types/                   # TypeScript Interfaces
+```
+
+### Geändert (Session 6)
+```
+containers/web/Dockerfile        # Multi-Stage Build (Node → Nginx)
+docker-compose.yml               # Web-Service aktiviert
+```
+
+### Gelöscht (Session 6)
+```
+containers/web/index.html        # Placeholder entfernt
+```
+
+### Session 5 - Init-Container
 ```
 /root/linbo-docker/
 ├── .github/workflows/
@@ -206,25 +334,20 @@ docker compose up -d
 └── README.md                    # Vollständige Doku
 ```
 
-### docker-compose.yml Änderungen
-- `version:` entfernt (obsolet)
-- `init:` Service hinzugefügt
-- Alle Services: `depends_on: init: condition: service_completed_successfully`
-- Volumes: Named volumes statt Host-Mounts
-
 ---
 
 ## Container-Übersicht
 
 | Container | Image | Ports | Funktion |
 |-----------|-------|-------|----------|
+| **linbo-web** | **linbo-docker-web** | **8080** | **Web-Frontend (React)** |
+| linbo-api | linbo-docker-api | 3000 | REST API |
+| linbo-db | postgres:15-alpine | 5432 (intern) | Datenbank |
+| linbo-cache | redis:7-alpine | 6379 (intern) | Cache |
 | linbo-init | linbo-docker-init | - | Download Boot-Files (einmalig) |
 | linbo-tftp | linbo-docker-tftp | 69/udp | PXE Boot |
 | linbo-rsync | linbo-docker-rsync | 873 | Image Sync |
 | linbo-ssh | linbo-docker-ssh | 2222 | Remote Commands |
-| linbo-api | linbo-docker-api | 3000 | REST API |
-| linbo-db | postgres:15-alpine | 5432 (intern) | Datenbank |
-| linbo-cache | redis:7-alpine | 6379 (intern) | Cache |
 
 ---
 
@@ -260,6 +383,7 @@ gh release create <tag> <file> --title "Title" --notes "Notes"
 
 | Datum | Session | Änderung |
 |-------|---------|----------|
+| **2026-02-04** | **6** | **Web-Frontend (Phase 5) vollständig implementiert** |
 | 2026-02-04 | 5 | GitHub Repo erstellt, Init-Container, Boot-Files Release |
 | 2026-02-03 | 4 | Test-VM neu installiert, API verifiziert |
 | 2026-02-03 | 3 | install.sh Bugs behoben |
