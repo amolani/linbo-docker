@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { PlusIcon, DocumentDuplicateIcon, EyeIcon, CodeBracketIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, DocumentDuplicateIcon, EyeIcon, CodeBracketIcon, CloudArrowUpIcon } from '@heroicons/react/24/outline';
 import { configsApi } from '@/api/configs';
 import { Button, Table, Modal, Input, Textarea, Badge, ConfirmModal } from '@/components/ui';
 import { LinboSettingsForm, PartitionsEditor, OsEntriesEditor, RawConfigEditorModal } from '@/components/configs';
@@ -150,6 +150,16 @@ export function ConfigsPage() {
     }
   };
 
+  const handleDeploy = async (configId: string, name: string) => {
+    try {
+      const result = await configsApi.deploy(configId);
+      notify.success(`"${name}" deployed: ${result.filepath} (${result.symlinkCount} Symlinks)`);
+      fetchConfigs();
+    } catch (error) {
+      notify.error('Fehler beim Deploy');
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const variants: Record<string, 'success' | 'warning' | 'default'> = {
       active: 'success',
@@ -216,6 +226,13 @@ export function ConfigsPage() {
       header: 'Aktionen',
       render: (config) => (
         <div className="flex space-x-2">
+          <button
+            onClick={() => handleDeploy(config.id, config.name)}
+            className="text-green-600 hover:text-green-900"
+            title="Deploy (start.conf schreiben)"
+          >
+            <CloudArrowUpIcon className="h-4 w-4" />
+          </button>
           <button
             onClick={() => handlePreview(config.id)}
             className="text-primary-600 hover:text-primary-900"
