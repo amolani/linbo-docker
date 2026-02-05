@@ -369,10 +369,10 @@ const prisma = new PrismaClient();
     const hash = await bcrypt.hash('$ADMIN_PASS', 10);
     await prisma.user.upsert({
       where: { username: '$ADMIN_USER' },
-      update: { password: hash },
+      update: { passwordHash: hash },
       create: {
         username: '$ADMIN_USER',
-        password: hash,
+        passwordHash: hash,
         role: 'admin'
       }
     });
