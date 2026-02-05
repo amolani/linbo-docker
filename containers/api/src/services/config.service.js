@@ -11,6 +11,24 @@ const { prisma } = require('../lib/prisma');
 const LINBO_DIR = process.env.LINBO_DIR || '/srv/linbo';
 
 /**
+ * Case-insensitive lookup for linboSettings
+ * Frontend uses lowercase, start.conf uses PascalCase
+ */
+function getLinboSetting(settings, key) {
+  if (!settings) return undefined;
+  // Try exact key first
+  if (settings[key] !== undefined) return settings[key];
+  // Try lowercase
+  const lowerKey = key.toLowerCase();
+  if (settings[lowerKey] !== undefined) return settings[lowerKey];
+  // Try all keys case-insensitively
+  for (const k of Object.keys(settings)) {
+    if (k.toLowerCase() === lowerKey) return settings[k];
+  }
+  return undefined;
+}
+
+/**
  * Generate start.conf content from database config
  * @param {string} configId - Config UUID
  * @returns {Promise<{content: string, config: object}>}
@@ -56,7 +74,12 @@ async function generateStartConf(configId) {
   };
 
   for (const [key, defaultValue] of Object.entries(defaultSettings)) {
-    const value = linboSettings[key] !== undefined ? linboSettings[key] : defaultValue;
+    const rawValue = getLinboSetting(linboSettings, key);
+    let value = rawValue !== undefined ? rawValue : defaultValue;
+    // Convert boolean to yes/no for start.conf format
+    if (typeof value === 'boolean') {
+      value = value ? 'yes' : 'no';
+    }
     lines.push(`${key} = ${value}`);
   }
   lines.push('');
