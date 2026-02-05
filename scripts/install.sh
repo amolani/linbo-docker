@@ -356,6 +356,12 @@ wait_for_api() {
     return 1
 }
 
+sync_database() {
+    log_info "Synchronizing database schema..."
+    docker exec linbo-api npx prisma db push --accept-data-loss > /dev/null 2>&1
+    log_success "Database schema synchronized"
+}
+
 create_admin_user() {
     log_info "Creating admin user '$ADMIN_USER'..."
 
@@ -457,6 +463,7 @@ main() {
     configure_environment
     start_containers
     wait_for_api
+    sync_database
     create_admin_user
     fix_permissions
     print_summary
