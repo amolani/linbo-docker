@@ -780,8 +780,8 @@ router.put(
         });
       }
 
-      // Save raw content to file
-      const result = await configService.saveRawConfig(config.name, content);
+      // Save raw content to file and sync to database
+      const result = await configService.saveRawConfig(config.name, content, config.id);
 
       // Update config metadata
       await prisma.config.update({
@@ -800,6 +800,7 @@ router.put(
         configId: config.id,
         configName: config.name,
         filepath: result.filepath,
+        dbSynced: result.dbSynced,
       });
 
       res.json({
@@ -809,7 +810,10 @@ router.put(
           filepath: result.filepath,
           size: result.size,
           hash: result.hash,
-          message: 'Raw config saved successfully',
+          dbSynced: result.dbSynced,
+          message: result.dbSynced
+            ? 'Raw config saved and database synchronized'
+            : 'Raw config saved (database sync skipped)',
         },
       });
     } catch (error) {
