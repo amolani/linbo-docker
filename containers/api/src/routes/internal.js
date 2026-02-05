@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const { prisma } = require('../lib/prisma');
 const ws = require('../lib/websocket');
+const macctService = require('../services/macct.service');
 
 // Internal API key for service-to-service authentication
 const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || 'linbo-internal-secret';
@@ -468,6 +469,139 @@ router.post('/register-host', authenticateInternal, async (req, res, next) => {
         error: {
           code: 'DUPLICATE_ENTRY',
           message: 'A host with this MAC or hostname already exists',
+        },
+      });
+    }
+    next(error);
+  }
+});
+
+// =============================================================================
+// Machine Account (macct) Routes - For DC Worker
+// =============================================================================
+
+/**
+ * POST /internal/macct-job
+ * Create a macct repair job (triggered by rsync hook or manually)
+ */
+router.post('/macct-job', authenticateInternal, async (req, res, next) => {
+  try {
+    const { host, school, hwclass } = req.body;
+
+    if (!host) {
+      return res.status(400).json({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'host is required',
+        },
+      });
+    }
+
+    const result = await macctService.createMacctRepairJob(
+      host,
+      school || 'default-school',
+      { hwclass, triggeredBy: 'rsync-hook' }
+    );
+
+    res.status(result.queued ? 201 : 200).json({
+      data: {
+        operationId: result.operation.id,
+        status: result.queued ? 'queued' : 'already_queued',
+        message: result.message,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PATCH /internal/operations/:id/status
+ * Update operation status (called by DC worker)
+ */
+router.patch('/operations/:id/status', authenticateInternal, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { status, result, error, attempt } = req.body;
+
+    if (!status) {
+      return res.status(400).json({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'status is required',
+        },
+      });
+    }
+
+    const validStatuses = ['pending', 'running', 'completed', 'failed', 'retrying'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: `Invalid status. Must be one of: ${validStatuses.join(', ')}`,
+        },
+      });
+    }
+
+    const operation = await macctService.updateOperationStatus(id, {
+      status,
+      result,
+      error,
+      attempt,
+    });
+
+    res.json({
+      data: {
+        operationId: operation.id,
+        status: operation.status,
+        message: 'Status updated successfully',
+      },
+    });
+  } catch (error) {
+    if (error.code === 'P2025') {
+      return res.status(404).json({
+        error: {
+          code: 'NOT_FOUND',
+          message: 'Operation not found',
+        },
+      });
+    }
+    next(error);
+  }
+});
+
+/**
+ * POST /internal/operations/:id/retry
+ * Retry a failed operation (called by DC worker or admin)
+ */
+router.post('/operations/:id/retry', authenticateInternal, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const result = await macctService.retryJob(id);
+
+    if (!result.success) {
+      return res.status(400).json({
+        error: {
+          code: 'RETRY_FAILED',
+          message: result.message,
+        },
+      });
+    }
+
+    res.json({
+      data: {
+        operationId: id,
+        attempt: result.attempt,
+        message: 'Job re-queued for retry',
+      },
+    });
+  } catch (error) {
+    if (error.message === 'Operation not found') {
+      return res.status(404).json({
+        error: {
+          code: 'NOT_FOUND',
+          message: 'Operation not found',
         },
       });
     }

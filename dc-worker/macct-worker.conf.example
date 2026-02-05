@@ -1,0 +1,25 @@
+# LINBO Docker Machine Account Worker Configuration
+# Copy to /etc/macct-worker.conf and adjust values
+
+# Redis connection (LINBO Docker Redis)
+# This must be reachable from the AD DC
+REDIS_HOST=10.0.0.1
+REDIS_PORT=6379
+REDIS_PASSWORD=
+REDIS_DB=0
+
+# LINBO API connection
+# This must be reachable from the AD DC
+API_URL=http://10.0.0.1:3000/api/v1
+API_KEY=linbo-internal-secret
+
+# Consumer identification
+# Should be unique per worker instance
+CONSUMER_NAME=dc-01
+
+# Log directory
+LOG_DIR=/var/log/macct
+
+# Path to repair_macct.py script
+# Default location on linuxmuster.net server
+REPAIR_SCRIPT=/usr/share/linuxmuster/linbo/repair_macct.py

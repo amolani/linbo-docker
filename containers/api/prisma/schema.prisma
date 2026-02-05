@@ -188,18 +188,27 @@ model Image {
 // =============================================================================
 model Operation {
   id          String    @id @default(uuid()) @db.Uuid
+  type        String    @default("sync") @db.VarChar(50)
   targetHosts String[]  @map("target_hosts") @db.Uuid
+  targetHost  String?   @map("target_host") @db.VarChar(255)
+  school      String?   @default("default-school") @db.VarChar(100)
   commands    String[]  @db.Text
   options     Json      @default("{}")
   status      String    @default("pending") @db.VarChar(50)
   progress    Int       @default(0)
+  attempt     Int       @default(0)
   stats       Json?
+  result      Json?
+  error       String?   @db.Text
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
   startedAt   DateTime? @map("started_at") @db.Timestamptz
   completedAt DateTime? @map("completed_at") @db.Timestamptz
 
   sessions Session[]
 
+  @@index([type], map: "idx_operations_type")
+  @@index([status], map: "idx_operations_status")
+  @@index([targetHost], map: "idx_operations_target_host")
   @@map("operations")
 }
 
