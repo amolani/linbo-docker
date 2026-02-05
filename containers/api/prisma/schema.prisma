@@ -131,12 +131,15 @@ model ConfigOs {
   configId          String?  @map("config_id") @db.Uuid
   position          Int
   name              String   @db.VarChar(255)
+  version           String?  @db.VarChar(50)
   description       String?  @db.Text
   osType            String?  @map("os_type") @db.VarChar(50)
   iconName          String?  @map("icon_name") @db.VarChar(255)
+  image             String?  @db.VarChar(255)
   baseImage         String?  @map("base_image") @db.VarChar(255)
   differentialImage String?  @map("differential_image") @db.VarChar(255)
   rootDevice        String?  @map("root_device") @db.VarChar(50)
+  root              String?  @db.VarChar(50)
   kernel            String?  @db.VarChar(255)
   initrd            String?  @db.VarChar(255)
   append            String[] @db.Text
@@ -146,6 +149,9 @@ model ConfigOs {
   autostart         Boolean  @default(false)
   autostartTimeout  Int      @default(0) @map("autostart_timeout")
   defaultAction     String?  @map("default_action") @db.VarChar(50)
+  restoreOpsiState  Boolean  @default(false) @map("restore_opsi_state")
+  forceOpsiSetup    String?  @map("force_opsi_setup") @db.VarChar(255)
+  hidden            Boolean  @default(false)
   prestartScript    String?  @map("prestart_script") @db.Text
   postsyncScript    String?  @map("postsync_script") @db.Text
 

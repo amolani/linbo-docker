@@ -29,7 +29,38 @@ function getLinboSetting(settings, key) {
 }
 
 /**
+ * Convert value to yes/no string for start.conf
+ */
+function toYesNo(value) {
+  if (typeof value === 'boolean') return value ? 'yes' : 'no';
+  if (typeof value === 'string') {
+    const lower = value.toLowerCase();
+    if (lower === 'yes' || lower === 'true' || lower === '1') return 'yes';
+    if (lower === 'no' || lower === 'false' || lower === '0') return 'no';
+    return value;
+  }
+  return value ? 'yes' : 'no';
+}
+
+/**
+ * Convert partition ID to hex string (without 0x prefix)
+ */
+function toHexId(value) {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'number') return value.toString(16);
+  if (typeof value === 'string') {
+    // Already hex string
+    if (/^[0-9a-fA-F]+$/.test(value)) return value.toLowerCase();
+    // Decimal string
+    const num = parseInt(value, 10);
+    if (!isNaN(num)) return num.toString(16);
+  }
+  return String(value);
+}
+
+/**
  * Generate start.conf content from database config
+ * Matches production linuxmuster.net 7.3 format exactly
  * @param {string} configId - Config UUID
  * @returns {Promise<{content: string, config: object}>}
  */
@@ -47,80 +78,62 @@ async function generateStartConf(configId) {
   }
 
   const lines = [];
+  const ls = config.linboSettings || {};
 
-  // Header comment
-  lines.push(`# LINBO start.conf - ${config.name}`);
-  lines.push(`# Generated: ${new Date().toISOString()}`);
-  lines.push(`# Version: ${config.version}`);
-  lines.push('');
-
-  // [LINBO] section
+  // [LINBO] section - exact order from production
   lines.push('[LINBO]');
-  const linboSettings = config.linboSettings || {};
-  const defaultSettings = {
-    Cache: '/dev/sda4',
-    Server: process.env.LINBO_SERVER || '10.0.0.1',
-    Group: config.name,
-    RootTimeout: 600,
-    AutoPartition: 'no',
-    AutoFormat: 'no',
-    AutoInitCache: 'no',
-    Autostart: 'no',
-    DownloadType: 'torrent',
-    GuiDisabled: 'no',
-    UseMinimalLayout: 'no',
-    Locale: 'de-de',
-    SystemType: 'bios64',
-    KernelOptions: '',
-  };
-
-  for (const [key, defaultValue] of Object.entries(defaultSettings)) {
-    const rawValue = getLinboSetting(linboSettings, key);
-    let value = rawValue !== undefined ? rawValue : defaultValue;
-    // Convert boolean to yes/no for start.conf format
-    if (typeof value === 'boolean') {
-      value = value ? 'yes' : 'no';
-    }
-    lines.push(`${key} = ${value}`);
-  }
+  lines.push(`Server = ${getLinboSetting(ls, 'Server') || process.env.LINBO_SERVER || '10.0.0.1'}`);
+  lines.push(`Group = ${getLinboSetting(ls, 'Group') || config.name}`);
+  lines.push(`Cache = ${getLinboSetting(ls, 'Cache') || '/dev/sda4'}`);
+  lines.push(`RootTimeout = ${getLinboSetting(ls, 'RootTimeout') || 600}`);
+  lines.push(`AutoPartition = ${toYesNo(getLinboSetting(ls, 'AutoPartition') || false)}`);
+  lines.push(`AutoFormat = ${toYesNo(getLinboSetting(ls, 'AutoFormat') || false)}`);
+  lines.push(`AutoInitCache = ${toYesNo(getLinboSetting(ls, 'AutoInitCache') || false)}`);
+  lines.push(`DownloadType = ${getLinboSetting(ls, 'DownloadType') || 'torrent'}`);
+  lines.push(`BackgroundFontColor = ${getLinboSetting(ls, 'BackgroundFontColor') || 'white'}`);
+  lines.push(`ConsoleFontColorStdout = ${getLinboSetting(ls, 'ConsoleFontColorStdout') || 'lightgreen'}`);
+  lines.push(`ConsoleFontColorStderr = ${getLinboSetting(ls, 'ConsoleFontColorStderr') || 'orange'}`);
+  lines.push(`SystemType = ${getLinboSetting(ls, 'SystemType') || 'bios64'}`);
+  lines.push(`KernelOptions = ${getLinboSetting(ls, 'KernelOptions') || ''}`);
+  lines.push(`clientDetailsVisibleByDefault = ${toYesNo(getLinboSetting(ls, 'clientDetailsVisibleByDefault') ?? true)}`);
+  lines.push(`Locale = ${getLinboSetting(ls, 'Locale') || 'de-DE'}`);
   lines.push('');
 
   // [Partition] sections
-  for (const partition of config.partitions) {
+  for (const p of config.partitions) {
     lines.push('[Partition]');
-    lines.push(`Dev = ${partition.device}`);
-    if (partition.label) lines.push(`Label = ${partition.label}`);
-    if (partition.size) lines.push(`Size = ${partition.size}`);
-    if (partition.partitionId) lines.push(`Id = ${partition.partitionId}`);
-    if (partition.fsType) lines.push(`FSType = ${partition.fsType}`);
-    lines.push(`Bootable = ${partition.bootable ? 'yes' : 'no'}`);
+    lines.push(`Dev = ${p.device}`);
+    lines.push(`Label = ${p.label || ''}`);
+    lines.push(`Size = ${p.size || ''}`);
+    lines.push(`Id = ${toHexId(p.partitionId)}`);
+    lines.push(`FSType = ${p.fsType || ''}`);
+    lines.push(`Bootable = ${toYesNo(p.bootable)}`);
     lines.push('');
   }
 
-  // [OS] sections
+  // [OS] sections - exact order from production
   for (const os of config.osEntries) {
     lines.push('[OS]');
     lines.push(`Name = ${os.name}`);
-    if (os.description) lines.push(`Description = ${os.description}`);
-    if (os.iconName) lines.push(`IconName = ${os.iconName}`);
-    if (os.baseImage) lines.push(`BaseImage = ${os.baseImage}`);
-    if (os.differentialImage) lines.push(`DiffImage = ${os.differentialImage}`);
-    if (os.rootDevice) lines.push(`Boot = ${os.rootDevice}`);
-    if (os.kernel) lines.push(`Kernel = ${os.kernel}`);
-    if (os.initrd) lines.push(`Initrd = ${os.initrd}`);
-    if (os.append && os.append.length > 0) {
-      lines.push(`Append = ${os.append.join(' ')}`);
-    }
-    lines.push(`StartEnabled = ${os.startEnabled ? 'yes' : 'no'}`);
-    lines.push(`SyncEnabled = ${os.syncEnabled ? 'yes' : 'no'}`);
-    lines.push(`NewEnabled = ${os.newEnabled ? 'yes' : 'no'}`);
-    if (os.autostart) {
-      lines.push('Autostart = yes');
-      if (os.autostartTimeout > 0) {
-        lines.push(`AutostartTimeout = ${os.autostartTimeout}`);
-      }
-    }
-    if (os.defaultAction) lines.push(`DefaultAction = ${os.defaultAction}`);
+    lines.push(`Version = ${os.version || ''}`);
+    lines.push(`Description = ${os.description || ''}`);
+    lines.push(`IconName = ${os.iconName || ''}`);
+    lines.push(`Image = ${os.image || ''}`);
+    lines.push(`BaseImage = ${os.baseImage || ''}`);
+    lines.push(`Boot = ${os.rootDevice || ''}`);
+    lines.push(`Root = ${os.root || os.rootDevice || ''}`);
+    lines.push(`Kernel = ${os.kernel || ''}`);
+    lines.push(`Initrd = ${os.initrd || ''}`);
+    lines.push(`Append = ${os.append ? (Array.isArray(os.append) ? os.append.join(' ') : os.append) : ''}`);
+    lines.push(`StartEnabled = ${toYesNo(os.startEnabled)}`);
+    lines.push(`SyncEnabled = ${toYesNo(os.syncEnabled)}`);
+    lines.push(`NewEnabled = ${toYesNo(os.newEnabled)}`);
+    lines.push(`Autostart = ${toYesNo(os.autostart)}`);
+    lines.push(`AutostartTimeout = ${os.autostartTimeout || 0}`);
+    lines.push(`DefaultAction = ${os.defaultAction || 'sync'}`);
+    lines.push(`RestoreOpsiState = ${toYesNo(os.restoreOpsiState || false)}`);
+    lines.push(`ForceOpsiSetup = ${os.forceOpsiSetup || ''}`);
+    lines.push(`Hidden = ${toYesNo(os.hidden || false)}`);
     lines.push('');
   }
 
@@ -377,8 +390,9 @@ function parseStartConf(content) {
 
   const booleanFields = [
     'autopartition', 'autoformat', 'autoinitcache', 'guidisabled',
-    'useminimallayout', 'bootable', 'startenabled', 'syncenabled',
-    'newenabled', 'autostart', 'hidden', 'restoreopisstate', 'forceopisetup'
+    'useminimallayout', 'clientdetailsvisiblebydefault', 'bootable',
+    'startenabled', 'syncenabled', 'newenabled', 'autostart',
+    'hidden', 'restoreopisstate'
   ];
 
   const integerFields = [
@@ -416,28 +430,28 @@ function parseStartConf(content) {
         position: result.partitions.length,
       });
     } else if (currentSection === 'os') {
-      // Build description with version if present
-      let desc = currentData.description || '';
-      if (currentData.version && !desc.includes(currentData.version)) {
-        desc = desc ? `${desc} (${currentData.version})` : currentData.version;
-      }
-
       result.osEntries.push({
         name: currentData.name || 'Unknown OS',
-        description: desc,
+        version: currentData.version || '',
+        description: currentData.description || '',
         iconName: currentData.iconname || '',
-        baseImage: currentData.baseimage || currentData.image || '',
+        image: currentData.image || '',
+        baseImage: currentData.baseimage || '',
         differentialImage: currentData.diffimage || '',
-        rootDevice: currentData.root || currentData.boot || '',
+        rootDevice: currentData.boot || '',
+        root: currentData.root || '',
         kernel: currentData.kernel || '',
         initrd: currentData.initrd || '',
-        append: currentData.append ? [currentData.append] : [],
+        append: currentData.append || '',
         startEnabled: currentData.startenabled !== false,
         syncEnabled: currentData.syncenabled !== false,
         newEnabled: currentData.newenabled !== false,
         autostart: currentData.autostart || false,
-        autostartTimeout: currentData.autostarttimeout || 5,
+        autostartTimeout: currentData.autostarttimeout || 0,
         defaultAction: currentData.defaultaction || 'sync',
+        restoreOpsiState: currentData.restoreopisstate || false,
+        forceOpsiSetup: currentData.forceopisetup || '',
+        hidden: currentData.hidden || false,
         position: result.osEntries.length,
       });
     }

@@ -90,15 +90,7 @@ export function LinboSettingsForm({ settings, onChange, serverIp = '10.0.0.1' }:
             />
             <span className="text-sm text-gray-700">Cache automatisch initialisieren</span>
           </label>
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 mr-2"
-              checked={settings.autostart || false}
-              onChange={(e) => handleChange('autostart', e.target.checked)}
-            />
-            <span className="text-sm text-gray-700">Autostart (Standard-OS automatisch starten)</span>
-          </label>
+{/* Autostart is per-OS setting, not global LINBO setting */}
         </div>
       </div>
 
