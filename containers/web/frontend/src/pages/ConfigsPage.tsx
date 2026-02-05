@@ -67,18 +67,25 @@ export function ConfigsPage() {
 
   const handleOpenModal = async (config?: Config) => {
     if (config) {
-      setEditingConfig(config);
-      setFormData({
-        name: config.name,
-        description: config.description || '',
-      });
-      setLinboSettings(config.linboSettings || defaultLinboSettings);
-      setPartitions(
-        (config.partitions || []).map(({ id, configId, ...rest }) => rest)
-      );
-      setOsEntries(
-        (config.osEntries || []).map(({ id, configId, ...rest }) => rest)
-      );
+      // Fetch full config with partitions and OS entries
+      try {
+        const fullConfig = await configsApi.get(config.id);
+        setEditingConfig(fullConfig);
+        setFormData({
+          name: fullConfig.name,
+          description: fullConfig.description || '',
+        });
+        setLinboSettings(fullConfig.linboSettings || defaultLinboSettings);
+        setPartitions(
+          (fullConfig.partitions || []).map(({ id, configId, ...rest }) => rest)
+        );
+        setOsEntries(
+          (fullConfig.osEntries || []).map(({ id, configId, ...rest }) => rest)
+        );
+      } catch (error) {
+        notify.error('Fehler beim Laden der Konfiguration');
+        return;
+      }
     } else {
       setEditingConfig(null);
       resetForm();
