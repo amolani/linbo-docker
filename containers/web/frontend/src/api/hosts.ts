@@ -22,6 +22,21 @@ export interface UpdateHostData {
   metadata?: Record<string, unknown>;
 }
 
+// API response wrapper types
+interface ApiResponse<T> {
+  data: T;
+}
+
+interface PaginatedApiResponse<T> {
+  data: T[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+}
+
 export const hostsApi = {
   list: async (params?: {
     page?: number;
@@ -30,7 +45,7 @@ export const hostsApi = {
     sort?: string;
     order?: 'asc' | 'desc';
   }): Promise<PaginatedResponse<Host>> => {
-    const response = await apiClient.get<PaginatedResponse<Host>>('/hosts', {
+    const response = await apiClient.get<PaginatedApiResponse<Host>>('/hosts', {
       params: {
         page: params?.page || 1,
         limit: params?.limit || 25,
@@ -43,32 +58,39 @@ export const hostsApi = {
         order: params?.order,
       },
     });
-    return response.data;
+    // Transform API response to match PaginatedResponse type
+    return {
+      data: response.data.data,
+      total: response.data.pagination.total,
+      page: response.data.pagination.page,
+      limit: response.data.pagination.limit,
+      totalPages: response.data.pagination.pages,
+    };
   },
 
   get: async (id: string): Promise<Host> => {
-    const response = await apiClient.get<Host>(`/hosts/${id}`);
-    return response.data;
+    const response = await apiClient.get<ApiResponse<Host>>(`/hosts/${id}`);
+    return response.data.data;
   },
 
   getByHostname: async (hostname: string): Promise<Host> => {
-    const response = await apiClient.get<Host>(`/hosts/by-name/${hostname}`);
-    return response.data;
+    const response = await apiClient.get<ApiResponse<Host>>(`/hosts/by-name/${hostname}`);
+    return response.data.data;
   },
 
   getByMac: async (mac: string): Promise<Host> => {
-    const response = await apiClient.get<Host>(`/hosts/by-mac/${mac}`);
-    return response.data;
+    const response = await apiClient.get<ApiResponse<Host>>(`/hosts/by-mac/${mac}`);
+    return response.data.data;
   },
 
   create: async (data: CreateHostData): Promise<Host> => {
-    const response = await apiClient.post<Host>('/hosts', data);
-    return response.data;
+    const response = await apiClient.post<ApiResponse<Host>>('/hosts', data);
+    return response.data.data;
   },
 
   update: async (id: string, data: UpdateHostData): Promise<Host> => {
-    const response = await apiClient.patch<Host>(`/hosts/${id}`, data);
-    return response.data;
+    const response = await apiClient.patch<ApiResponse<Host>>(`/hosts/${id}`, data);
+    return response.data.data;
   },
 
   delete: async (id: string): Promise<void> => {
@@ -76,31 +98,31 @@ export const hostsApi = {
   },
 
   wakeOnLan: async (id: string): Promise<{ success: boolean; message: string }> => {
-    const response = await apiClient.post<{ success: boolean; message: string }>(
+    const response = await apiClient.post<ApiResponse<{ success: boolean; message: string }>>(
       `/hosts/${id}/wake-on-lan`
     );
-    return response.data;
+    return response.data.data;
   },
 
   sync: async (id: string, options?: { image?: string; force?: boolean }): Promise<{ operationId: string }> => {
-    const response = await apiClient.post<{ operationId: string }>(
+    const response = await apiClient.post<ApiResponse<{ operationId: string }>>(
       `/hosts/${id}/sync`,
       options
     );
-    return response.data;
+    return response.data.data;
   },
 
   start: async (id: string, osIndex?: number): Promise<{ success: boolean }> => {
-    const response = await apiClient.post<{ success: boolean }>(
+    const response = await apiClient.post<ApiResponse<{ success: boolean }>>(
       `/hosts/${id}/start`,
       { osIndex }
     );
-    return response.data;
+    return response.data.data;
   },
 
   updateStatus: async (id: string, status: string): Promise<Host> => {
-    const response = await apiClient.patch<Host>(`/hosts/${id}/status`, { status });
-    return response.data;
+    const response = await apiClient.patch<ApiResponse<Host>>(`/hosts/${id}/status`, { status });
+    return response.data.data;
   },
 
   bulkWakeOnLan: async (hostIds: string[]): Promise<{ success: number; failed: number }> => {
@@ -114,12 +136,12 @@ export const hostsApi = {
   },
 
   bulkSync: async (hostIds: string[], options?: { image?: string; force?: boolean }): Promise<{ operationId: string }> => {
-    const response = await apiClient.post<{ operationId: string }>('/operations', {
+    const response = await apiClient.post<ApiResponse<{ operationId: string }>>('/operations', {
       targetHosts: hostIds,
       commands: ['sync'],
       options,
     });
-    return response.data;
+    return response.data.data;
   },
 
   bulkStart: async (hostIds: string[], osIndex?: number): Promise<{ success: number; failed: number }> => {

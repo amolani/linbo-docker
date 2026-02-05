@@ -2,8 +2,24 @@ import { useState, useEffect } from 'react';
 import { PlusIcon, DocumentDuplicateIcon, EyeIcon } from '@heroicons/react/24/outline';
 import { configsApi } from '@/api/configs';
 import { Button, Table, Modal, Input, Textarea, Badge, ConfirmModal } from '@/components/ui';
+import { LinboSettingsForm, PartitionsEditor, OsEntriesEditor } from '@/components/configs';
 import { notify } from '@/stores/notificationStore';
-import type { Config, Column } from '@/types';
+import type { Config, Column, LinboSettings, ConfigPartition, ConfigOs } from '@/types';
+
+type PartitionData = Omit<ConfigPartition, 'id' | 'configId'>;
+type OsEntryData = Omit<ConfigOs, 'id' | 'configId'>;
+
+type TabId = 'basic' | 'linbo' | 'partitions' | 'os';
+
+const defaultLinboSettings: LinboSettings = {
+  server: '10.0.0.1',
+  cache: '/dev/sda4',
+  downloadType: 'rsync',
+  roottimeout: 600,
+  autopartition: false,
+  autoformat: false,
+  autoinitcache: true,
+};
 
 export function ConfigsPage() {
   const [configs, setConfigs] = useState<Config[]>([]);
@@ -14,10 +30,16 @@ export function ConfigsPage() {
   const [editingConfig, setEditingConfig] = useState<Config | null>(null);
   const [deleteConfirmConfig, setDeleteConfirmConfig] = useState<Config | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabId>('basic');
+
+  // Form state
   const [formData, setFormData] = useState({
     name: '',
     description: '',
   });
+  const [linboSettings, setLinboSettings] = useState<LinboSettings>(defaultLinboSettings);
+  const [partitions, setPartitions] = useState<PartitionData[]>([]);
+  const [osEntries, setOsEntries] = useState<OsEntryData[]>([]);
 
   const fetchConfigs = async () => {
     try {
@@ -34,16 +56,31 @@ export function ConfigsPage() {
     fetchConfigs();
   }, []);
 
-  const handleOpenModal = (config?: Config) => {
+  const resetForm = () => {
+    setFormData({ name: '', description: '' });
+    setLinboSettings(defaultLinboSettings);
+    setPartitions([]);
+    setOsEntries([]);
+    setActiveTab('basic');
+  };
+
+  const handleOpenModal = async (config?: Config) => {
     if (config) {
       setEditingConfig(config);
       setFormData({
         name: config.name,
         description: config.description || '',
       });
+      setLinboSettings(config.linboSettings || defaultLinboSettings);
+      setPartitions(
+        (config.partitions || []).map(({ id, configId, ...rest }) => rest)
+      );
+      setOsEntries(
+        (config.osEntries || []).map(({ id, configId, ...rest }) => rest)
+      );
     } else {
       setEditingConfig(null);
-      setFormData({ name: '', description: '' });
+      resetForm();
     }
     setIsModalOpen(true);
   };
@@ -52,12 +89,19 @@ export function ConfigsPage() {
     e.preventDefault();
     setIsSubmitting(true);
 
+    const payload = {
+      ...formData,
+      linboSettings,
+      partitions,
+      osEntries,
+    };
+
     try {
       if (editingConfig) {
-        await configsApi.update(editingConfig.id, formData);
+        await configsApi.update(editingConfig.id, payload);
         notify.success('Konfiguration aktualisiert');
       } else {
-        await configsApi.create(formData);
+        await configsApi.create(payload);
         notify.success('Konfiguration erstellt');
       }
       setIsModalOpen(false);
@@ -75,11 +119,11 @@ export function ConfigsPage() {
 
     try {
       await configsApi.delete(deleteConfirmConfig.id);
-      notify.success('Konfiguration gelöscht');
+      notify.success('Konfiguration geloescht');
       setDeleteConfirmConfig(null);
       fetchConfigs();
     } catch (error) {
-      notify.error('Fehler beim Löschen');
+      notify.error('Fehler beim Loeschen');
     } finally {
       setIsSubmitting(false);
     }
@@ -122,6 +166,13 @@ export function ConfigsPage() {
       </Badge>
     );
   };
+
+  const tabs: { id: TabId; label: string; count?: number }[] = [
+    { id: 'basic', label: 'Grundeinstellungen' },
+    { id: 'linbo', label: 'LINBO-Einstellungen' },
+    { id: 'partitions', label: 'Partitionen', count: partitions.length },
+    { id: 'os', label: 'Betriebssysteme', count: osEntries.length },
+  ];
 
   const columns: Column<Config>[] = [
     {
@@ -188,7 +239,7 @@ export function ConfigsPage() {
             onClick={() => setDeleteConfirmConfig(config)}
             className="text-red-600 hover:text-red-900 text-sm"
           >
-            Löschen
+            Loeschen
           </button>
         </div>
       ),
@@ -223,30 +274,96 @@ export function ConfigsPage() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         title={editingConfig ? 'Konfiguration bearbeiten' : 'Neue Konfiguration'}
+        size="xl"
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Input
-            label="Name"
-            required
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-          />
-          <Textarea
-            label="Beschreibung"
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-          />
-          <div className="flex justify-end space-x-3 pt-4">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setIsModalOpen(false)}
-            >
-              Abbrechen
-            </Button>
-            <Button type="submit" loading={isSubmitting}>
-              {editingConfig ? 'Speichern' : 'Erstellen'}
-            </Button>
+        <form onSubmit={handleSubmit}>
+          {/* Tabs */}
+          <div className="border-b border-gray-200 mb-4">
+            <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`${
+                    activeTab === tab.id
+                      ? 'border-primary-500 text-primary-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+                >
+                  {tab.label}
+                  {tab.count !== undefined && (
+                    <span className={`${
+                      activeTab === tab.id ? 'bg-primary-100 text-primary-600' : 'bg-gray-100 text-gray-900'
+                    } ml-2 py-0.5 px-2.5 rounded-full text-xs font-medium`}>
+                      {tab.count}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </nav>
+          </div>
+
+          {/* Tab Content */}
+          <div className="min-h-[300px]">
+            {activeTab === 'basic' && (
+              <div className="space-y-4">
+                <Input
+                  label="Name"
+                  required
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="z.B. pc-raum-101"
+                />
+                <Textarea
+                  label="Beschreibung"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="Optionale Beschreibung der Konfiguration"
+                />
+              </div>
+            )}
+
+            {activeTab === 'linbo' && (
+              <LinboSettingsForm
+                settings={linboSettings}
+                onChange={setLinboSettings}
+              />
+            )}
+
+            {activeTab === 'partitions' && (
+              <PartitionsEditor
+                partitions={partitions}
+                onChange={setPartitions}
+              />
+            )}
+
+            {activeTab === 'os' && (
+              <OsEntriesEditor
+                osEntries={osEntries}
+                partitions={partitions}
+                onChange={setOsEntries}
+              />
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="flex justify-between items-center pt-4 mt-4 border-t">
+            <div className="text-sm text-gray-500">
+              {partitions.length} Partition(en), {osEntries.length} Betriebssystem(e)
+            </div>
+            <div className="flex space-x-3">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setIsModalOpen(false)}
+              >
+                Abbrechen
+              </Button>
+              <Button type="submit" loading={isSubmitting}>
+                {editingConfig ? 'Speichern' : 'Erstellen'}
+              </Button>
+            </div>
           </div>
         </form>
       </Modal>
@@ -263,7 +380,7 @@ export function ConfigsPage() {
         </pre>
         <div className="flex justify-end pt-4">
           <Button variant="secondary" onClick={() => setIsPreviewOpen(false)}>
-            Schließen
+            Schliessen
           </Button>
         </div>
       </Modal>
@@ -273,9 +390,9 @@ export function ConfigsPage() {
         isOpen={!!deleteConfirmConfig}
         onClose={() => setDeleteConfirmConfig(null)}
         onConfirm={handleDelete}
-        title="Konfiguration löschen"
-        message={`Möchten Sie die Konfiguration "${deleteConfirmConfig?.name}" wirklich löschen?`}
-        confirmLabel="Löschen"
+        title="Konfiguration loeschen"
+        message={`Moechten Sie die Konfiguration "${deleteConfirmConfig?.name}" wirklich loeschen?`}
+        confirmLabel="Loeschen"
         variant="danger"
         loading={isSubmitting}
       />

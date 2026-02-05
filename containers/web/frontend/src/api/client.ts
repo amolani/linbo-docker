@@ -9,10 +9,33 @@ export const apiClient = axios.create({
   },
 });
 
+/**
+ * Get token from localStorage - checks both direct storage and Zustand persist storage
+ */
+function getAuthToken(): string | null {
+  // First try direct localStorage (set during login)
+  let token = localStorage.getItem('token');
+
+  // If not found, try to get from Zustand persist storage (after page reload)
+  if (!token) {
+    const authStorage = localStorage.getItem('auth-storage');
+    if (authStorage) {
+      try {
+        const parsed = JSON.parse(authStorage);
+        token = parsed.state?.token || null;
+      } catch {
+        // Ignore parse errors
+      }
+    }
+  }
+
+  return token;
+}
+
 // Request interceptor - add auth token
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const token = localStorage.getItem('token');
+    const token = getAuthToken();
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -23,13 +46,13 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Response interceptor - handle errors
+// Response interceptor - handle errors (no unwrapping - let API functions handle response format)
 apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      localStorage.removeItem('auth-storage');
       window.location.href = '/login';
     }
     return Promise.reject(error);

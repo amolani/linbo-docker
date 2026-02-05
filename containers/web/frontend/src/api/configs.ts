@@ -19,30 +19,35 @@ export interface UpdateConfigData {
   osEntries?: Omit<ConfigOs, 'id' | 'configId'>[];
 }
 
+// API response wrapper type
+interface ApiResponse<T> {
+  data: T;
+}
+
 export const configsApi = {
   list: async (): Promise<Config[]> => {
-    const response = await apiClient.get<Config[]>('/configs');
-    return response.data;
+    const response = await apiClient.get<ApiResponse<Config[]>>('/configs');
+    return response.data.data;
   },
 
   get: async (id: string): Promise<Config> => {
-    const response = await apiClient.get<Config>(`/configs/${id}`);
-    return response.data;
+    const response = await apiClient.get<ApiResponse<Config>>(`/configs/${id}`);
+    return response.data.data;
   },
 
   preview: async (id: string): Promise<string> => {
-    const response = await apiClient.get<{ content: string }>(`/configs/${id}/preview`);
-    return response.data.content;
+    const response = await apiClient.get<ApiResponse<{ content: string }>>(`/configs/${id}/preview`);
+    return response.data.data.content;
   },
 
   create: async (data: CreateConfigData): Promise<Config> => {
-    const response = await apiClient.post<Config>('/configs', data);
-    return response.data;
+    const response = await apiClient.post<ApiResponse<Config>>('/configs', data);
+    return response.data.data;
   },
 
   update: async (id: string, data: UpdateConfigData): Promise<Config> => {
-    const response = await apiClient.patch<Config>(`/configs/${id}`, data);
-    return response.data;
+    const response = await apiClient.patch<ApiResponse<Config>>(`/configs/${id}`, data);
+    return response.data.data;
   },
 
   delete: async (id: string): Promise<void> => {
@@ -50,15 +55,15 @@ export const configsApi = {
   },
 
   applyToGroups: async (id: string, groupIds: string[]): Promise<{ success: boolean; updated: number }> => {
-    const response = await apiClient.post<{ success: boolean; updated: number }>(
+    const response = await apiClient.post<ApiResponse<{ success: boolean; updated: number }>>(
       `/configs/${id}/apply-to-groups`,
       { groupIds }
     );
-    return response.data;
+    return response.data.data;
   },
 
   clone: async (id: string, newName: string): Promise<Config> => {
-    const response = await apiClient.post<Config>(`/configs/${id}/clone`, { name: newName });
-    return response.data;
+    const response = await apiClient.post<ApiResponse<Config>>(`/configs/${id}/clone`, { name: newName });
+    return response.data.data;
   },
 };

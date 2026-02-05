@@ -84,6 +84,15 @@ export const useAuthStore = create<AuthState>()(
     {
       name: 'auth-storage',
       partialize: (state) => ({ token: state.token, user: state.user }),
+      onRehydrateStorage: () => (state) => {
+        // Sync token to direct localStorage after rehydration
+        // This ensures the token is available for API requests
+        if (state?.token) {
+          localStorage.setItem('token', state.token);
+          // Also ensure isAuthenticated is set
+          state.isAuthenticated = true;
+        }
+      },
     }
   )
 );
