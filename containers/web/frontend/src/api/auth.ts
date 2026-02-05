@@ -1,10 +1,15 @@
 import apiClient from './client';
 import type { LoginRequest, LoginResponse, User } from '@/types';
 
+// API response wrapper type
+interface ApiResponse<T> {
+  data: T;
+}
+
 export const authApi = {
   login: async (credentials: LoginRequest): Promise<LoginResponse> => {
-    const response = await apiClient.post<LoginResponse>('/auth/login', credentials);
-    return response.data;
+    const response = await apiClient.post<ApiResponse<LoginResponse>>('/auth/login', credentials);
+    return response.data.data;
   },
 
   logout: async (): Promise<void> => {
@@ -12,8 +17,8 @@ export const authApi = {
   },
 
   me: async (): Promise<User> => {
-    const response = await apiClient.get<User>('/auth/me');
-    return response.data;
+    const response = await apiClient.get<ApiResponse<User>>('/auth/me');
+    return response.data.data;
   },
 
   changePassword: async (oldPassword: string, newPassword: string): Promise<void> => {
@@ -21,7 +26,7 @@ export const authApi = {
   },
 
   register: async (data: { username: string; password: string; email?: string; role?: string }): Promise<User> => {
-    const response = await apiClient.post<User>('/auth/register', data);
-    return response.data;
+    const response = await apiClient.post<ApiResponse<User>>('/auth/register', data);
+    return response.data.data;
   },
 };

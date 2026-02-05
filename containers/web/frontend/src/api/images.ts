@@ -22,30 +22,35 @@ export interface ImageInfo {
   modifiedAt: string;
 }
 
+// API response wrapper type
+interface ApiResponse<T> {
+  data: T;
+}
+
 export const imagesApi = {
   list: async (): Promise<Image[]> => {
-    const response = await apiClient.get<Image[]>('/images');
-    return response.data;
+    const response = await apiClient.get<ApiResponse<Image[]>>('/images');
+    return response.data.data;
   },
 
   get: async (id: string): Promise<Image> => {
-    const response = await apiClient.get<Image>(`/images/${id}`);
-    return response.data;
+    const response = await apiClient.get<ApiResponse<Image>>(`/images/${id}`);
+    return response.data.data;
   },
 
   create: async (data: CreateImageData): Promise<Image> => {
-    const response = await apiClient.post<Image>('/images', data);
-    return response.data;
+    const response = await apiClient.post<ApiResponse<Image>>('/images', data);
+    return response.data.data;
   },
 
   register: async (filename: string): Promise<Image> => {
-    const response = await apiClient.post<Image>('/images/register', { filename });
-    return response.data;
+    const response = await apiClient.post<ApiResponse<Image>>('/images/register', { filename });
+    return response.data.data;
   },
 
   update: async (id: string, data: UpdateImageData): Promise<Image> => {
-    const response = await apiClient.patch<Image>(`/images/${id}`, data);
-    return response.data;
+    const response = await apiClient.patch<ApiResponse<Image>>(`/images/${id}`, data);
+    return response.data.data;
   },
 
   delete: async (id: string): Promise<void> => {
@@ -53,14 +58,14 @@ export const imagesApi = {
   },
 
   verify: async (id: string): Promise<{ valid: boolean; checksum: string }> => {
-    const response = await apiClient.post<{ valid: boolean; checksum: string }>(
+    const response = await apiClient.post<ApiResponse<{ valid: boolean; checksum: string }>>(
       `/images/${id}/verify`
     );
-    return response.data;
+    return response.data.data;
   },
 
   getInfo: async (id: string): Promise<ImageInfo> => {
-    const response = await apiClient.get<ImageInfo>(`/images/${id}/info`);
-    return response.data;
+    const response = await apiClient.get<ApiResponse<ImageInfo>>(`/images/${id}/info`);
+    return response.data.data;
   },
 };

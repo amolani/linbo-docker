@@ -1,6 +1,6 @@
 # LINBO Docker - Implementierungsstatus
 
-**Letzte Aktualisierung:** 2026-02-04 (Session 6)
+**Letzte Aktualisierung:** 2026-02-05 (Session 7)
 
 ---
 
@@ -9,6 +9,7 @@
 ### Aktueller Stand
 - **Phase 4 (REST-API):** ✅ ABGESCHLOSSEN
 - **Phase 5 (Web-Frontend):** ✅ ABGESCHLOSSEN
+- **Phase 5.5 (Auth/API-Bugfix):** ✅ ABGESCHLOSSEN
 - **Phase 6 (Integration):** 🔄 IN ARBEIT
 - **GitHub Repository:** https://github.com/amolani/linbo-docker ✅
 - **Boot-Files Release:** https://github.com/amolani/linbo-docker/releases/tag/boot-files-4.3.29-0 ✅
@@ -63,7 +64,58 @@ curl -sI https://github.com/amolani/linbo-docker/releases/download/boot-files-4.
 
 ---
 
-## Was wurde in Session 6 erledigt (AKTUELL)
+## Was wurde in Session 7 erledigt (AKTUELL)
+
+### Frontend Auth & API Bugfix ✅
+
+#### Problem: 403 Forbidden nach Login
+Das Frontend konnte nach dem Login keine API-Requests durchführen (403 Fehler).
+Nach Page-Reload war die Session verloren.
+
+#### Ursache identifiziert
+1. **Token-Storage Mismatch:**
+   - Zustand persist-Middleware speicherte Token unter `auth-storage` (JSON)
+   - API-Client las Token nur von `localStorage.getItem('token')`
+   - Nach Page-Reload: Token für API-Calls nicht verfügbar
+
+2. **API Response Format:**
+   - Backend gibt `{data: {...}}` Wrapper zurück
+   - Frontend erwartete Daten direkt ohne Wrapper
+   - Bei paginierten Responses ging `pagination` Info verloren
+
+#### Durchgeführte Fixes
+
+**`containers/web/frontend/src/api/client.ts`:**
+- Neue `getAuthToken()` Funktion liest Token aus beiden Storage-Locations
+- Fallback von `localStorage.getItem('token')` zu `auth-storage` JSON
+
+**`containers/web/frontend/src/stores/authStore.ts`:**
+- `onRehydrateStorage` Callback hinzugefügt
+- Synchronisiert Token beim Page-Reload in beide localStorage-Keys
+- Setzt `isAuthenticated` beim Rehydrate
+
+**Alle API-Module (`auth.ts`, `hosts.ts`, `rooms.ts`, `groups.ts`, `configs.ts`, `images.ts`, `operations.ts`, `stats.ts`):**
+- `ApiResponse<T>` Wrapper-Type hinzugefügt
+- Alle Responses mit `response.data.data` extrahiert
+- Paginierte Responses korrekt transformiert (`PaginatedApiResponse<T>`)
+
+#### Testdaten erstellt
+| Typ | Anzahl | Beispiele |
+|-----|--------|-----------|
+| Räume | 4 | Raum 101, Raum 201, Test-Raum, testraum1 |
+| Gruppen | 2 | PC Pool Standard, Lehrerzimmer |
+| Configs | 1 | Win10-Standard |
+| Hosts | 2 | pc-r101-01, pc-r101-02 |
+
+#### Ergebnis
+- ✅ Login funktioniert
+- ✅ Session bleibt nach Page-Reload erhalten
+- ✅ Alle CRUD-Operationen funktionieren
+- ✅ API-Logs zeigen nur noch 200/304 (keine 403)
+
+---
+
+## Was wurde in Session 6 erledigt
 
 ### Web-Frontend vollständig implementiert ✅
 
@@ -383,7 +435,8 @@ gh release create <tag> <file> --title "Title" --notes "Notes"
 
 | Datum | Session | Änderung |
 |-------|---------|----------|
-| **2026-02-04** | **6** | **Web-Frontend (Phase 5) vollständig implementiert** |
+| **2026-02-05** | **7** | **Auth/API-Bugfix: Token-Storage, Response-Parsing, Tests** |
+| 2026-02-04 | 6 | Web-Frontend (Phase 5) vollständig implementiert |
 | 2026-02-04 | 5 | GitHub Repo erstellt, Init-Container, Boot-Files Release |
 | 2026-02-03 | 4 | Test-VM neu installiert, API verifiziert |
 | 2026-02-03 | 3 | install.sh Bugs behoben |
