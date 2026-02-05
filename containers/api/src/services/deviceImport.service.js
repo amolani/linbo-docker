@@ -20,7 +20,7 @@ const ws = require('../lib/websocket');
  * -------|-------|-------------
  * room   | 0     | Raum-Name
  * host   | 1     | Hostname
- * group  | 2     | LINBO-Gruppe (Config-Name) oder "nopxe"
+ * config | 2     | LINBO-Config (start.conf name) oder "nopxe"
  * mac    | 3     | MAC-Adresse
  * ip     | 4     | IP-Adresse oder "DHCP"
  * field5 | 5     | (ungenutzt)
@@ -35,7 +35,7 @@ const ws = require('../lib/websocket');
 const CSV_COLUMNS = {
   ROOM: 0,
   HOSTNAME: 1,
-  GROUP: 2,
+  CONFIG: 2,
   MAC: 3,
   IP: 4,
   DHCP_OPTIONS: 7,
@@ -170,7 +170,7 @@ function validateCsvRow(row) {
 
   const room = fields[CSV_COLUMNS.ROOM];
   const hostname = fields[CSV_COLUMNS.HOSTNAME];
-  const group = fields[CSV_COLUMNS.GROUP];
+  const configName = fields[CSV_COLUMNS.CONFIG];
   const mac = fields[CSV_COLUMNS.MAC];
   const ip = fields[CSV_COLUMNS.IP];
   const dhcpOptions = fields[CSV_COLUMNS.DHCP_OPTIONS] || '';
@@ -188,8 +188,8 @@ function validateCsvRow(row) {
     errors.push(`Line ${lineNumber}: Invalid hostname format: ${hostname}`);
   }
 
-  if (!group) {
-    errors.push(`Line ${lineNumber}: Group is required`);
+  if (!configName) {
+    errors.push(`Line ${lineNumber}: Config is required`);
   }
 
   if (!mac) {
@@ -203,8 +203,8 @@ function validateCsvRow(row) {
   }
 
   // Warnungen
-  if (group === 'nopxe') {
-    warnings.push(`Line ${lineNumber}: Host ${hostname} has no PXE group`);
+  if (configName === 'nopxe') {
+    warnings.push(`Line ${lineNumber}: Host ${hostname} has no PXE config`);
   }
 
   if (pxeFlag === 0) {
@@ -222,13 +222,13 @@ function validateCsvRow(row) {
     data: {
       room: room.toLowerCase(),
       hostname: hostname.toLowerCase(),
-      group: group === 'nopxe' ? null : group,
+      configName: configName === 'nopxe' ? null : configName,
       macAddress: normalizeMac(mac),
       ipAddress: ip === 'DHCP' ? null : ip,
       dhcpOptions,
       computerType: role,
       pxeFlag,
-      isPxeEnabled: pxeFlag > 0 && group !== 'nopxe',
+      isPxeEnabled: pxeFlag > 0 && configName !== 'nopxe',
     },
   };
 }
@@ -314,7 +314,6 @@ function validateCsv(csvContent, options = {}) {
  * @param {boolean} options.dryRun - Nur validieren, nicht importieren
  * @param {string} options.mergeStrategy - 'update' | 'skip' | 'error'
  * @param {boolean} options.createRooms - Fehlende Räume automatisch erstellen
- * @param {boolean} options.createGroups - Fehlende Gruppen automatisch erstellen
  * @param {boolean} options.deployConfigs - Nach Import Configs deployen
  * @returns {Promise<Object>}
  */
@@ -323,7 +322,6 @@ async function importFromCsv(csvContent, options = {}) {
     dryRun = false,
     mergeStrategy = 'update',
     createRooms = true,
-    createGroups = true,
     deployConfigs = true,
   } = options;
 
@@ -400,14 +398,14 @@ async function importFromCsv(csvContent, options = {}) {
   };
 
   const roomsToCreate = new Set();
-  const groupsToCreate = new Set();
+  const configsToCreate = new Set();
   const hostsToProcess = [];
 
-  // Sammle einzigartige Räume und Gruppen
+  // Sammle einzigartige Räume und Configs
   for (const row of validation.rows.filter(r => r.valid)) {
     roomsToCreate.add(row.data.room);
-    if (row.data.group) {
-      groupsToCreate.add(row.data.group);
+    if (row.data.configName) {
+      configsToCreate.add(row.data.configName);
     }
     hostsToProcess.push(row.data);
   }
@@ -441,37 +439,24 @@ async function importFromCsv(csvContent, options = {}) {
     }
   }
 
-  // Gruppen erstellen/laden
-  const groupMap = new Map();
-  if (createGroups) {
-    for (const groupName of groupsToCreate) {
-      try {
-        let group = await prisma.hostGroup.findUnique({
-          where: { name: groupName },
-        });
+  // Configs laden (configs werden nicht automatisch erstellt - nur existierende Configs werden akzeptiert)
+  const configMap = new Map();
+  const existingConfigs = await prisma.config.findMany({
+    where: { name: { in: Array.from(configsToCreate) } },
+  });
+  for (const config of existingConfigs) {
+    configMap.set(config.name, config.id);
+  }
 
-        if (!group) {
-          group = await prisma.hostGroup.create({
-            data: { name: groupName },
-          });
-        }
-
-        groupMap.set(groupName, group.id);
-      } catch (error) {
-        results.errors.push(`Failed to create group ${groupName}: ${error.message}`);
-      }
-    }
-  } else {
-    const existingGroups = await prisma.hostGroup.findMany({
-      where: { name: { in: Array.from(groupsToCreate) } },
-    });
-    for (const group of existingGroups) {
-      groupMap.set(group.name, group.id);
+  // Warnung für nicht existierende Configs
+  for (const configName of configsToCreate) {
+    if (!configMap.has(configName)) {
+      results.errors.push(`Config "${configName}" does not exist. Create it first.`);
     }
   }
 
   // Hosts importieren
-  const affectedGroupIds = new Set();
+  const affectedConfigIds = new Set();
 
   for (const hostData of hostsToProcess) {
     try {
@@ -487,10 +472,10 @@ async function importFromCsv(csvContent, options = {}) {
       const existing = existingByMac || existingByHostname;
 
       const roomId = roomMap.get(hostData.room) || null;
-      const groupId = hostData.group ? groupMap.get(hostData.group) || null : null;
+      const configId = hostData.configName ? configMap.get(hostData.configName) || null : null;
 
-      if (groupId) {
-        affectedGroupIds.add(groupId);
+      if (configId) {
+        affectedConfigIds.add(configId);
       }
 
       if (existing) {
@@ -515,7 +500,7 @@ async function importFromCsv(csvContent, options = {}) {
             macAddress: hostData.macAddress,
             ipAddress: hostData.ipAddress,
             roomId,
-            groupId,
+            configId,
             metadata: {
               ...existing.metadata,
               computerType: hostData.computerType,
@@ -535,7 +520,7 @@ async function importFromCsv(csvContent, options = {}) {
             macAddress: hostData.macAddress,
             ipAddress: hostData.ipAddress,
             roomId,
-            groupId,
+            configId,
             status: 'offline',
             metadata: {
               computerType: hostData.computerType,
@@ -557,32 +542,29 @@ async function importFromCsv(csvContent, options = {}) {
   }
 
   // Nach Import: Configs deployen
-  if (deployConfigs && affectedGroupIds.size > 0) {
+  if (deployConfigs && affectedConfigIds.size > 0) {
     try {
-      // Für jede betroffene Gruppe: Symlinks und GRUB-Configs aktualisieren
-      const groups = await prisma.hostGroup.findMany({
-        where: { id: { in: Array.from(affectedGroupIds) } },
+      // Für jede betroffene Config: Symlinks und GRUB-Configs aktualisieren
+      const configs = await prisma.config.findMany({
+        where: { id: { in: Array.from(affectedConfigIds) } },
         include: {
-          defaultConfig: true,
           hosts: {
             select: { hostname: true, ipAddress: true },
           },
         },
       });
 
-      for (const group of groups) {
-        if (group.defaultConfig) {
-          // Symlinks erstellen
-          await configService.createHostSymlinks(group.defaultConfig.id);
-        }
+      for (const config of configs) {
+        // Symlinks erstellen
+        await configService.createHostSymlinks(config.id);
 
-        // GRUB-Config für Gruppe
-        await grubService.generateGroupGrubConfig(group.name).catch(() => {});
+        // GRUB-Config für Config
+        await grubService.generateConfigGrubConfig(config.name).catch(() => {});
 
         // GRUB-Configs für Hosts
-        for (const host of group.hosts) {
+        for (const host of config.hosts) {
           await grubService
-            .generateHostGrubConfig(host.hostname, group.name)
+            .generateHostGrubConfig(host.hostname, config.name)
             .catch(() => {});
         }
       }
@@ -617,7 +599,7 @@ async function exportToCsv() {
   const hosts = await prisma.host.findMany({
     include: {
       room: { select: { name: true } },
-      group: { select: { name: true } },
+      config: { select: { name: true } },
     },
     orderBy: [{ room: { name: 'asc' } }, { hostname: 'asc' }],
   });
@@ -625,25 +607,25 @@ async function exportToCsv() {
   const lines = [
     '# LINBO Docker - Exported devices',
     `# Generated: ${new Date().toISOString()}`,
-    '# Format: room;hostname;group;mac;ip;;;;;role;;pxe;;;;;',
+    '# Format: room;hostname;config;mac;ip;;;;;role;;pxe;;;;;',
     '#',
   ];
 
   for (const host of hosts) {
     const room = host.room?.name || 'unknown';
     const hostname = host.hostname;
-    const group = host.group?.name || 'nopxe';
+    const configName = host.config?.name || 'nopxe';
     const mac = host.macAddress.toUpperCase();
     const ip = host.ipAddress || 'DHCP';
     const role = host.metadata?.computerType || '';
     const pxeFlag = host.metadata?.pxeFlag ?? 1;
     const dhcpOptions = host.metadata?.dhcpOptions || '';
 
-    // Format: room;host;group;mac;ip;;;dhcpopts;;role;;pxe;;;;;
+    // Format: room;host;config;mac;ip;;;dhcpopts;;role;;pxe;;;;;
     const fields = [
       room,
       hostname,
-      group,
+      configName,
       mac,
       ip,
       '', // field5
@@ -675,48 +657,43 @@ async function syncFilesystem() {
     grubConfigs: { created: 0, errors: [] },
   };
 
-  // Alle Gruppen mit Hosts laden
-  const groups = await prisma.hostGroup.findMany({
+  // Alle Configs mit Hosts laden
+  const configs = await prisma.config.findMany({
     include: {
-      defaultConfig: true,
       hosts: {
         select: { hostname: true, ipAddress: true },
       },
     },
   });
 
-  for (const group of groups) {
+  for (const config of configs) {
     // Symlinks für Config
-    if (group.defaultConfig) {
-      try {
-        const count = await configService.createHostSymlinks(
-          group.defaultConfig.id
-        );
-        results.symlinks.created += count;
-      } catch (error) {
-        results.symlinks.errors.push({
-          group: group.name,
-          error: error.message,
-        });
-      }
+    try {
+      const count = await configService.createHostSymlinks(config.id);
+      results.symlinks.created += count;
+    } catch (error) {
+      results.symlinks.errors.push({
+        config: config.name,
+        error: error.message,
+      });
     }
 
-    // GRUB-Config für Gruppe
+    // GRUB-Config für Config
     try {
-      await grubService.generateGroupGrubConfig(group.name);
+      await grubService.generateConfigGrubConfig(config.name);
       results.grubConfigs.created++;
     } catch (error) {
       results.grubConfigs.errors.push({
-        type: 'group',
-        name: group.name,
+        type: 'config',
+        name: config.name,
         error: error.message,
       });
     }
 
     // GRUB-Configs für Hosts
-    for (const host of group.hosts) {
+    for (const host of config.hosts) {
       try {
-        await grubService.generateHostGrubConfig(host.hostname, group.name);
+        await grubService.generateHostGrubConfig(host.hostname, config.name);
         results.grubConfigs.created++;
       } catch (error) {
         results.grubConfigs.errors.push({

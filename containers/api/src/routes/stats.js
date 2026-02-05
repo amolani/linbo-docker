@@ -28,7 +28,6 @@ router.get('/overview', authenticateToken, async (req, res, next) => {
     // Gather stats in parallel
     const [
       hostStats,
-      groupCount,
       roomCount,
       configCount,
       imageCount,
@@ -42,7 +41,6 @@ router.get('/overview', authenticateToken, async (req, res, next) => {
         _count: { status: true },
       }),
       // Counts
-      prisma.hostGroup.count(),
       prisma.room.count(),
       prisma.config.count(),
       prisma.image.count(),
@@ -107,7 +105,6 @@ router.get('/overview', authenticateToken, async (req, res, next) => {
         syncing: hostStatusMap.syncing || 0,
         error: hostStatusMap.error || 0,
       },
-      groups: groupCount,
       rooms: roomCount,
       configs: configCount,
       images: imageCount,
@@ -142,7 +139,7 @@ router.get('/overview', authenticateToken, async (req, res, next) => {
  */
 router.get('/hosts', authenticateToken, async (req, res, next) => {
   try {
-    const [byStatus, byRoom, byGroup, recentlyOnline] = await Promise.all([
+    const [byStatus, byRoom, byConfig, recentlyOnline] = await Promise.all([
       // By status
       prisma.host.groupBy({
         by: ['status'],
@@ -153,10 +150,10 @@ router.get('/hosts', authenticateToken, async (req, res, next) => {
         by: ['roomId'],
         _count: { roomId: true },
       }),
-      // By group
+      // By config
       prisma.host.groupBy({
-        by: ['groupId'],
-        _count: { groupId: true },
+        by: ['configId'],
+        _count: { configId: true },
       }),
       // Recently online (last 24h)
       prisma.host.count({
@@ -166,23 +163,23 @@ router.get('/hosts', authenticateToken, async (req, res, next) => {
       }),
     ]);
 
-    // Get room and group names
+    // Get room and config names
     const roomIds = byRoom.map(r => r.roomId).filter(Boolean);
-    const groupIds = byGroup.map(g => g.groupId).filter(Boolean);
+    const configIds = byConfig.map(c => c.configId).filter(Boolean);
 
-    const [rooms, groups] = await Promise.all([
+    const [rooms, configs] = await Promise.all([
       prisma.room.findMany({
         where: { id: { in: roomIds } },
         select: { id: true, name: true },
       }),
-      prisma.hostGroup.findMany({
-        where: { id: { in: groupIds } },
+      prisma.config.findMany({
+        where: { id: { in: configIds } },
         select: { id: true, name: true },
       }),
     ]);
 
     const roomMap = new Map(rooms.map(r => [r.id, r.name]));
-    const groupMap = new Map(groups.map(g => [g.id, g.name]));
+    const configMap = new Map(configs.map(c => [c.id, c.name]));
 
     res.json({
       data: {
@@ -195,10 +192,10 @@ router.get('/hosts', authenticateToken, async (req, res, next) => {
           roomName: roomMap.get(r.roomId) || 'Unassigned',
           count: r._count.roomId,
         })),
-        byGroup: byGroup.map(g => ({
-          groupId: g.groupId,
-          groupName: groupMap.get(g.groupId) || 'Unassigned',
-          count: g._count.groupId,
+        byConfig: byConfig.map(c => ({
+          configId: c.configId,
+          configName: configMap.get(c.configId) || 'Unassigned',
+          count: c._count.configId,
         })),
         recentlyOnline,
       },

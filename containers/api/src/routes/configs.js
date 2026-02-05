@@ -19,31 +19,27 @@ const configService = require('../services/config.service');
 const grubService = require('../services/grub.service');
 
 /**
- * Regenerate GRUB configs for all groups using a specific config
+ * Regenerate GRUB config for a specific config
  * @param {string} configId - The config ID
+ * @param {string} configName - The config name (optional, will be fetched if not provided)
  */
-async function regenerateGrubForConfig(configId) {
+async function regenerateGrubForConfig(configId, configName = null) {
   try {
-    // Find all groups using this config as default
-    const groups = await prisma.hostGroup.findMany({
-      where: { defaultConfigId: configId },
-      select: { name: true },
-    });
-
-    // Regenerate GRUB config for each group
-    for (const group of groups) {
-      try {
-        await grubService.generateGroupGrubConfig(group.name);
-      } catch (error) {
-        console.error(`[Configs] Failed to regenerate GRUB for group ${group.name}:`, error.message);
-      }
+    let name = configName;
+    if (!name) {
+      const config = await prisma.config.findUnique({
+        where: { id: configId },
+        select: { name: true },
+      });
+      name = config?.name;
     }
 
-    if (groups.length > 0) {
-      console.log(`[Configs] Regenerated GRUB configs for ${groups.length} groups`);
+    if (name) {
+      await grubService.generateConfigGrubConfig(name);
+      console.log(`[Configs] Regenerated GRUB config for ${name}`);
     }
   } catch (error) {
-    console.error('[Configs] Failed to regenerate GRUB configs:', error.message);
+    console.error('[Configs] Failed to regenerate GRUB config:', error.message);
   }
 }
 
@@ -65,7 +61,6 @@ router.get('/', authenticateToken, async (req, res, next) => {
         _count: {
           select: {
             hosts: true,
-            hostGroups: true,
             partitions: true,
             osEntries: true,
           },
@@ -78,7 +73,6 @@ router.get('/', authenticateToken, async (req, res, next) => {
       ...config,
       linboSettings: normalizeLinboSettings(config.linboSettings),
       hostCount: config._count.hosts,
-      groupCount: config._count.hostGroups,
       partitionCount: config._count.partitions,
       osCount: config._count.osEntries,
       _count: undefined,
@@ -118,12 +112,8 @@ router.get('/:id', authenticateToken, async (req, res, next) => {
         partitions: { orderBy: { position: 'asc' } },
         osEntries: { orderBy: { position: 'asc' } },
         hosts: {
-          select: { id: true, hostname: true },
+          select: { id: true, hostname: true, macAddress: true },
           orderBy: { hostname: 'asc' },
-        },
-        hostGroups: {
-          select: { id: true, name: true },
-          orderBy: { name: 'asc' },
         },
       },
     });
@@ -320,7 +310,7 @@ router.delete(
       const config = await prisma.config.findUnique({
         where: { id: req.params.id },
         include: {
-          _count: { select: { hosts: true, hostGroups: true } },
+          _count: { select: { hosts: true } },
         },
       });
 
@@ -333,12 +323,11 @@ router.delete(
         });
       }
 
-      const totalUsage = config._count.hosts + config._count.hostGroups;
-      if (totalUsage > 0 && !req.query.force) {
+      if (config._count.hosts > 0 && !req.query.force) {
         return res.status(400).json({
           error: {
             code: 'CONFIG_IN_USE',
-            message: `Config is used by ${config._count.hosts} hosts and ${config._count.hostGroups} groups. Add ?force=true to delete anyway.`,
+            message: `Config is used by ${config._count.hosts} hosts. Add ?force=true to delete anyway.`,
           },
         });
       }
@@ -363,30 +352,21 @@ router.delete(
 );
 
 /**
- * POST /configs/:id/apply-to-groups
- * Apply config to specified groups
+ * POST /configs/:id/wake-all
+ * Wake all hosts using this config
  */
 router.post(
-  '/:id/apply-to-groups',
+  '/:id/wake-all',
   authenticateToken,
   requireRole(['admin', 'operator']),
-  auditAction('config.apply_to_groups'),
+  auditAction('config.wake_all'),
   async (req, res, next) => {
     try {
-      const { groupIds } = req.body;
-
-      if (!groupIds || !Array.isArray(groupIds) || groupIds.length === 0) {
-        return res.status(400).json({
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'groupIds array is required',
-          },
-        });
-      }
-
-      // Verify config exists
       const config = await prisma.config.findUnique({
         where: { id: req.params.id },
+        include: {
+          hosts: { select: { id: true, hostname: true, macAddress: true } },
+        },
       });
 
       if (!config) {
@@ -398,45 +378,20 @@ router.post(
         });
       }
 
-      // Update groups and their hosts
-      const result = await prisma.$transaction(async (tx) => {
-        // Update groups' default config
-        await tx.hostGroup.updateMany({
-          where: { id: { in: groupIds } },
-          data: { defaultConfigId: req.params.id },
-        });
+      // Send WoL to all hosts
+      const wolService = require('../services/wol.service');
+      const results = await Promise.allSettled(
+        config.hosts.map(host => wolService.sendWakeOnLan(host.macAddress))
+      );
 
-        // Update all hosts in those groups
-        const hostResult = await tx.host.updateMany({
-          where: { groupId: { in: groupIds } },
-          data: { configId: req.params.id },
-        });
-
-        return hostResult;
-      });
-
-      // Invalidate cache
-      await redis.delPattern('hosts:*');
-      await redis.delPattern('groups:*');
-
-      // Regenerate GRUB configs for affected groups
-      const groups = await prisma.hostGroup.findMany({
-        where: { id: { in: groupIds } },
-        select: { name: true },
-      });
-      for (const group of groups) {
-        try {
-          await grubService.generateGroupGrubConfig(group.name);
-        } catch (error) {
-          console.error(`[Configs] Failed to regenerate GRUB for group ${group.name}:`, error.message);
-        }
-      }
+      const successful = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.filter(r => r.status === 'rejected').length;
 
       res.json({
         data: {
-          message: `Config applied to ${groupIds.length} groups and ${result.count} hosts`,
-          groupCount: groupIds.length,
-          hostCount: result.count,
+          message: `Wake-on-LAN sent to ${successful}/${config.hosts.length} hosts`,
+          successful,
+          failed,
           configName: config.name,
         },
       });

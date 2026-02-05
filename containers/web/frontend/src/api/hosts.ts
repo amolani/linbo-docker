@@ -43,7 +43,6 @@ export interface CreateHostData {
   macAddress: string;
   ipAddress?: string;
   roomId?: string;
-  groupId?: string;
   configId?: string;
   metadata?: Record<string, unknown>;
 }
@@ -53,7 +52,6 @@ export interface UpdateHostData {
   macAddress?: string;
   ipAddress?: string;
   roomId?: string | null;
-  groupId?: string | null;
   configId?: string | null;
   status?: string;
   metadata?: Record<string, unknown>;
@@ -89,7 +87,6 @@ export const hostsApi = {
         search: params?.filters?.search,
         status: params?.filters?.status,
         roomId: params?.filters?.roomId,
-        groupId: params?.filters?.groupId,
         configId: params?.filters?.configId,
         sort: params?.sort,
         order: params?.order,

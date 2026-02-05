@@ -278,14 +278,14 @@ router.post(
       const result = await grubService.regenerateAllGrubConfigs();
 
       ws.broadcast('system.grub_configs_regenerated', {
-        groups: result.groups,
+        configs: result.configs?.length || 0,
         hosts: result.hosts,
         timestamp: new Date(),
       });
 
       res.json({
         data: {
-          message: `Generated ${result.groups} group configs and ${result.hosts} host configs`,
+          message: `Generated ${result.configs?.length || 0} config files and ${result.hosts} host symlinks`,
           ...result,
         },
       });
@@ -327,7 +327,7 @@ router.post(
 
       res.json({
         data: {
-          message: `Removed ${result.removedGroups.length} group configs and ${result.removedHosts.length} host configs`,
+          message: `Removed ${result.removedConfigs?.length || 0} config files and ${result.removedHosts?.length || 0} host configs`,
           ...result,
         },
       });
@@ -340,7 +340,7 @@ router.post(
 /**
  * POST /system/migrate-grub-configs
  * Migrate existing host config files to symlinks
- * This converts regular files in hostcfg/ to symlinks pointing to group configs
+ * This converts regular files in hostcfg/ to symlinks pointing to config files
  */
 router.post(
   '/migrate-grub-configs',

@@ -14,7 +14,7 @@ process.env.LINBO_DIR = TEST_DIR;
 // Mock Prisma
 jest.mock('../../src/lib/prisma', () => ({
   prisma: {
-    hostGroup: {
+    config: {
       findFirst: jest.fn(),
       findMany: jest.fn(),
     },
@@ -46,23 +46,21 @@ const mockOsEntries = [
   },
 ];
 
-const mockGroup = {
+const mockConfig = {
   id: '550e8400-e29b-41d4-a716-446655440001',
   name: 'win11_efi_sata',
-  defaultConfig: {
-    linboSettings: {
-      KernelOptions: 'quiet splash',
-      Server: '10.0.0.11',
-    },
-    partitions: mockPartitions,
-    osEntries: mockOsEntries,
+  linboSettings: {
+    KernelOptions: 'quiet splash',
+    Server: '10.0.0.11',
   },
+  partitions: mockPartitions,
+  osEntries: mockOsEntries,
 };
 
 const mockHost = {
   id: '550e8400-e29b-41d4-a716-446655440002',
   hostname: 'pc-r101-01',
-  group: { name: 'win11_efi_sata' },
+  config: { name: 'win11_efi_sata' },
 };
 
 describe('GRUB Service', () => {
@@ -262,11 +260,11 @@ describe('GRUB Service', () => {
   // Config Generation Tests
   // ==========================================================================
 
-  describe('generateGroupGrubConfig', () => {
+  describe('generateConfigGrubConfig', () => {
     test('should generate valid GRUB config for group', async () => {
-      prisma.hostGroup.findFirst.mockResolvedValue(mockGroup);
+      prisma.config.findFirst.mockResolvedValue(mockConfig);
 
-      const result = await grubService.generateGroupGrubConfig('win11_efi_sata');
+      const result = await grubService.generateConfigGrubConfig('win11_efi_sata');
 
       expect(result.content).toContain('# LINBO Docker - Group GRUB Configuration');
       expect(result.content).toContain('Group: win11_efi_sata');
@@ -275,27 +273,27 @@ describe('GRUB Service', () => {
     });
 
     test('should include kernel options from config', async () => {
-      prisma.hostGroup.findFirst.mockResolvedValue(mockGroup);
+      prisma.config.findFirst.mockResolvedValue(mockConfig);
 
-      const result = await grubService.generateGroupGrubConfig('win11_efi_sata');
+      const result = await grubService.generateConfigGrubConfig('win11_efi_sata');
 
       expect(result.content).toContain('quiet splash');
       expect(result.content).toContain('server=10.0.0.11');
     });
 
     test('should include cache partition settings', async () => {
-      prisma.hostGroup.findFirst.mockResolvedValue(mockGroup);
+      prisma.config.findFirst.mockResolvedValue(mockConfig);
 
-      const result = await grubService.generateGroupGrubConfig('win11_efi_sata');
+      const result = await grubService.generateConfigGrubConfig('win11_efi_sata');
 
       expect(result.content).toContain('set cachelabel="cache"');
       expect(result.content).toContain('(hd0,3)');
     });
 
     test('should generate OS menu entries', async () => {
-      prisma.hostGroup.findFirst.mockResolvedValue(mockGroup);
+      prisma.config.findFirst.mockResolvedValue(mockConfig);
 
-      const result = await grubService.generateGroupGrubConfig('win11_efi_sata');
+      const result = await grubService.generateConfigGrubConfig('win11_efi_sata');
 
       // Check for all 4 menu types
       expect(result.content).toContain("'Windows 11 Pro (Start)'");
@@ -305,9 +303,9 @@ describe('GRUB Service', () => {
     });
 
     test('should include linbocmd commands', async () => {
-      prisma.hostGroup.findFirst.mockResolvedValue(mockGroup);
+      prisma.config.findFirst.mockResolvedValue(mockConfig);
 
-      const result = await grubService.generateGroupGrubConfig('win11_efi_sata');
+      const result = await grubService.generateConfigGrubConfig('win11_efi_sata');
 
       expect(result.content).toContain('linbocmd=start:1');
       expect(result.content).toContain('linbocmd=sync:1,start:1');
@@ -315,9 +313,9 @@ describe('GRUB Service', () => {
     });
 
     test('should write file to correct location', async () => {
-      prisma.hostGroup.findFirst.mockResolvedValue(mockGroup);
+      prisma.config.findFirst.mockResolvedValue(mockConfig);
 
-      const result = await grubService.generateGroupGrubConfig('win11_efi_sata');
+      const result = await grubService.generateConfigGrubConfig('win11_efi_sata');
 
       expect(result.filepath).toContain('win11_efi_sata.cfg');
 
@@ -326,12 +324,14 @@ describe('GRUB Service', () => {
     });
 
     test('should handle group without config', async () => {
-      prisma.hostGroup.findFirst.mockResolvedValue({
-        ...mockGroup,
-        defaultConfig: null,
+      prisma.config.findFirst.mockResolvedValue({
+        ...mockConfig,
+        linboSettings: null,
+        partitions: [],
+        osEntries: [],
       });
 
-      const result = await grubService.generateGroupGrubConfig('win11_efi_sata');
+      const result = await grubService.generateConfigGrubConfig('win11_efi_sata');
 
       expect(result.content).toContain('Group: win11_efi_sata');
       // Should still have LINBO entry
@@ -339,9 +339,9 @@ describe('GRUB Service', () => {
     });
 
     test('should include GRUB modules', async () => {
-      prisma.hostGroup.findFirst.mockResolvedValue(mockGroup);
+      prisma.config.findFirst.mockResolvedValue(mockConfig);
 
-      const result = await grubService.generateGroupGrubConfig('win11_efi_sata');
+      const result = await grubService.generateConfigGrubConfig('win11_efi_sata');
 
       expect(result.content).toContain('insmod all_video');
       expect(result.content).toContain('insmod png');
@@ -351,18 +351,18 @@ describe('GRUB Service', () => {
     });
 
     test('should include theme settings', async () => {
-      prisma.hostGroup.findFirst.mockResolvedValue(mockGroup);
+      prisma.config.findFirst.mockResolvedValue(mockConfig);
 
-      const result = await grubService.generateGroupGrubConfig('win11_efi_sata');
+      const result = await grubService.generateConfigGrubConfig('win11_efi_sata');
 
       expect(result.content).toContain('set theme=/boot/grub/themes/linbo/theme.txt');
       expect(result.content).toContain('background_color');
     });
 
     test('should include OS type class for icons', async () => {
-      prisma.hostGroup.findFirst.mockResolvedValue(mockGroup);
+      prisma.config.findFirst.mockResolvedValue(mockConfig);
 
-      const result = await grubService.generateGroupGrubConfig('win11_efi_sata');
+      const result = await grubService.generateConfigGrubConfig('win11_efi_sata');
 
       expect(result.content).toContain('--class win11_start');
       expect(result.content).toContain('--class win11_syncstart');
@@ -466,52 +466,59 @@ describe('GRUB Service', () => {
   });
 
   describe('regenerateAllGrubConfigs', () => {
-    test('should regenerate configs for all groups and hosts', async () => {
-      prisma.hostGroup.findMany.mockResolvedValue([
+    test('should regenerate configs for all configs and hosts', async () => {
+      prisma.config.findMany.mockResolvedValue([
         {
-          name: 'group1',
+          name: 'config1',
           hosts: [
             { hostname: 'host1' },
             { hostname: 'host2' },
           ],
-          defaultConfig: mockGroup.defaultConfig,
+          linboSettings: mockConfig.linboSettings,
+          partitions: mockConfig.partitions,
+          osEntries: mockConfig.osEntries,
         },
         {
-          name: 'group2',
+          name: 'config2',
           hosts: [],
-          defaultConfig: null,
+          linboSettings: {},
+          partitions: [],
+          osEntries: [],
         },
       ]);
-      prisma.hostGroup.findFirst.mockResolvedValue(mockGroup);
+      prisma.config.findFirst.mockResolvedValue(mockConfig);
       prisma.host.findMany.mockResolvedValue([]);
 
       const result = await grubService.regenerateAllGrubConfigs();
 
-      expect(result.groups).toBe(2);
+      expect(result.configs).toBeDefined();
       expect(result.hosts).toBe(2);
-      expect(result.configs.length).toBeGreaterThan(0);
+      expect(result.configs).toBe(2); // Number of config GRUB files generated
+      expect(result.results.length).toBeGreaterThan(0);
     });
 
     test('should create symlinks for hosts', async () => {
-      prisma.hostGroup.findMany.mockResolvedValue([
+      prisma.config.findMany.mockResolvedValue([
         {
-          name: 'testgroup',
+          name: 'testconfig',
           hosts: [{ hostname: 'symlink-host' }],
-          defaultConfig: mockGroup.defaultConfig,
+          linboSettings: mockConfig.linboSettings,
+          partitions: mockConfig.partitions,
+          osEntries: mockConfig.osEntries,
         },
       ]);
-      prisma.hostGroup.findFirst.mockResolvedValue(mockGroup);
+      prisma.config.findFirst.mockResolvedValue(mockConfig);
       prisma.host.findMany.mockResolvedValue([]);
 
       const result = await grubService.regenerateAllGrubConfigs();
 
       // Check host result indicates symlink
-      const hostResult = result.configs.find(c => c.name === 'symlink-host');
+      const hostResult = result.results.find(c => c.name === 'symlink-host');
       expect(hostResult.isSymlink).toBe(true);
     });
 
     test('should handle orphaned hosts', async () => {
-      prisma.hostGroup.findMany.mockResolvedValue([]);
+      prisma.config.findMany.mockResolvedValue([]);
       prisma.host.findMany.mockResolvedValue([
         { hostname: 'orphan1' },
         { hostname: 'orphan2' },
@@ -520,16 +527,16 @@ describe('GRUB Service', () => {
       const result = await grubService.regenerateAllGrubConfigs();
 
       expect(result.hosts).toBe(2);
-      expect(result.configs.some(c => c.group === 'default')).toBe(true);
+      expect(result.results.some(c => c.config === 'default')).toBe(true);
     });
 
     test('should include main config in results', async () => {
-      prisma.hostGroup.findMany.mockResolvedValue([]);
+      prisma.config.findMany.mockResolvedValue([]);
       prisma.host.findMany.mockResolvedValue([]);
 
       const result = await grubService.regenerateAllGrubConfigs();
 
-      expect(result.configs.some(c => c.type === 'main')).toBe(true);
+      expect(result.results.some(c => c.type === 'main')).toBe(true);
     });
   });
 
@@ -540,7 +547,7 @@ describe('GRUB Service', () => {
       await fs.writeFile(filepath, '# old content');
 
       prisma.host.findMany.mockResolvedValue([
-        { hostname: 'migrate-test', group: { name: 'testgroup' } },
+        { hostname: 'migrate-test', config: { name: 'testgroup' } },
       ]);
 
       const result = await grubService.migrateHostConfigsToSymlinks();
@@ -557,7 +564,7 @@ describe('GRUB Service', () => {
       await fs.writeFile(filepath, '# backup content');
 
       prisma.host.findMany.mockResolvedValue([
-        { hostname: 'backup-test', group: { name: 'testgroup' } },
+        { hostname: 'backup-test', config: { name: 'testgroup' } },
       ]);
 
       await grubService.migrateHostConfigsToSymlinks();
@@ -575,7 +582,7 @@ describe('GRUB Service', () => {
       await fs.symlink('../testgroup.cfg', filepath);
 
       prisma.host.findMany.mockResolvedValue([
-        { hostname: 'already-symlink', group: { name: 'testgroup' } },
+        { hostname: 'already-symlink', config: { name: 'testgroup' } },
       ]);
 
       const result = await grubService.migrateHostConfigsToSymlinks();
@@ -586,7 +593,7 @@ describe('GRUB Service', () => {
 
     test('should create symlink for missing hosts', async () => {
       prisma.host.findMany.mockResolvedValue([
-        { hostname: 'new-host-migration', group: { name: 'testgroup' } },
+        { hostname: 'new-host-migration', config: { name: 'testgroup' } },
       ]);
 
       const result = await grubService.migrateHostConfigsToSymlinks();
@@ -599,12 +606,12 @@ describe('GRUB Service', () => {
     });
   });
 
-  describe('deleteGroupGrubConfig', () => {
+  describe('deleteConfigGrubConfig', () => {
     test('should delete group config file', async () => {
       const filepath = path.join(grubDir, 'testgroup.cfg');
       await fs.writeFile(filepath, '# test');
 
-      const deleted = await grubService.deleteGroupGrubConfig('testgroup');
+      const deleted = await grubService.deleteConfigGrubConfig('testgroup');
 
       expect(deleted).toBe(true);
 
@@ -613,7 +620,7 @@ describe('GRUB Service', () => {
     });
 
     test('should return false if file does not exist', async () => {
-      const deleted = await grubService.deleteGroupGrubConfig('nonexistent');
+      const deleted = await grubService.deleteConfigGrubConfig('nonexistent');
 
       expect(deleted).toBe(false);
     });
@@ -654,8 +661,8 @@ describe('GRUB Service', () => {
 
       const result = await grubService.listGrubConfigs();
 
-      expect(result.groups).toContain('list-group1');
-      expect(result.groups).toContain('list-group2');
+      expect(result.configs).toContain('list-group1');
+      expect(result.configs).toContain('list-group2');
       expect(result.hosts.some(h => h.name === 'list-host1')).toBe(true);
     });
 
@@ -682,31 +689,31 @@ describe('GRUB Service', () => {
       expect(host.isSymlink).toBe(false);
     });
 
-    test('should exclude grub.cfg from groups list', async () => {
+    test('should exclude grub.cfg from configs list', async () => {
       await fs.writeFile(path.join(grubDir, 'grub.cfg'), '# main');
 
       const result = await grubService.listGrubConfigs();
 
-      expect(result.groups).not.toContain('grub');
+      expect(result.configs).not.toContain('grub');
     });
   });
 
   describe('cleanupOrphanedConfigs', () => {
-    test('should remove configs for non-existent groups', async () => {
-      await fs.writeFile(path.join(grubDir, 'orphangroup.cfg'), '# test');
+    test('should remove configs for non-existent configs', async () => {
+      await fs.writeFile(path.join(grubDir, 'orphanconfig.cfg'), '# test');
 
-      prisma.hostGroup.findMany.mockResolvedValue([{ name: 'existinggroup' }]);
+      prisma.config.findMany.mockResolvedValue([{ name: 'existingconfig' }]);
       prisma.host.findMany.mockResolvedValue([]);
 
       const result = await grubService.cleanupOrphanedConfigs();
 
-      expect(result.removedGroups).toContain('orphangroup');
+      expect(result.removedConfigs).toContain('orphanconfig');
     });
 
     test('should remove configs for non-existent hosts', async () => {
       await fs.writeFile(path.join(hostcfgDir, 'orphanhost.cfg'), '# test');
 
-      prisma.hostGroup.findMany.mockResolvedValue([]);
+      prisma.config.findMany.mockResolvedValue([]);
       prisma.host.findMany.mockResolvedValue([{ hostname: 'existinghost' }]);
 
       const result = await grubService.cleanupOrphanedConfigs();
@@ -715,16 +722,16 @@ describe('GRUB Service', () => {
     });
 
     test('should not remove configs for existing entities', async () => {
-      await fs.writeFile(path.join(grubDir, 'validgroup.cfg'), '# test');
+      await fs.writeFile(path.join(grubDir, 'validconfig.cfg'), '# test');
 
-      prisma.hostGroup.findMany.mockResolvedValue([{ name: 'validgroup' }]);
+      prisma.config.findMany.mockResolvedValue([{ name: 'validconfig' }]);
       prisma.host.findMany.mockResolvedValue([]);
 
       const result = await grubService.cleanupOrphanedConfigs();
 
-      expect(result.removedGroups).not.toContain('validgroup');
+      expect(result.removedConfigs).not.toContain('validconfig');
 
-      const fileExists = await fs.access(path.join(grubDir, 'validgroup.cfg'))
+      const fileExists = await fs.access(path.join(grubDir, 'validconfig.cfg'))
         .then(() => true).catch(() => false);
       expect(fileExists).toBe(true);
     });

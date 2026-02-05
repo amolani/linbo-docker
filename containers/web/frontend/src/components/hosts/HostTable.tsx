@@ -76,9 +76,9 @@ export function HostTable({
       render: (host) => host.room?.name || '-',
     },
     {
-      key: 'group',
-      header: 'Gruppe',
-      render: (host) => host.group?.name || '-',
+      key: 'config',
+      header: 'Konfiguration',
+      render: (host) => host.config?.name || '-',
     },
     {
       key: 'actions',

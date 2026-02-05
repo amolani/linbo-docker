@@ -29,29 +29,11 @@ model Room {
 }
 
 // =============================================================================
-// Host Groups
-// =============================================================================
-model HostGroup {
-  id              String   @id @default(uuid()) @db.Uuid
-  name            String   @unique @db.VarChar(255)
-  description     String?  @db.Text
-  defaultConfigId String?  @map("default_config_id") @db.Uuid
-  defaults        Json     @default("{}")
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
-
-  defaultConfig Config? @relation("DefaultConfig", fields: [defaultConfigId], references: [id], onDelete: SetNull)
-  hosts         Host[]
-
-  @@map("host_groups")
-}
-
-// =============================================================================
 // Configurations (start.conf)
 // =============================================================================
 model Config {
   id            String    @id @default(uuid()) @db.Uuid
-  name          String    @db.VarChar(255)
+  name          String    @unique @db.VarChar(255)
   description   String?   @db.Text
   version       String    @default("1.0.0") @db.VarChar(50)
   status        String    @default("draft") @db.VarChar(50)
@@ -67,7 +49,6 @@ model Config {
   partitions ConfigPartition[]
   osEntries  ConfigOs[]
   hosts      Host[]
-  hostGroups HostGroup[]       @relation("DefaultConfig")
 
   @@map("configs")
 }
@@ -81,7 +62,6 @@ model Host {
   macAddress String    @unique @map("mac_address") @db.VarChar(17)
   ipAddress  String?   @map("ip_address") @db.Inet
   roomId     String?   @map("room_id") @db.Uuid
-  groupId    String?   @map("group_id") @db.Uuid
   configId   String?   @map("config_id") @db.Uuid
   status     String    @default("offline") @db.VarChar(50)
   lastSeen   DateTime? @map("last_seen") @db.Timestamptz
@@ -92,14 +72,13 @@ model Host {
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  room     Room?      @relation(fields: [roomId], references: [id], onDelete: SetNull)
-  group    HostGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
-  config   Config?    @relation(fields: [configId], references: [id], onDelete: SetNull)
+  room     Room?     @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  config   Config?   @relation(fields: [configId], references: [id], onDelete: SetNull)
   sessions Session[]
 
   @@index([status], map: "idx_hosts_status")
   @@index([roomId], map: "idx_hosts_room")
-  @@index([groupId], map: "idx_hosts_group")
+  @@index([configId], map: "idx_hosts_config")
   @@index([macAddress], map: "idx_hosts_mac")
   @@map("hosts")
 }

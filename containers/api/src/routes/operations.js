@@ -45,7 +45,7 @@ router.post(
   auditAction('operation.direct'),
   async (req, res, next) => {
     try {
-      const { hostIds, roomId, groupId, commands, options = {} } = req.body;
+      const { hostIds, roomId, configId, commands, options = {} } = req.body;
 
       // Validiere Commands
       const validation = remoteService.validateCommandString(commands);
@@ -61,7 +61,7 @@ router.post(
       // Hosts ermitteln
       let targetHostIds = hostIds;
       if (!targetHostIds || targetHostIds.length === 0) {
-        const hosts = await remoteService.getHostsByFilter({ roomId, groupId });
+        const hosts = await remoteService.getHostsByFilter({ roomId, configId });
         targetHostIds = hosts.map(h => h.id);
       }
 
@@ -99,7 +99,7 @@ router.post(
   auditAction('operation.schedule'),
   async (req, res, next) => {
     try {
-      const { hostIds, roomId, groupId, commands, options = {} } = req.body;
+      const { hostIds, roomId, configId, commands, options = {} } = req.body;
 
       // Validiere Commands
       const validation = remoteService.validateCommandString(commands);
@@ -115,7 +115,7 @@ router.post(
       // Hosts ermitteln
       let targetHostIds = hostIds;
       if (!targetHostIds || targetHostIds.length === 0) {
-        const hosts = await remoteService.getHostsByFilter({ roomId, groupId });
+        const hosts = await remoteService.getHostsByFilter({ roomId, configId });
         targetHostIds = hosts.map(h => h.id);
       }
 
@@ -192,7 +192,7 @@ router.post(
       const {
         hostIds,
         roomId,
-        groupId,
+        configId,
         wait,
         commands,
         onboot = false,
@@ -214,7 +214,7 @@ router.post(
       }
 
       const result = await remoteService.wakeAndExecute(
-        { hostIds, roomId, groupId },
+        { hostIds, roomId, configId },
         { wait, commands, onboot, noauto, disablegui }
       );
 

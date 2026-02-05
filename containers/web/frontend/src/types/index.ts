@@ -34,22 +34,6 @@ export interface Room {
   };
 }
 
-// Host Group
-export interface HostGroup {
-  id: string;
-  name: string;
-  description?: string;
-  defaultConfigId?: string;
-  defaults: Record<string, unknown>;
-  createdAt: string;
-  updatedAt: string;
-  defaultConfig?: Config;
-  hosts?: Host[];
-  _count?: {
-    hosts: number;
-  };
-}
-
 // Host
 export interface Host {
   id: string;
@@ -57,7 +41,6 @@ export interface Host {
   macAddress: string;
   ipAddress?: string;
   roomId?: string;
-  groupId?: string;
   configId?: string;
   status: HostStatus;
   lastSeen?: string;
@@ -68,7 +51,6 @@ export interface Host {
   createdAt: string;
   updatedAt: string;
   room?: Room;
-  group?: HostGroup;
   config?: Config;
 }
 
@@ -237,7 +219,7 @@ export interface DashboardStats {
     offline: number;
     syncing: number;
   };
-  groups: number;
+  configs: number;
   rooms: number;
   images: {
     total: number;
@@ -318,7 +300,6 @@ export interface HostFilters {
   search?: string;
   status?: HostStatus;
   roomId?: string;
-  groupId?: string;
   configId?: string;
 }
 

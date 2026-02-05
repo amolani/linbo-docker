@@ -95,7 +95,6 @@ const mockConfig = {
     },
   ],
   hosts: [],
-  hostGroups: [],
 };
 
 describe('Config Service', () => {
@@ -181,14 +180,13 @@ describe('Config Service', () => {
       expect(result.content).toContain('AutoPartition = no');
     });
 
-    test('should include header comment with timestamp', async () => {
+    test('should not include header comments (production format)', async () => {
       prisma.config.findUnique.mockResolvedValue(mockConfig);
 
       const result = await configService.generateStartConf(mockConfig.id);
 
-      expect(result.content).toContain('# LINBO start.conf - win11_efi_sata');
-      expect(result.content).toContain('# Generated:');
-      expect(result.content).toContain('# Version: 1');
+      // Production start.conf files do not have header comments
+      expect(result.content).toMatch(/^\[LINBO\]/);
     });
   });
 
@@ -247,7 +245,6 @@ describe('Config Service', () => {
           { ipAddress: '10.0.0.101' },
           { ipAddress: '10.0.0.102' },
         ],
-        hostGroups: [],
       };
       prisma.config.findUnique.mockResolvedValue(configWithHosts);
 
@@ -260,20 +257,15 @@ describe('Config Service', () => {
       expect(link1).toBe('start.conf.win11_efi_sata');
     });
 
-    test('should include hosts from groups', async () => {
-      const configWithGroups = {
+    test('should create symlinks for multiple hosts', async () => {
+      const configWithHosts = {
         ...mockConfig,
-        hosts: [],
-        hostGroups: [
-          {
-            hosts: [
-              { ipAddress: '10.0.0.201' },
-              { ipAddress: '10.0.0.202' },
-            ],
-          },
+        hosts: [
+          { ipAddress: '10.0.0.201' },
+          { ipAddress: '10.0.0.202' },
         ],
       };
-      prisma.config.findUnique.mockResolvedValue(configWithGroups);
+      prisma.config.findUnique.mockResolvedValue(configWithHosts);
 
       const count = await configService.createHostSymlinks(mockConfig.id);
 
@@ -287,7 +279,6 @@ describe('Config Service', () => {
           { ipAddress: '10.0.0.103' },
           { ipAddress: null },
         ],
-        hostGroups: [],
       };
       prisma.config.findUnique.mockResolvedValue(configWithMissingIP);
 

@@ -187,11 +187,6 @@ async function createHostSymlinks(configId) {
     where: { id: configId },
     include: {
       hosts: true,
-      hostGroups: {
-        include: {
-          hosts: true,
-        },
-      },
     },
   });
 
@@ -202,22 +197,13 @@ async function createHostSymlinks(configId) {
   const groupFile = `start.conf.${config.name}`;
   let created = 0;
 
-  // Collect all hosts (directly assigned and from groups)
+  // Collect all hosts assigned to this config
   const allHosts = new Map();
 
   // Hosts directly assigned to this config
   for (const host of config.hosts) {
     if (host.ipAddress) {
       allHosts.set(host.ipAddress, host);
-    }
-  }
-
-  // Hosts from groups using this config as default
-  for (const group of config.hostGroups) {
-    for (const host of group.hosts) {
-      if (host.ipAddress) {
-        allHosts.set(host.ipAddress, host);
-      }
     }
   }
 

@@ -46,7 +46,6 @@ const createHostSchema = z.object({
   macAddress: macAddressSchema,
   ipAddress: ipAddressSchema.optional(),
   roomId: uuidSchema.optional().nullable(),
-  groupId: uuidSchema.optional().nullable(),
   configId: uuidSchema.optional().nullable(),
   status: z.enum(['online', 'offline', 'syncing', 'error']).default('offline'),
   bootMode: z.string().max(50).optional(),
@@ -58,7 +57,7 @@ const updateHostSchema = createHostSchema.partial();
 
 const hostQuerySchema = paginationSchema.extend({
   roomId: uuidSchema.optional(),
-  groupId: uuidSchema.optional(),
+  configId: uuidSchema.optional(),
   status: z.enum(['online', 'offline', 'syncing', 'error']).optional(),
   search: z.string().optional(),
 });
@@ -74,19 +73,6 @@ const createRoomSchema = z.object({
 });
 
 const updateRoomSchema = createRoomSchema.partial();
-
-// =============================================================================
-// Group Schemas
-// =============================================================================
-
-const createGroupSchema = z.object({
-  name: z.string().min(1).max(255),
-  description: z.string().optional(),
-  defaultConfigId: uuidSchema.optional().nullable(),
-  defaults: z.record(z.any()).default({}),
-});
-
-const updateGroupSchema = createGroupSchema.partial();
 
 // =============================================================================
 // Config Schemas
@@ -300,8 +286,6 @@ module.exports = {
   hostQuerySchema,
   createRoomSchema,
   updateRoomSchema,
-  createGroupSchema,
-  updateGroupSchema,
   partitionSchema,
   osSchema,
   createConfigSchema,

@@ -345,15 +345,15 @@ describe('Remote Service', () => {
       );
     });
 
-    test('should filter by groupId', async () => {
+    test('should filter by configId', async () => {
       const mockHosts = [{ id: '1', hostname: 'pc01' }];
       prisma.host.findMany.mockResolvedValue(mockHosts);
 
-      await remoteService.getHostsByFilter({ groupId: 'group-1' });
+      await remoteService.getHostsByFilter({ configId: 'config-1' });
 
       expect(prisma.host.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { groupId: 'group-1' },
+          where: { configId: 'config-1' },
         })
       );
     });

@@ -17,7 +17,7 @@ export interface SendCommandData {
 export interface DirectCommandRequest {
   hostIds?: string[];
   roomId?: string;
-  groupId?: string;
+  configId?: string;
   commands: string;
   options?: {
     wakeOnLan?: boolean;
@@ -29,7 +29,7 @@ export interface DirectCommandRequest {
 export interface ScheduleCommandRequest {
   hostIds?: string[];
   roomId?: string;
-  groupId?: string;
+  configId?: string;
   commands: string;
   options?: {
     wakeOnLan?: boolean;
@@ -175,7 +175,7 @@ export const operationsApi = {
     return response.data.data;
   },
 
-  wake: async (data: { hostIds?: string[]; roomId?: string; groupId?: string; delay?: number }): Promise<{ sent: number; hosts: string[] }> => {
+  wake: async (data: { hostIds?: string[]; roomId?: string; configId?: string; delay?: number }): Promise<{ sent: number; hosts: string[] }> => {
     const response = await apiClient.post<ApiResponse<{ sent: number; hosts: string[] }>>('/operations/wake', data);
     return response.data.data;
   },

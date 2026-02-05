@@ -2,12 +2,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { PlusIcon, ArrowDownTrayIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
 import { useHosts, useHostActions, useHostFilters } from '@/hooks/useHosts';
 import { roomsApi } from '@/api/rooms';
-import { groupsApi } from '@/api/groups';
+import { configsApi } from '@/api/configs';
 import { hostsApi } from '@/api/hosts';
 import { Button, Table, Pagination, StatusBadge, Modal, Input, Select, ConfirmModal } from '@/components/ui';
 import { ImportHostsModal } from '@/components/hosts';
 import { notify } from '@/stores/notificationStore';
-import type { Host, Room, HostGroup, Column } from '@/types';
+import type { Host, Room, Config, Column } from '@/types';
 
 export function HostsPage() {
   const {
@@ -42,7 +42,7 @@ export function HostsPage() {
   } = useHostActions();
 
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [groups, setGroups] = useState<HostGroup[]>([]);
+  const [configs, setConfigs] = useState<Config[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -53,17 +53,17 @@ export function HostsPage() {
     macAddress: '',
     ipAddress: '',
     roomId: '',
-    groupId: '',
+    configId: '',
   });
 
   useEffect(() => {
     const fetchOptions = async () => {
-      const [roomsData, groupsData] = await Promise.all([
+      const [roomsData, configsData] = await Promise.all([
         roomsApi.list(),
-        groupsApi.list(),
+        configsApi.list(),
       ]);
       setRooms(roomsData);
-      setGroups(groupsData);
+      setConfigs(configsData);
     };
     fetchOptions();
   }, []);
@@ -76,7 +76,7 @@ export function HostsPage() {
         macAddress: host.macAddress,
         ipAddress: host.ipAddress || '',
         roomId: host.roomId || '',
-        groupId: host.groupId || '',
+        configId: host.configId || '',
       });
     } else {
       setEditingHost(null);
@@ -85,7 +85,7 @@ export function HostsPage() {
         macAddress: '',
         ipAddress: '',
         roomId: '',
-        groupId: '',
+        configId: '',
       });
     }
     setIsModalOpen(true);
@@ -98,7 +98,7 @@ export function HostsPage() {
       macAddress: formData.macAddress,
       ipAddress: formData.ipAddress || undefined,
       roomId: formData.roomId || undefined,
-      groupId: formData.groupId || undefined,
+      configId: formData.configId || undefined,
     };
 
     if (editingHost) {
@@ -172,9 +172,9 @@ export function HostsPage() {
       render: (host) => host.room?.name || '-',
     },
     {
-      key: 'group',
-      header: 'Gruppe',
-      render: (host) => host.group?.name || '-',
+      key: 'config',
+      header: 'Konfiguration',
+      render: (host) => host.config?.name || '-',
     },
     {
       key: 'actions',
@@ -270,11 +270,11 @@ export function HostsPage() {
             ]}
           />
           <Select
-            value={filters.groupId || ''}
-            onChange={(e) => updateFilter('groupId', e.target.value || undefined)}
+            value={filters.configId || ''}
+            onChange={(e) => updateFilter('configId', e.target.value || undefined)}
             options={[
-              { value: '', label: 'Alle Gruppen' },
-              ...groups.map((g) => ({ value: g.id, label: g.name })),
+              { value: '', label: 'Alle Konfigurationen' },
+              ...configs.map((c) => ({ value: c.id, label: c.name })),
             ]}
           />
           <Button variant="secondary" onClick={clearFilters}>
@@ -373,12 +373,12 @@ export function HostsPage() {
             ]}
           />
           <Select
-            label="Gruppe"
-            value={formData.groupId}
-            onChange={(e) => setFormData({ ...formData, groupId: e.target.value })}
+            label="Konfiguration"
+            value={formData.configId}
+            onChange={(e) => setFormData({ ...formData, configId: e.target.value })}
             options={[
-              { value: '', label: 'Keine Gruppe' },
-              ...groups.map((g) => ({ value: g.id, label: g.name })),
+              { value: '', label: 'Keine Konfiguration' },
+              ...configs.map((c) => ({ value: c.id, label: c.name })),
             ]}
           />
           <div className="flex justify-end space-x-3 pt-4">
