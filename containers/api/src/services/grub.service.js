@@ -12,6 +12,21 @@ const GRUB_DIR = path.join(LINBO_DIR, 'boot/grub');
 const HOSTCFG_DIR = path.join(GRUB_DIR, 'hostcfg');
 
 /**
+ * Case-insensitive lookup for linboSettings
+ * Frontend uses lowercase, backend expects PascalCase
+ */
+function getLinboSetting(settings, key) {
+  if (!settings) return undefined;
+  if (settings[key] !== undefined) return settings[key];
+  const lowerKey = key.toLowerCase();
+  if (settings[lowerKey] !== undefined) return settings[lowerKey];
+  for (const k of Object.keys(settings)) {
+    if (k.toLowerCase() === lowerKey) return settings[k];
+  }
+  return undefined;
+}
+
+/**
  * Generate GRUB config for a host group
  * Creates: /boot/grub/{groupname}.cfg
  * @param {string} groupName - Name of the host group
@@ -31,10 +46,11 @@ async function generateGroupGrubConfig(groupName, options = {}) {
     },
   });
 
-  // Get kernel options from config
+  // Get kernel options from config (case-insensitive lookup)
   let kernelOptions = options.kernelOptions || '';
-  if (group?.defaultConfig?.linboSettings?.KernelOptions) {
-    kernelOptions = group.defaultConfig.linboSettings.KernelOptions;
+  const configKernelOpts = getLinboSetting(group?.defaultConfig?.linboSettings, 'KernelOptions');
+  if (configKernelOpts) {
+    kernelOptions = configKernelOpts;
   }
 
   // Generate GRUB config content
@@ -91,10 +107,11 @@ async function generateHostGrubConfig(hostname, groupName, options = {}) {
     },
   });
 
-  // Get kernel options from host config or options
+  // Get kernel options from host config or options (case-insensitive lookup)
   let kernelOptions = options.kernelOptions || '';
-  if (host?.config?.linboSettings?.KernelOptions) {
-    kernelOptions = host.config.linboSettings.KernelOptions;
+  const hostKernelOpts = getLinboSetting(host?.config?.linboSettings, 'KernelOptions');
+  if (hostKernelOpts) {
+    kernelOptions = hostKernelOpts;
   }
 
   // Generate GRUB config content
