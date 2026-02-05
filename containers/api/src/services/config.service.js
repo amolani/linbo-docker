@@ -336,12 +336,120 @@ async function getRawConfig(configName) {
 }
 
 /**
- * Save raw start.conf content directly to file
+ * Parse start.conf content into structured data
+ * @param {string} content - Raw start.conf content
+ * @returns {{linboSettings: object, partitions: array, osEntries: array}}
+ */
+function parseStartConf(content) {
+  const lines = content.split('\n');
+  const result = {
+    linboSettings: {},
+    partitions: [],
+    osEntries: [],
+  };
+
+  let currentSection = null;
+  let currentData = {};
+
+  const booleanFields = [
+    'autopartition', 'autoformat', 'autoinitcache', 'guidisabled',
+    'useminimallayout', 'bootable', 'startenabled', 'syncenabled',
+    'newenabled', 'autostart', 'hidden', 'restoreopisstate', 'forceopisetup'
+  ];
+
+  const integerFields = [
+    'roottimeout', 'autostarttimeout', 'position'
+  ];
+
+  function saveCurrentSection() {
+    if (!currentSection) return;
+
+    if (currentSection === 'linbo') {
+      result.linboSettings = { ...currentData };
+    } else if (currentSection === 'partition') {
+      result.partitions.push({
+        device: currentData.dev || '',
+        label: currentData.label || '',
+        size: currentData.size || '',
+        partitionId: currentData.id || '',
+        fsType: currentData.fstype || '',
+        bootable: currentData.bootable || false,
+        position: result.partitions.length,
+      });
+    } else if (currentSection === 'os') {
+      result.osEntries.push({
+        name: currentData.name || 'Unknown OS',
+        description: currentData.description || '',
+        version: currentData.version || '',
+        iconName: currentData.iconname || '',
+        baseImage: currentData.baseimage || currentData.image || '',
+        differentialImage: currentData.diffimage || '',
+        rootDevice: currentData.root || currentData.boot || '',
+        bootDevice: currentData.boot || '',
+        kernel: currentData.kernel || '',
+        initrd: currentData.initrd || '',
+        append: currentData.append ? [currentData.append] : [],
+        startEnabled: currentData.startenabled !== false,
+        syncEnabled: currentData.syncenabled !== false,
+        newEnabled: currentData.newenabled !== false,
+        autostart: currentData.autostart || false,
+        autostartTimeout: currentData.autostarttimeout || 5,
+        defaultAction: currentData.defaultaction || 'sync',
+        hidden: currentData.hidden || false,
+        position: result.osEntries.length,
+      });
+    }
+
+    currentData = {};
+  }
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // Skip empty lines and comments
+    if (!trimmed || trimmed.startsWith('#')) continue;
+
+    // Check for section header
+    const sectionMatch = trimmed.match(/^\[(\w+)\]$/i);
+    if (sectionMatch) {
+      saveCurrentSection();
+      currentSection = sectionMatch[1].toLowerCase();
+      continue;
+    }
+
+    // Parse key = value
+    const kvMatch = trimmed.match(/^(\w+)\s*=\s*(.*)$/);
+    if (kvMatch && currentSection) {
+      const key = kvMatch[1].toLowerCase();
+      let value = kvMatch[2].trim();
+
+      // Convert boolean values
+      if (booleanFields.includes(key)) {
+        value = value.toLowerCase() === 'yes' || value === 'true' || value === '1';
+      }
+      // Convert integer values
+      else if (integerFields.includes(key)) {
+        value = parseInt(value, 10) || 0;
+      }
+
+      currentData[key] = value;
+    }
+  }
+
+  // Save last section
+  saveCurrentSection();
+
+  return result;
+}
+
+/**
+ * Save raw start.conf content and sync to database
  * @param {string} configName - Config name (group name)
  * @param {string} content - Raw config content
- * @returns {Promise<{filepath: string, size: number, hash: string}>}
+ * @param {string} configId - Config UUID for database sync
+ * @returns {Promise<{filepath: string, size: number, hash: string, dbSynced: boolean}>}
  */
-async function saveRawConfig(configName, content) {
+async function saveRawConfig(configName, content, configId = null) {
   const filename = `start.conf.${configName}`;
   const filepath = path.join(LINBO_DIR, filename);
 
@@ -369,11 +477,65 @@ async function saveRawConfig(configName, content) {
   const hash = crypto.createHash('md5').update(content).digest('hex');
   await fs.writeFile(`${filepath}.md5`, hash);
 
-  return { filepath, size: content.length, hash };
+  // Sync to database if configId provided
+  let dbSynced = false;
+  if (configId) {
+    try {
+      const parsed = parseStartConf(content);
+
+      // Update config with parsed data in a transaction
+      await prisma.$transaction(async (tx) => {
+        // Update linboSettings
+        await tx.config.update({
+          where: { id: configId },
+          data: {
+            linboSettings: parsed.linboSettings,
+          },
+        });
+
+        // Delete existing partitions and recreate
+        await tx.configPartition.deleteMany({
+          where: { configId },
+        });
+
+        for (const partition of parsed.partitions) {
+          await tx.configPartition.create({
+            data: {
+              configId,
+              ...partition,
+            },
+          });
+        }
+
+        // Delete existing OS entries and recreate
+        await tx.configOs.deleteMany({
+          where: { configId },
+        });
+
+        for (const os of parsed.osEntries) {
+          await tx.configOs.create({
+            data: {
+              configId,
+              ...os,
+            },
+          });
+        }
+      });
+
+      console.log(`[ConfigService] Database synced for config: ${configName}`);
+      dbSynced = true;
+    } catch (error) {
+      console.error(`[ConfigService] Failed to sync database:`, error.message);
+      // Don't throw - file save was successful, DB sync is secondary
+    }
+  }
+
+  return { filepath, size: content.length, hash, dbSynced };
 }
 
 module.exports = {
   generateStartConf,
+  parseStartConf,
   deployConfig,
   createHostSymlinks,
   cleanupOrphanedSymlinks,
