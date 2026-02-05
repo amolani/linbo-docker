@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { PlusIcon, DocumentDuplicateIcon, EyeIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, DocumentDuplicateIcon, EyeIcon, CodeBracketIcon } from '@heroicons/react/24/outline';
 import { configsApi } from '@/api/configs';
 import { Button, Table, Modal, Input, Textarea, Badge, ConfirmModal } from '@/components/ui';
-import { LinboSettingsForm, PartitionsEditor, OsEntriesEditor } from '@/components/configs';
+import { LinboSettingsForm, PartitionsEditor, OsEntriesEditor, RawConfigEditorModal } from '@/components/configs';
 import { notify } from '@/stores/notificationStore';
 import type { Config, Column, LinboSettings, ConfigPartition, ConfigOs } from '@/types';
 
@@ -28,6 +28,7 @@ export function ConfigsPage() {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewContent, setPreviewContent] = useState('');
   const [editingConfig, setEditingConfig] = useState<Config | null>(null);
+  const [rawEditorConfig, setRawEditorConfig] = useState<Config | null>(null);
   const [deleteConfirmConfig, setDeleteConfirmConfig] = useState<Config | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('basic');
@@ -223,6 +224,13 @@ export function ConfigsPage() {
             <EyeIcon className="h-4 w-4" />
           </button>
           <button
+            onClick={() => setRawEditorConfig(config)}
+            className="text-primary-600 hover:text-primary-900"
+            title="Raw Editor"
+          >
+            <CodeBracketIcon className="h-4 w-4" />
+          </button>
+          <button
             onClick={() => handleClone(config.id, config.name)}
             className="text-primary-600 hover:text-primary-900"
             title="Klonen"
@@ -395,6 +403,14 @@ export function ConfigsPage() {
         confirmLabel="Loeschen"
         variant="danger"
         loading={isSubmitting}
+      />
+
+      {/* Raw Config Editor */}
+      <RawConfigEditorModal
+        isOpen={!!rawEditorConfig}
+        onClose={() => setRawEditorConfig(null)}
+        config={rawEditorConfig}
+        onSaved={() => fetchConfigs()}
       />
     </div>
   );

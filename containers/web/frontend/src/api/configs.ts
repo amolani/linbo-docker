@@ -66,4 +66,39 @@ export const configsApi = {
     const response = await apiClient.post<ApiResponse<Config>>(`/configs/${id}/clone`, { name: newName });
     return response.data.data;
   },
+
+  deploy: async (id: string): Promise<{ filepath: string; symlinkCount: number; message: string }> => {
+    const response = await apiClient.post<ApiResponse<{ filepath: string; symlinkCount: number; message: string }>>(
+      `/configs/${id}/deploy`
+    );
+    return response.data.data;
+  },
+
+  getRaw: async (id: string): Promise<RawConfigResponse> => {
+    const response = await apiClient.get<ApiResponse<RawConfigResponse>>(`/configs/${id}/raw`);
+    return response.data.data;
+  },
+
+  saveRaw: async (id: string, content: string): Promise<SaveRawResponse> => {
+    const response = await apiClient.put<ApiResponse<SaveRawResponse>>(`/configs/${id}/raw`, { content });
+    return response.data.data;
+  },
 };
+
+export interface RawConfigResponse {
+  configId: string;
+  configName: string;
+  content: string;
+  filepath: string;
+  exists: boolean;
+  lastModified: string | null;
+}
+
+export interface SaveRawResponse {
+  configId: string;
+  configName: string;
+  filepath: string;
+  size: number;
+  hash: string;
+  message: string;
+}

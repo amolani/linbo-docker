@@ -303,6 +303,75 @@ async function listDeployedConfigs() {
   return configs;
 }
 
+/**
+ * Get raw start.conf content from deployed file
+ * @param {string} configName - Config name (group name)
+ * @returns {Promise<{content: string, filepath: string, exists: boolean, lastModified: Date|null}>}
+ */
+async function getRawConfig(configName) {
+  const filename = `start.conf.${configName}`;
+  const filepath = path.join(LINBO_DIR, filename);
+
+  try {
+    const content = await fs.readFile(filepath, 'utf8');
+    const stat = await fs.stat(filepath);
+
+    return {
+      content,
+      filepath,
+      exists: true,
+      lastModified: stat.mtime,
+    };
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return {
+        content: '',
+        filepath,
+        exists: false,
+        lastModified: null,
+      };
+    }
+    throw error;
+  }
+}
+
+/**
+ * Save raw start.conf content directly to file
+ * @param {string} configName - Config name (group name)
+ * @param {string} content - Raw config content
+ * @returns {Promise<{filepath: string, size: number, hash: string}>}
+ */
+async function saveRawConfig(configName, content) {
+  const filename = `start.conf.${configName}`;
+  const filepath = path.join(LINBO_DIR, filename);
+
+  // Ensure LINBO directory exists
+  await fs.mkdir(LINBO_DIR, { recursive: true });
+
+  // Backup existing file if it exists
+  try {
+    const existing = await fs.readFile(filepath, 'utf8');
+    if (existing !== content) {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const backupPath = `${filepath}.${timestamp}.bak`;
+      await fs.writeFile(backupPath, existing);
+      console.log(`[ConfigService] Backup created: ${backupPath}`);
+    }
+  } catch (e) {
+    // File doesn't exist, no backup needed
+  }
+
+  // Write new content
+  await fs.writeFile(filepath, content, 'utf8');
+  console.log(`[ConfigService] Raw config saved: ${filepath}`);
+
+  // Generate MD5 hash
+  const hash = crypto.createHash('md5').update(content).digest('hex');
+  await fs.writeFile(`${filepath}.md5`, hash);
+
+  return { filepath, size: content.length, hash };
+}
+
 module.exports = {
   generateStartConf,
   deployConfig,
@@ -310,4 +379,6 @@ module.exports = {
   cleanupOrphanedSymlinks,
   deployAllConfigs,
   listDeployedConfigs,
+  getRawConfig,
+  saveRawConfig,
 };
