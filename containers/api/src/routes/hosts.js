@@ -18,6 +18,138 @@ const { auditAction } = require('../middleware/audit');
 const redis = require('../lib/redis');
 const grubService = require('../services/grub.service');
 
+// =============================================================================
+// Device Import/Export Routes (Phase 7) - MUST be before /:id route!
+// =============================================================================
+
+const deviceImportService = require('../services/deviceImport.service');
+
+/**
+ * POST /hosts/import
+ * Import hosts from CSV (linuxmuster devices.csv format)
+ */
+router.post(
+  '/import',
+  authenticateToken,
+  requireRole(['admin']),
+  auditAction('hosts.import'),
+  async (req, res, next) => {
+    try {
+      const { csv, options = {} } = req.body;
+
+      if (!csv) {
+        return res.status(400).json({
+          error: {
+            code: 'MISSING_CSV',
+            message: 'CSV content is required',
+          },
+        });
+      }
+
+      const result = await deviceImportService.importFromCsv(csv, options);
+
+      // Invalidate cache after successful import
+      if (result.success && !options.dryRun) {
+        await redis.delPattern('hosts:*');
+      }
+
+      const statusCode = result.success ? 200 : 400;
+      res.status(statusCode).json({ data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /hosts/import/validate
+ * Validate CSV without importing
+ */
+router.post(
+  '/import/validate',
+  authenticateToken,
+  requireRole(['admin', 'operator']),
+  async (req, res, next) => {
+    try {
+      const { csv, options = {} } = req.body;
+
+      if (!csv) {
+        return res.status(400).json({
+          error: {
+            code: 'MISSING_CSV',
+            message: 'CSV content is required',
+          },
+        });
+      }
+
+      // Dry-run import
+      const result = await deviceImportService.importFromCsv(csv, {
+        ...options,
+        dryRun: true,
+      });
+
+      res.json({ data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /hosts/export
+ * Export all hosts as CSV
+ */
+router.get(
+  '/export',
+  authenticateToken,
+  requireRole(['admin', 'operator']),
+  async (req, res, next) => {
+    try {
+      const csv = await deviceImportService.exportToCsv();
+
+      // Set headers for CSV download
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="devices_${new Date().toISOString().split('T')[0]}.csv"`
+      );
+
+      res.send(csv);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /hosts/sync-filesystem
+ * Synchronize database with filesystem (symlinks, GRUB configs)
+ */
+router.post(
+  '/sync-filesystem',
+  authenticateToken,
+  requireRole(['admin']),
+  auditAction('hosts.sync_filesystem'),
+  async (req, res, next) => {
+    try {
+      const result = await deviceImportService.syncFilesystem();
+
+      res.json({
+        data: {
+          message: 'Filesystem synchronized',
+          ...result,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// =============================================================================
+// Standard Host Routes
+// =============================================================================
+
 /**
  * GET /hosts
  * List hosts with pagination and filters
@@ -579,6 +711,118 @@ router.patch(
           },
         });
       }
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /hosts/:id/schedule-command
+ * Schedule an onboot command for a single host
+ */
+router.post(
+  '/:id/schedule-command',
+  authenticateToken,
+  requireRole(['admin', 'operator']),
+  auditAction('host.schedule_command'),
+  async (req, res, next) => {
+    try {
+      const { commands, noauto, disablegui } = req.body;
+
+      if (!commands) {
+        return res.status(400).json({
+          error: {
+            code: 'MISSING_COMMANDS',
+            message: 'commands field is required',
+          },
+        });
+      }
+
+      const remoteService = require('../services/remote.service');
+
+      // Validiere Commands
+      const validation = remoteService.validateCommandString(commands);
+      if (!validation.valid) {
+        return res.status(400).json({
+          error: {
+            code: 'INVALID_COMMANDS',
+            message: validation.error,
+          },
+        });
+      }
+
+      const result = await remoteService.scheduleOnbootCommands(
+        [req.params.id],
+        commands,
+        { noauto, disablegui }
+      );
+
+      if (result.failed.length > 0) {
+        return res.status(400).json({
+          error: {
+            code: 'SCHEDULE_FAILED',
+            message: result.failed[0].error,
+          },
+        });
+      }
+
+      res.status(201).json({
+        data: {
+          message: 'Command scheduled for next boot',
+          hostname: result.created[0],
+          commands,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * DELETE /hosts/:id/scheduled-command
+ * Cancel a scheduled onboot command for a host
+ */
+router.delete(
+  '/:id/scheduled-command',
+  authenticateToken,
+  requireRole(['admin', 'operator']),
+  auditAction('host.cancel_scheduled_command'),
+  async (req, res, next) => {
+    try {
+      const host = await prisma.host.findUnique({
+        where: { id: req.params.id },
+        select: { hostname: true },
+      });
+
+      if (!host) {
+        return res.status(404).json({
+          error: {
+            code: 'HOST_NOT_FOUND',
+            message: 'Host not found',
+          },
+        });
+      }
+
+      const remoteService = require('../services/remote.service');
+      const deleted = await remoteService.cancelScheduledCommand(host.hostname);
+
+      if (!deleted) {
+        return res.status(404).json({
+          error: {
+            code: 'NO_SCHEDULED_COMMAND',
+            message: 'No scheduled command found for this host',
+          },
+        });
+      }
+
+      res.json({
+        data: {
+          message: 'Scheduled command cancelled',
+          hostname: host.hostname,
+        },
+      });
+    } catch (error) {
       next(error);
     }
   }

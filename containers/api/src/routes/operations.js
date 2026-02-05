@@ -15,6 +15,253 @@ const {
 const { auditAction } = require('../middleware/audit');
 const ws = require('../lib/websocket');
 
+// =============================================================================
+// Remote Command Routes (Phase 7) - MUST be before /:id route!
+// =============================================================================
+
+const remoteService = require('../services/remote.service');
+
+/**
+ * GET /operations/scheduled
+ * List all scheduled onboot commands
+ */
+router.get('/scheduled', authenticateToken, async (req, res, next) => {
+  try {
+    const scheduled = await remoteService.listScheduledCommands();
+    res.json({ data: scheduled });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /operations/direct
+ * Execute commands directly via SSH
+ */
+router.post(
+  '/direct',
+  authenticateToken,
+  requireRole(['admin', 'operator']),
+  auditAction('operation.direct'),
+  async (req, res, next) => {
+    try {
+      const { hostIds, roomId, groupId, commands, options = {} } = req.body;
+
+      // Validiere Commands
+      const validation = remoteService.validateCommandString(commands);
+      if (!validation.valid) {
+        return res.status(400).json({
+          error: {
+            code: 'INVALID_COMMANDS',
+            message: validation.error,
+          },
+        });
+      }
+
+      // Hosts ermitteln
+      let targetHostIds = hostIds;
+      if (!targetHostIds || targetHostIds.length === 0) {
+        const hosts = await remoteService.getHostsByFilter({ roomId, groupId });
+        targetHostIds = hosts.map(h => h.id);
+      }
+
+      if (targetHostIds.length === 0) {
+        return res.status(400).json({
+          error: {
+            code: 'NO_HOSTS',
+            message: 'No hosts found matching the filter',
+          },
+        });
+      }
+
+      // Befehle ausführen
+      const result = await remoteService.executeDirectCommands(
+        targetHostIds,
+        commands,
+        options
+      );
+
+      res.json({ data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /operations/schedule
+ * Schedule onboot commands (.cmd files)
+ */
+router.post(
+  '/schedule',
+  authenticateToken,
+  requireRole(['admin', 'operator']),
+  auditAction('operation.schedule'),
+  async (req, res, next) => {
+    try {
+      const { hostIds, roomId, groupId, commands, options = {} } = req.body;
+
+      // Validiere Commands
+      const validation = remoteService.validateCommandString(commands);
+      if (!validation.valid) {
+        return res.status(400).json({
+          error: {
+            code: 'INVALID_COMMANDS',
+            message: validation.error,
+          },
+        });
+      }
+
+      // Hosts ermitteln
+      let targetHostIds = hostIds;
+      if (!targetHostIds || targetHostIds.length === 0) {
+        const hosts = await remoteService.getHostsByFilter({ roomId, groupId });
+        targetHostIds = hosts.map(h => h.id);
+      }
+
+      if (targetHostIds.length === 0) {
+        return res.status(400).json({
+          error: {
+            code: 'NO_HOSTS',
+            message: 'No hosts found matching the filter',
+          },
+        });
+      }
+
+      // Onboot-Commands erstellen
+      const result = await remoteService.scheduleOnbootCommands(
+        targetHostIds,
+        commands,
+        options
+      );
+
+      res.status(201).json({ data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * DELETE /operations/scheduled/:hostname
+ * Cancel a scheduled onboot command
+ */
+router.delete(
+  '/scheduled/:hostname',
+  authenticateToken,
+  requireRole(['admin', 'operator']),
+  auditAction('operation.cancel_scheduled'),
+  async (req, res, next) => {
+    try {
+      const deleted = await remoteService.cancelScheduledCommand(
+        req.params.hostname
+      );
+
+      if (!deleted) {
+        return res.status(404).json({
+          error: {
+            code: 'NOT_FOUND',
+            message: `No scheduled command found for host: ${req.params.hostname}`,
+          },
+        });
+      }
+
+      res.json({
+        data: {
+          message: 'Scheduled command cancelled',
+          hostname: req.params.hostname,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /operations/wake
+ * Send Wake-on-LAN to hosts with optional follow-up commands
+ */
+router.post(
+  '/wake',
+  authenticateToken,
+  requireRole(['admin', 'operator']),
+  auditAction('operation.wake'),
+  async (req, res, next) => {
+    try {
+      const {
+        hostIds,
+        roomId,
+        groupId,
+        wait,
+        commands,
+        onboot = false,
+        noauto = false,
+        disablegui = false,
+      } = req.body;
+
+      // Validiere Commands wenn angegeben
+      if (commands) {
+        const validation = remoteService.validateCommandString(commands);
+        if (!validation.valid) {
+          return res.status(400).json({
+            error: {
+              code: 'INVALID_COMMANDS',
+              message: validation.error,
+            },
+          });
+        }
+      }
+
+      const result = await remoteService.wakeAndExecute(
+        { hostIds, roomId, groupId },
+        { wait, commands, onboot, noauto, disablegui }
+      );
+
+      res.json({ data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /operations/validate-commands
+ * Validate a command string without executing
+ */
+router.post('/validate-commands', authenticateToken, async (req, res, next) => {
+  try {
+    const { commands } = req.body;
+
+    if (!commands) {
+      return res.status(400).json({
+        error: {
+          code: 'MISSING_COMMANDS',
+          message: 'commands field is required',
+        },
+      });
+    }
+
+    const result = remoteService.validateCommandString(commands);
+
+    res.json({
+      data: {
+        valid: result.valid,
+        error: result.error,
+        parsed: result.commands,
+        knownCommands: remoteService.KNOWN_COMMANDS,
+        specialFlags: remoteService.SPECIAL_FLAGS,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// =============================================================================
+// Standard Operation Routes
+// =============================================================================
+
 /**
  * GET /operations
  * List operations with filters
