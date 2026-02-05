@@ -16,6 +16,36 @@ const { auditAction } = require('../middleware/audit');
 const redis = require('../lib/redis');
 const ws = require('../lib/websocket');
 const configService = require('../services/config.service');
+const grubService = require('../services/grub.service');
+
+/**
+ * Regenerate GRUB configs for all groups using a specific config
+ * @param {string} configId - The config ID
+ */
+async function regenerateGrubForConfig(configId) {
+  try {
+    // Find all groups using this config as default
+    const groups = await prisma.hostGroup.findMany({
+      where: { defaultConfigId: configId },
+      select: { name: true },
+    });
+
+    // Regenerate GRUB config for each group
+    for (const group of groups) {
+      try {
+        await grubService.generateGroupGrubConfig(group.name);
+      } catch (error) {
+        console.error(`[Configs] Failed to regenerate GRUB for group ${group.name}:`, error.message);
+      }
+    }
+
+    if (groups.length > 0) {
+      console.log(`[Configs] Regenerated GRUB configs for ${groups.length} groups`);
+    }
+  } catch (error) {
+    console.error('[Configs] Failed to regenerate GRUB configs:', error.message);
+  }
+}
 
 /**
  * GET /configs
@@ -257,6 +287,9 @@ router.patch(
       // Invalidate cache
       await redis.delPattern('configs:*');
 
+      // Regenerate GRUB configs for groups using this config
+      await regenerateGrubForConfig(req.params.id);
+
       res.json({ data: config });
     } catch (error) {
       if (error.code === 'P2025') {
@@ -385,6 +418,19 @@ router.post(
       // Invalidate cache
       await redis.delPattern('hosts:*');
       await redis.delPattern('groups:*');
+
+      // Regenerate GRUB configs for affected groups
+      const groups = await prisma.hostGroup.findMany({
+        where: { id: { in: groupIds } },
+        select: { name: true },
+      });
+      for (const group of groups) {
+        try {
+          await grubService.generateGroupGrubConfig(group.name);
+        } catch (error) {
+          console.error(`[Configs] Failed to regenerate GRUB for group ${group.name}:`, error.message);
+        }
+      }
 
       res.json({
         data: {
@@ -556,6 +602,9 @@ router.post(
           },
         },
       });
+
+      // Regenerate GRUB configs for groups using this config
+      await regenerateGrubForConfig(req.params.id);
 
       // Broadcast deployment event
       ws.broadcast('config.deployed', {
@@ -742,6 +791,9 @@ router.put(
           },
         },
       });
+
+      // Regenerate GRUB configs for groups using this config
+      await regenerateGrubForConfig(req.params.id);
 
       // Broadcast update event
       ws.broadcast('config.raw_updated', {
