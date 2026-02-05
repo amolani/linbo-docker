@@ -221,6 +221,11 @@ async function startServer() {
       }
     });
     console.log('  Redis connected');
+
+    // Initialize macct consumer group for DC workers
+    const macctService = require('./services/macct.service');
+    await macctService.initializeConsumerGroup();
+    console.log('  Macct consumer group initialized');
   } catch (err) {
     console.error('  Redis connection failed:', err.message);
     console.log('  Server will start, but caching will be disabled');

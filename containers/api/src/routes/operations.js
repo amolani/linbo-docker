@@ -259,6 +259,187 @@ router.post('/validate-commands', authenticateToken, async (req, res, next) => {
 });
 
 // =============================================================================
+// Machine Account (macct) Routes - Phase 8
+// =============================================================================
+
+const macctService = require('../services/macct.service');
+
+/**
+ * POST /operations/macct-repair
+ * Manually trigger a machine account repair job
+ */
+router.post(
+  '/macct-repair',
+  authenticateToken,
+  requireRole(['admin', 'operator']),
+  auditAction('operation.macct_repair'),
+  async (req, res, next) => {
+    try {
+      const { hostname, hostId, school } = req.body;
+
+      // Get hostname from hostId if not provided directly
+      let targetHostname = hostname;
+      if (!targetHostname && hostId) {
+        const host = await prisma.host.findUnique({
+          where: { id: hostId },
+          select: { hostname: true },
+        });
+        if (!host) {
+          return res.status(404).json({
+            error: {
+              code: 'HOST_NOT_FOUND',
+              message: 'Host not found',
+            },
+          });
+        }
+        targetHostname = host.hostname;
+      }
+
+      if (!targetHostname) {
+        return res.status(400).json({
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'hostname or hostId is required',
+          },
+        });
+      }
+
+      const result = await macctService.createMacctRepairJob(
+        targetHostname,
+        school || 'default-school',
+        { triggeredBy: 'api', requestedBy: req.user?.username }
+      );
+
+      res.status(result.queued ? 201 : 200).json({
+        data: {
+          operationId: result.operation.id,
+          hostname: targetHostname,
+          status: result.queued ? 'queued' : 'already_queued',
+          message: result.message,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /operations/macct
+ * List machine account repair jobs
+ */
+router.get('/macct', authenticateToken, async (req, res, next) => {
+  try {
+    const { status, hostname, school, page, limit } = req.query;
+
+    const result = await macctService.listMacctJobs({
+      status,
+      hostname,
+      school,
+      page: parseInt(page, 10) || 1,
+      limit: parseInt(limit, 10) || 50,
+    });
+
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /operations/macct/stream-info
+ * Get Redis stream information for monitoring
+ */
+router.get(
+  '/macct/stream-info',
+  authenticateToken,
+  requireRole(['admin']),
+  async (req, res, next) => {
+    try {
+      const [streamInfo, pendingJobs] = await Promise.all([
+        macctService.getStreamInfo(),
+        macctService.getPendingJobs(),
+      ]);
+
+      res.json({
+        data: {
+          ...streamInfo,
+          pending: pendingJobs,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /operations/macct/:id
+ * Get machine account operation status
+ */
+router.get('/macct/:id', authenticateToken, async (req, res, next) => {
+  try {
+    const operation = await macctService.getOperationStatus(req.params.id);
+
+    if (!operation) {
+      return res.status(404).json({
+        error: {
+          code: 'NOT_FOUND',
+          message: 'Operation not found',
+        },
+      });
+    }
+
+    res.json({ data: operation });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /operations/macct/:id/retry
+ * Retry a failed macct operation
+ */
+router.post(
+  '/macct/:id/retry',
+  authenticateToken,
+  requireRole(['admin', 'operator']),
+  auditAction('operation.macct_retry'),
+  async (req, res, next) => {
+    try {
+      const result = await macctService.retryJob(req.params.id);
+
+      if (!result.success) {
+        return res.status(400).json({
+          error: {
+            code: 'RETRY_FAILED',
+            message: result.message,
+          },
+        });
+      }
+
+      res.json({
+        data: {
+          operationId: req.params.id,
+          attempt: result.attempt,
+          message: 'Job re-queued for retry',
+        },
+      });
+    } catch (error) {
+      if (error.message === 'Operation not found') {
+        return res.status(404).json({
+          error: {
+            code: 'NOT_FOUND',
+            message: 'Operation not found',
+          },
+        });
+      }
+      next(error);
+    }
+  }
+);
+
+// =============================================================================
 // Standard Operation Routes
 // =============================================================================
 
