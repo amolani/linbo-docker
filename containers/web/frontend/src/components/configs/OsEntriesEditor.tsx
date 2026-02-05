@@ -93,8 +93,12 @@ export function OsEntriesEditor({ osEntries, partitions, onChange }: OsEntriesEd
     if (index !== undefined) {
       setEditingIndex(index);
       const entry = osEntries[index];
-      // Merge with defaults to ensure all fields exist
-      setFormData({ ...defaultOsEntry, ...entry });
+      // Merge with defaults, converting null to undefined for proper fallback
+      const cleanEntry: Partial<OsEntryData> = {};
+      for (const [key, value] of Object.entries(entry)) {
+        (cleanEntry as Record<string, unknown>)[key] = value === null ? undefined : value;
+      }
+      setFormData({ ...defaultOsEntry, ...cleanEntry });
       // Handle append as string or array
       const appendValue = entry.append;
       if (Array.isArray(appendValue)) {
