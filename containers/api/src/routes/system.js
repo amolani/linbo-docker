@@ -337,6 +337,39 @@ router.post(
   }
 );
 
+/**
+ * POST /system/migrate-grub-configs
+ * Migrate existing host config files to symlinks
+ * This converts regular files in hostcfg/ to symlinks pointing to group configs
+ */
+router.post(
+  '/migrate-grub-configs',
+  authenticateToken,
+  requireRole(['admin']),
+  auditAction('system.migrate_grub_configs'),
+  async (req, res, next) => {
+    try {
+      const result = await grubService.migrateHostConfigsToSymlinks();
+
+      ws.broadcast('system.grub_configs_migrated', {
+        migrated: result.migrated,
+        alreadySymlinks: result.alreadySymlinks,
+        errors: result.errors.length,
+        timestamp: new Date(),
+      });
+
+      res.json({
+        data: {
+          message: `Migration complete: ${result.migrated} migrated, ${result.alreadySymlinks} already symlinks`,
+          ...result,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 // =============================================================================
 // Operation Worker Management
 // =============================================================================
