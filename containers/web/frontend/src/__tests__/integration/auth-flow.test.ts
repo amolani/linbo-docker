@@ -14,8 +14,7 @@ describe('Authentication Flow Integration', () => {
 
   describe('Login Flow', () => {
     it('should complete full login flow', () => {
-      // 1. User submits credentials
-      const credentials = { username: 'admin', password: 'admin' };
+      // 1. User submits credentials (username: 'admin', password: 'admin')
 
       // 2. API returns token and user
       const apiResponse = {

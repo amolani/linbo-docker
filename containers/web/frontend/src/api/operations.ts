@@ -13,6 +13,76 @@ export interface SendCommandData {
   args?: string[];
 }
 
+// Remote Command types (Phase 7c)
+export interface DirectCommandRequest {
+  hostIds?: string[];
+  roomId?: string;
+  groupId?: string;
+  commands: string;
+  options?: {
+    wakeOnLan?: boolean;
+    wolDelay?: number;
+    disableGui?: boolean;
+  };
+}
+
+export interface ScheduleCommandRequest {
+  hostIds?: string[];
+  roomId?: string;
+  groupId?: string;
+  commands: string;
+  options?: {
+    wakeOnLan?: boolean;
+    wolDelay?: number;
+    noAuto?: boolean;
+    disableGui?: boolean;
+  };
+}
+
+export interface ScheduledCommand {
+  hostname: string;
+  commands: string;
+  createdAt: string;
+  filePath: string;
+}
+
+export interface CommandValidationResult {
+  valid: boolean;
+  commands: Array<{
+    command: string;
+    args?: string;
+    valid: boolean;
+    error?: string;
+  }>;
+  errors: string[];
+}
+
+// Known LINBO commands for the command builder
+export interface LinboCommand {
+  value: string;
+  label: string;
+  description: string;
+  hasArg?: boolean;
+  argLabel?: string;
+  argOptions?: string[];
+}
+
+export const LINBO_COMMANDS: LinboCommand[] = [
+  { value: 'partition', label: 'Partition', description: 'Partitionstabelle schreiben' },
+  { value: 'label', label: 'Label', description: 'Partitionen labeln' },
+  { value: 'format', label: 'Format', description: 'Partitionen formatieren', hasArg: true, argLabel: 'Partition #' },
+  { value: 'initcache', label: 'Init Cache', description: 'Cache initialisieren', hasArg: true, argLabel: 'Download-Typ', argOptions: ['rsync', 'multicast', 'torrent'] },
+  { value: 'sync', label: 'Sync', description: 'OS synchronisieren', hasArg: true, argLabel: 'OS #' },
+  { value: 'new', label: 'New (Clean)', description: 'Neuinstallation (Format + Sync)', hasArg: true, argLabel: 'OS #' },
+  { value: 'start', label: 'Start', description: 'OS starten', hasArg: true, argLabel: 'OS #' },
+  { value: 'create_image', label: 'Create Image', description: 'Image erstellen', hasArg: true, argLabel: 'OS #' },
+  { value: 'upload_image', label: 'Upload Image', description: 'Image hochladen', hasArg: true, argLabel: 'OS #' },
+  { value: 'reboot', label: 'Reboot', description: 'Client neu starten' },
+  { value: 'halt', label: 'Halt', description: 'Client herunterfahren' },
+  { value: 'noauto', label: 'No Auto', description: 'Auto-Aktionen deaktivieren' },
+  { value: 'disablegui', label: 'Disable GUI', description: 'GUI deaktivieren' },
+];
+
 // API response wrapper types
 interface ApiResponse<T> {
   data: T;
@@ -76,6 +146,37 @@ export const operationsApi = {
 
   cancel: async (id: string): Promise<{ success: boolean }> => {
     const response = await apiClient.post<ApiResponse<{ success: boolean }>>(`/operations/${id}/cancel`);
+    return response.data.data;
+  },
+
+  // Remote Commands (Phase 7c)
+  direct: async (data: DirectCommandRequest): Promise<Operation> => {
+    const response = await apiClient.post<ApiResponse<Operation>>('/operations/direct', data);
+    return response.data.data;
+  },
+
+  schedule: async (data: ScheduleCommandRequest): Promise<{ scheduled: number; hosts: string[] }> => {
+    const response = await apiClient.post<ApiResponse<{ scheduled: number; hosts: string[] }>>('/operations/schedule', data);
+    return response.data.data;
+  },
+
+  listScheduled: async (): Promise<ScheduledCommand[]> => {
+    const response = await apiClient.get<ApiResponse<ScheduledCommand[]>>('/operations/scheduled');
+    return response.data.data;
+  },
+
+  cancelScheduled: async (hostname: string): Promise<{ success: boolean }> => {
+    const response = await apiClient.delete<ApiResponse<{ success: boolean }>>(`/operations/scheduled/${hostname}`);
+    return response.data.data;
+  },
+
+  validateCommands: async (commands: string): Promise<CommandValidationResult> => {
+    const response = await apiClient.post<ApiResponse<CommandValidationResult>>('/operations/validate-commands', { commands });
+    return response.data.data;
+  },
+
+  wake: async (data: { hostIds?: string[]; roomId?: string; groupId?: string; delay?: number }): Promise<{ sent: number; hosts: string[] }> => {
+    const response = await apiClient.post<ApiResponse<{ sent: number; hosts: string[] }>>('/operations/wake', data);
     return response.data.data;
   },
 };

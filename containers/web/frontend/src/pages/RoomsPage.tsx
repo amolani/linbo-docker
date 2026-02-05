@@ -118,7 +118,7 @@ export function RoomsPage() {
     {
       key: 'hosts',
       header: 'Hosts',
-      render: (room) => room._count?.hosts || 0,
+      render: (room) => (room as Room & { hostCount?: number }).hostCount ?? room._count?.hosts ?? 0,
     },
     {
       key: 'actions',

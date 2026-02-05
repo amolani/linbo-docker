@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// Type for the persisted auth state (partial state that gets rehydrated)
+interface PersistedAuthState {
+  token: string | null;
+  user: { id: string; username: string; email: string; role: 'admin' | 'operator' | 'viewer' } | null;
+  isAuthenticated: boolean;
+}
+
 describe('Auth Store - Rehydration Logic', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -8,9 +15,9 @@ describe('Auth Store - Rehydration Logic', () => {
 
   it('should sync token to localStorage on rehydration', () => {
     // Simulate the onRehydrateStorage callback behavior
-    const state = {
+    const state: PersistedAuthState = {
       token: 'rehydrated-token-789',
-      user: { id: '1', username: 'admin', email: 'admin@test.com', role: 'admin' as const },
+      user: { id: '1', username: 'admin', email: 'admin@test.com', role: 'admin' },
       isAuthenticated: false,
     };
 
@@ -25,7 +32,9 @@ describe('Auth Store - Rehydration Logic', () => {
   });
 
   it('should not set token if state is null', () => {
-    const state = null;
+    // Use a function to prevent TypeScript from narrowing the const to literal 'null'
+    const getState = (): PersistedAuthState | null => null;
+    const state = getState();
 
     // This is what onRehydrateStorage does:
     if (state?.token) {
@@ -36,7 +45,7 @@ describe('Auth Store - Rehydration Logic', () => {
   });
 
   it('should not set token if token is empty', () => {
-    const state = {
+    const state: PersistedAuthState = {
       token: null,
       user: null,
       isAuthenticated: false,
@@ -83,7 +92,7 @@ describe('Auth Store - Login Logic', () => {
 
 describe('Auth Store - Check Auth Logic', () => {
   it('should return not authenticated when no token', () => {
-    const state = {
+    const state: Pick<PersistedAuthState, 'token' | 'isAuthenticated'> = {
       token: null,
       isAuthenticated: false,
     };

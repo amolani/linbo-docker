@@ -130,7 +130,7 @@ export function GroupsPage() {
     {
       key: 'hosts',
       header: 'Hosts',
-      render: (group) => group._count?.hosts || 0,
+      render: (group) => (group as HostGroup & { hostCount?: number }).hostCount ?? group._count?.hosts ?? 0,
     },
     {
       key: 'actions',
