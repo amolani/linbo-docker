@@ -516,8 +516,8 @@ async function saveRawConfig(configName, content, configId = null) {
         for (const partition of parsed.partitions) {
           await tx.configPartition.create({
             data: {
-              configId,
               ...partition,
+              config: { connect: { id: configId } },
             },
           });
         }
@@ -530,8 +530,8 @@ async function saveRawConfig(configName, content, configId = null) {
         for (const os of parsed.osEntries) {
           await tx.configOs.create({
             data: {
-              configId,
               ...os,
+              config: { connect: { id: configId } },
             },
           });
         }
