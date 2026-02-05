@@ -1,10 +1,16 @@
 #!/bin/bash
 #
 # LINBO Docker - Installation Script
-# Automated deployment for fresh VMs
+# Fully automated deployment for fresh VMs
 #
-# Usage: curl -fsSL https://raw.githubusercontent.com/amolani/linbo-docker/main/scripts/install.sh | bash
-# Or:    ./scripts/install.sh
+# Usage:
+#   curl -fsSL https://raw.githubusercontent.com/amolani/linbo-docker/main/scripts/install.sh | bash
+#
+# With custom settings:
+#   curl -fsSL ... | LINBO_IP=10.0.0.13 ADMIN_PASS=secret bash
+#
+# Interactive mode:
+#   ./scripts/install.sh --interactive
 #
 
 set -e
@@ -16,11 +22,16 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Configuration
-REPO_URL="https://github.com/amolani/linbo-docker.git"
-INSTALL_DIR="/opt/linbo-docker"
-ADMIN_USER="admin"
-ADMIN_PASS="admin123"
+# Configuration (can be overridden via environment variables)
+REPO_URL="${REPO_URL:-https://github.com/amolani/linbo-docker.git}"
+INSTALL_DIR="${INSTALL_DIR:-/opt/linbo-docker}"
+ADMIN_USER="${ADMIN_USER:-admin}"
+ADMIN_PASS="${ADMIN_PASS:-admin}"
+
+# Check if running interactively
+is_interactive() {
+    [[ -t 0 && -t 1 ]] || [[ "$1" == "--interactive" ]] || [[ "$1" == "-i" ]]
+}
 
 # Functions
 log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
@@ -53,7 +64,6 @@ check_root() {
 }
 
 detect_ip() {
-    # Try to detect the primary IP address
     local ip=""
 
     # Method 1: Default route interface
@@ -61,7 +71,12 @@ detect_ip() {
 
     # Method 2: First non-loopback interface
     if [ -z "$ip" ]; then
-        ip=$(hostname -I | awk '{print $1}')
+        ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+    fi
+
+    # Method 3: Fallback
+    if [ -z "$ip" ]; then
+        ip="127.0.0.1"
     fi
 
     echo "$ip"
@@ -72,24 +87,24 @@ check_dependencies() {
 
     local missing=()
 
-    # Check Docker
     if ! command -v docker &> /dev/null; then
         missing+=("docker")
     fi
 
-    # Check Docker Compose (v2)
-    if ! docker compose version &> /dev/null; then
+    if ! docker compose version &> /dev/null 2>&1; then
         missing+=("docker-compose-plugin")
     fi
 
-    # Check git
     if ! command -v git &> /dev/null; then
         missing+=("git")
     fi
 
-    # Check curl
     if ! command -v curl &> /dev/null; then
         missing+=("curl")
+    fi
+
+    if ! command -v openssl &> /dev/null; then
+        missing+=("openssl")
     fi
 
     if [ ${#missing[@]} -gt 0 ]; then
@@ -103,8 +118,8 @@ check_dependencies() {
 install_dependencies() {
     log_info "Installing missing dependencies..."
 
-    # Detect package manager
     if command -v apt-get &> /dev/null; then
+        export DEBIAN_FRONTEND=noninteractive
         apt-get update -qq
 
         for dep in "$@"; do
@@ -124,6 +139,9 @@ install_dependencies() {
                     ;;
                 curl)
                     apt-get install -y curl
+                    ;;
+                openssl)
+                    apt-get install -y openssl
                     ;;
             esac
         done
@@ -145,6 +163,9 @@ install_dependencies() {
                 curl)
                     yum install -y curl
                     ;;
+                openssl)
+                    yum install -y openssl
+                    ;;
             esac
         done
     else
@@ -159,15 +180,18 @@ clone_repository() {
     log_info "Setting up LINBO Docker..."
 
     if [ -d "$INSTALL_DIR" ]; then
-        log_warn "Directory $INSTALL_DIR already exists"
-        read -p "Overwrite? (y/N): " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            rm -rf "$INSTALL_DIR"
+        if [ "$INTERACTIVE" = true ]; then
+            log_warn "Directory $INSTALL_DIR already exists"
+            read -p "Overwrite? (y/N): " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                log_info "Using existing installation"
+                return
+            fi
         else
-            log_info "Using existing installation"
-            return
+            log_warn "Directory $INSTALL_DIR exists, removing..."
         fi
+        rm -rf "$INSTALL_DIR"
     fi
 
     git clone "$REPO_URL" "$INSTALL_DIR"
@@ -175,11 +199,10 @@ clone_repository() {
 }
 
 generate_secrets() {
-    # Generate random secrets
     JWT_SECRET=$(openssl rand -base64 48 | tr -d '\n')
-    POSTGRES_PASSWORD=$(openssl rand -base64 24 | tr -d '\n' | tr -d '/')
+    POSTGRES_PASSWORD=$(openssl rand -base64 24 | tr -d '\n' | tr -d '/' | tr -d '+')
     INTERNAL_API_KEY=$(openssl rand -hex 32)
-    RSYNC_PASSWORD=$(openssl rand -base64 16 | tr -d '\n' | tr -d '/')
+    RSYNC_PASSWORD=$(openssl rand -base64 16 | tr -d '\n' | tr -d '/' | tr -d '+')
 }
 
 configure_environment() {
@@ -187,24 +210,27 @@ configure_environment() {
 
     cd "$INSTALL_DIR"
 
-    # Detect or ask for IP
-    DETECTED_IP=$(detect_ip)
+    # Use LINBO_IP env var or detect automatically
+    SERVER_IP="${LINBO_IP:-$(detect_ip)}"
 
-    echo ""
-    echo -e "${YELLOW}Server Configuration${NC}"
-    echo "===================="
-    echo ""
-    read -p "Server IP address [$DETECTED_IP]: " SERVER_IP
-    SERVER_IP=${SERVER_IP:-$DETECTED_IP}
+    if [ "$INTERACTIVE" = true ]; then
+        echo ""
+        echo -e "${YELLOW}Server Configuration${NC}"
+        echo "===================="
+        echo ""
+        read -p "Server IP address [$SERVER_IP]: " INPUT_IP
+        SERVER_IP=${INPUT_IP:-$SERVER_IP}
 
-    echo ""
-    read -p "Admin username [$ADMIN_USER]: " INPUT_USER
-    ADMIN_USER=${INPUT_USER:-$ADMIN_USER}
+        read -p "Admin username [$ADMIN_USER]: " INPUT_USER
+        ADMIN_USER=${INPUT_USER:-$ADMIN_USER}
 
-    read -p "Admin password [$ADMIN_PASS]: " INPUT_PASS
-    ADMIN_PASS=${INPUT_PASS:-$ADMIN_PASS}
-
-    echo ""
+        read -p "Admin password [$ADMIN_PASS]: " INPUT_PASS
+        ADMIN_PASS=${INPUT_PASS:-$ADMIN_PASS}
+        echo ""
+    else
+        log_info "Using Server IP: $SERVER_IP"
+        log_info "Using Admin: $ADMIN_USER / $ADMIN_PASS"
+    fi
 
     # Generate secrets
     generate_secrets
@@ -289,7 +315,7 @@ PRISMA_LOG_QUERIES=false
 DEBUG_ERRORS=false
 EOF
 
-    log_success "Environment configured"
+    log_success "Environment configured (Server IP: $SERVER_IP)"
 }
 
 start_containers() {
@@ -297,8 +323,8 @@ start_containers() {
 
     cd "$INSTALL_DIR"
 
-    # Pull/build images
-    docker compose build --quiet
+    # Build images
+    docker compose build --quiet 2>/dev/null || docker compose build
 
     # Start containers
     docker compose up -d
@@ -309,11 +335,12 @@ start_containers() {
 wait_for_api() {
     log_info "Waiting for API to be ready..."
 
-    local max_attempts=30
+    local max_attempts=60
     local attempt=1
 
     while [ $attempt -le $max_attempts ]; do
         if docker exec linbo-api curl -s http://localhost:3000/health > /dev/null 2>&1; then
+            echo ""
             log_success "API is healthy"
             return 0
         fi
@@ -330,7 +357,7 @@ wait_for_api() {
 }
 
 create_admin_user() {
-    log_info "Creating admin user..."
+    log_info "Creating admin user '$ADMIN_USER'..."
 
     docker exec linbo-api node -e "
 const bcrypt = require('bcryptjs');
@@ -356,7 +383,7 @@ const prisma = new PrismaClient();
     process.exit(1);
   }
 })();
-" 2>/dev/null
+" 2>/dev/null || log_warn "Could not create admin user automatically"
 
     log_success "Admin user '$ADMIN_USER' created"
 }
@@ -364,12 +391,13 @@ const prisma = new PrismaClient();
 fix_permissions() {
     log_info "Setting file permissions..."
 
-    # Get volume path
     local volume_path=$(docker volume inspect linbo-docker_srv_data --format '{{.Mountpoint}}' 2>/dev/null || echo "")
 
     if [ -n "$volume_path" ] && [ -d "$volume_path" ]; then
         chown -R 1001:1001 "$volume_path"
         log_success "Permissions set on $volume_path"
+    else
+        log_warn "Could not find volume path, skipping permission fix"
     fi
 }
 
@@ -393,7 +421,8 @@ print_summary() {
     echo "  Password: $ADMIN_PASS"
     echo ""
     echo -e "${BLUE}Container Status:${NC}"
-    docker compose -f "$INSTALL_DIR/docker-compose.yml" ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || docker compose ps
+    cd "$INSTALL_DIR"
+    docker compose ps --format "table {{.Name}}\t{{.Status}}" 2>/dev/null || docker compose ps
     echo ""
     echo -e "${BLUE}Useful Commands:${NC}"
     echo "  cd $INSTALL_DIR"
@@ -408,14 +437,19 @@ print_summary() {
     echo "    filename \"boot/grub/i386-pc/core.0\"      # BIOS"
     echo "    filename \"boot/grub/x86_64-efi/core.efi\" # EFI"
     echo ""
-    echo -e "${YELLOW}Note:${NC}"
-    echo "  If TFTP port 69 conflicts with existing service:"
-    echo "    systemctl stop tftpd-hpa   # or disable in docker-compose.yml"
-    echo ""
 }
 
 # Main installation flow
 main() {
+    # Check for interactive mode
+    INTERACTIVE=false
+    if is_interactive "$1"; then
+        INTERACTIVE=true
+        log_info "Running in interactive mode"
+    else
+        log_info "Running in automatic mode (use --interactive for prompts)"
+    fi
+
     print_banner
     check_root
     check_dependencies
