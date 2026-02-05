@@ -414,7 +414,6 @@ function parseStartConf(content) {
         autostart: currentData.autostart || false,
         autostartTimeout: currentData.autostarttimeout || 5,
         defaultAction: currentData.defaultaction || 'sync',
-        hidden: currentData.hidden || false,
         position: result.osEntries.length,
       });
     }
