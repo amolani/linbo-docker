@@ -367,11 +367,26 @@ function parseStartConf(content) {
     if (currentSection === 'linbo') {
       result.linboSettings = { ...currentData };
     } else if (currentSection === 'partition') {
+      // Parse partition ID - can be hex (0x83, ef) or decimal
+      let partId = null;
+      if (currentData.id) {
+        const idStr = String(currentData.id).toLowerCase().trim();
+        if (idStr.startsWith('0x')) {
+          partId = parseInt(idStr, 16);
+        } else if (/^[0-9a-f]+$/i.test(idStr)) {
+          // Could be hex without 0x prefix (like "ef", "83")
+          partId = parseInt(idStr, 16);
+        } else {
+          partId = parseInt(idStr, 10);
+        }
+        if (isNaN(partId)) partId = null;
+      }
+
       result.partitions.push({
         device: currentData.dev || '',
         label: currentData.label || '',
         size: currentData.size || '',
-        partitionId: currentData.id || '',
+        partitionId: partId,
         fsType: currentData.fstype || '',
         bootable: currentData.bootable || false,
         position: result.partitions.length,
