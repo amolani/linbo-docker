@@ -277,6 +277,15 @@ async function startServer() {
   websocket.init(wss);
   console.log('  WebSocket initialized');
 
+  // Start Operation Worker (unless disabled)
+  if (process.env.ENABLE_OPERATION_WORKER !== 'false') {
+    const { startWorker } = require('./workers/operation.worker');
+    startWorker();
+    console.log('  Operation Worker started');
+  } else {
+    console.log('  Operation Worker disabled');
+  }
+
   // Start HTTP server
   server.listen(PORT, HOST, () => {
     console.log(`
