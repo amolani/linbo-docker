@@ -22,7 +22,7 @@ else
   insmod ext2
   insmod all_video
 
-  linux /linbo64 quiet splash linbo_server=$pxe_default_server
+  linux /linbo64 quiet splash server=$pxe_default_server
   initrd /linbofs64
 fi
 
