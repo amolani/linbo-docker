@@ -90,7 +90,27 @@ export function LinboSettingsForm({ settings, onChange, serverIp = '10.0.0.1' }:
             />
             <span className="text-sm text-gray-700">Cache automatisch initialisieren</span>
           </label>
+          <label className="flex items-center">
+            <input
+              type="checkbox"
+              className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 mr-2"
+              checked={settings.autostart || false}
+              onChange={(e) => handleChange('autostart', e.target.checked)}
+            />
+            <span className="text-sm text-gray-700">Autostart (Standard-OS automatisch starten)</span>
+          </label>
         </div>
+      </div>
+
+      <div className="border-t pt-4">
+        <h4 className="text-sm font-medium text-gray-700 mb-3">Kernel-Optionen</h4>
+        <Input
+          label="KernelOptions"
+          value={settings.kerneloptions || ''}
+          onChange={(e) => handleChange('kerneloptions', e.target.value)}
+          placeholder="z.B. quiet splash dhcpretry=9 forcegrub"
+          helperText="Kernel-Parameter fuer den LINBO-Boot"
+        />
       </div>
 
       <div className="border-t pt-4">

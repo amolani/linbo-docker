@@ -116,7 +116,11 @@ export interface LinboSettings {
   autopartition?: boolean;
   autoformat?: boolean;
   autoinitcache?: boolean;
+  autostart?: boolean;
   downloadType?: 'rsync' | 'torrent' | 'multicast';
+  kerneloptions?: string;
+  systemtype?: 'bios' | 'bios64' | 'efi32' | 'efi64';
+  locale?: string;
   backgroundfontcolor?: string;
   consolefontcolorsstdout?: string;
   consolefontcolorstderr?: string;
