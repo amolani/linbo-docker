@@ -56,9 +56,11 @@ model Config {
   version       String    @default("1.0.0") @db.VarChar(50)
   status        String    @default("draft") @db.VarChar(50)
   linboSettings Json      @default("{}") @map("linbo_settings")
+  metadata      Json?     @default("{}")
   createdBy     String?   @map("created_by") @db.VarChar(255)
   approvedBy    String?   @map("approved_by") @db.VarChar(255)
   approvedAt    DateTime? @map("approved_at") @db.Timestamptz
+  deployedAt    DateTime? @map("deployed_at") @db.Timestamptz
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 

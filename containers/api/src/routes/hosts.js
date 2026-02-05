@@ -16,6 +16,7 @@ const {
 } = require('../middleware/validate');
 const { auditAction } = require('../middleware/audit');
 const redis = require('../lib/redis');
+const grubService = require('../services/grub.service');
 
 /**
  * GET /hosts
@@ -213,6 +214,15 @@ router.post(
       // Invalidate cache
       await redis.delPattern('hosts:*');
 
+      // Generate GRUB config for new host
+      if (host.group) {
+        try {
+          await grubService.generateHostGrubConfig(host.hostname, host.group.name);
+        } catch (error) {
+          console.error('[Hosts] Failed to generate GRUB config:', error.message);
+        }
+      }
+
       res.status(201).json({ data: host });
     } catch (error) {
       if (error.code === 'P2002') {
@@ -263,6 +273,15 @@ router.patch(
       // Invalidate cache
       await redis.delPattern('hosts:*');
 
+      // Regenerate GRUB config for updated host
+      if (host.group) {
+        try {
+          await grubService.generateHostGrubConfig(host.hostname, host.group.name);
+        } catch (error) {
+          console.error('[Hosts] Failed to regenerate GRUB config:', error.message);
+        }
+      }
+
       res.json({ data: host });
     } catch (error) {
       if (error.code === 'P2025') {
@@ -298,12 +317,27 @@ router.delete(
   auditAction('host.delete'),
   async (req, res, next) => {
     try {
+      // Get host info before deletion for GRUB cleanup
+      const host = await prisma.host.findUnique({
+        where: { id: req.params.id },
+        select: { hostname: true },
+      });
+
       await prisma.host.delete({
         where: { id: req.params.id },
       });
 
       // Invalidate cache
       await redis.delPattern('hosts:*');
+
+      // Delete GRUB config for deleted host
+      if (host) {
+        try {
+          await grubService.deleteHostGrubConfig(host.hostname);
+        } catch (error) {
+          console.error('[Hosts] Failed to delete GRUB config:', error.message);
+        }
+      }
 
       res.json({
         data: {

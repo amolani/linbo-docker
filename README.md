@@ -16,6 +16,11 @@ LINBO Docker is a containerized version of [LINBO](https://github.com/linuxmuste
 - **Real-time Updates** - WebSocket for live status updates
 - **Standalone** - No linuxmuster.net server required
 - **Auto-Updates** - Boot files automatically updated via GitHub Actions
+- **Config Deployment** - Automatic start.conf deployment with IP-symlinks
+- **Key Injection** - SSH/Dropbear keys in linbofs64
+- **Background Operations** - Async operation worker for batch commands
+- **GRUB Automation** - Auto-generated boot configs per group/host
+- **RSYNC Integration** - API hooks for upload/download tracking
 
 ## Quick Start
 
@@ -165,6 +170,14 @@ JWT_SECRET=your_jwt_secret
 
 # API port
 API_PORT=3000
+
+# Internal API key for service-to-service communication
+INTERNAL_API_KEY=your_internal_secret
+
+# Operation worker settings
+ENABLE_OPERATION_WORKER=true
+OPERATION_POLL_INTERVAL=5000
+MAX_CONCURRENT_SESSIONS=5
 ```
 
 See `.env.example` for all options.
@@ -178,6 +191,55 @@ LINBO Docker does not include a DHCP server. Configure your existing DHCP server
 next-server 10.0.0.1;         # Your LINBO Docker server IP
 filename "boot/grub/grub.cfg";
 ```
+
+## Server Components
+
+LINBO Docker includes a complete server-side control plane that makes it a true standalone solution.
+
+### Config Deploy Service
+Deploys configurations from the database as `start.conf` files with IP-based symlinks.
+
+```bash
+# Deploy a config
+curl -X POST http://localhost:3000/api/v1/configs/{id}/deploy \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Update-Linbofs Service
+Injects SSH keys and RSYNC password hash into `linbofs64` for client authentication.
+
+```bash
+# Update linbofs64 with keys
+curl -X POST http://localhost:3000/api/v1/system/update-linbofs \
+  -H "Authorization: Bearer $TOKEN"
+
+# Check status
+curl http://localhost:3000/api/v1/system/linbofs-status \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Operation Worker
+Background worker that processes pending operations asynchronously.
+
+```bash
+# Check worker status
+curl http://localhost:3000/api/v1/system/worker-status \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### GRUB Config Generator
+Automatically generates GRUB configs for network boot.
+
+```bash
+# Regenerate all GRUB configs
+curl -X POST http://localhost:3000/api/v1/system/regenerate-grub-configs \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### RSYNC Hooks
+Integrated hooks notify the API about upload/download events and auto-register images.
+
+**See [docs/SERVER-COMPONENTS.md](docs/SERVER-COMPONENTS.md) for detailed documentation.**
 
 ## API Documentation
 
@@ -204,7 +266,12 @@ curl http://localhost:3000/api/v1/hosts \
 | `POST /api/v1/hosts/:id/sync` | Sync host |
 | `POST /api/v1/hosts/:id/wake-on-lan` | Wake host |
 | `GET /api/v1/configs` | List configurations |
+| `POST /api/v1/configs/:id/deploy` | Deploy config to /srv/linbo |
 | `GET /api/v1/images` | List images |
+| `POST /api/v1/system/update-linbofs` | Inject keys into linbofs64 |
+| `GET /api/v1/system/linbofs-status` | Check linbofs64 status |
+| `POST /api/v1/system/regenerate-grub-configs` | Regenerate GRUB configs |
+| `GET /api/v1/system/worker-status` | Operation worker status |
 
 Full API documentation: `GET /api/v1`
 
@@ -265,7 +332,15 @@ linbo-docker/
 │   ├── api/                    # Node.js REST API
 │   │   └── src/
 │   │       ├── routes/         # API endpoints
+│   │       │   ├── configs.js  # Config deployment
+│   │       │   ├── system.js   # System management
+│   │       │   └── internal.js # Internal API (RSYNC hooks)
 │   │       ├── services/       # Business logic
+│   │       │   ├── config.service.js   # Config deployment
+│   │       │   ├── linbofs.service.js  # Key injection
+│   │       │   └── grub.service.js     # GRUB config gen
+│   │       ├── workers/        # Background workers
+│   │       │   └── operation.worker.js # Operation runner
 │   │       ├── middleware/     # Auth, validation
 │   │       └── lib/            # Prisma, Redis, WebSocket
 │   └── web/                    # React Web Frontend
@@ -281,9 +356,13 @@ linbo-docker/
 │               └── types/      # TypeScript interfaces
 ├── config/
 │   ├── init.sql                # Database schema
-│   └── rsyncd.conf             # RSYNC config
+│   └── rsyncd.conf             # RSYNC config (with API hooks)
 ├── scripts/server/             # LINBO server scripts
-├── docs/plan/                  # Project documentation
+│   ├── update-linbofs.sh       # Key injection script
+│   └── rsync-*-api.sh          # RSYNC hook scripts
+├── docs/
+│   ├── SERVER-COMPONENTS.md    # Server components docs
+│   └── plan/                   # Project planning docs
 └── .github/workflows/          # CI/CD workflows
 ```
 

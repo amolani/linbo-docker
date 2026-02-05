@@ -1,0 +1,313 @@
+/**
+ * LINBO Docker - Config Service
+ * Config deployment and symlink management
+ */
+
+const fs = require('fs').promises;
+const path = require('path');
+const crypto = require('crypto');
+const { prisma } = require('../lib/prisma');
+
+const LINBO_DIR = process.env.LINBO_DIR || '/srv/linbo';
+
+/**
+ * Generate start.conf content from database config
+ * @param {string} configId - Config UUID
+ * @returns {Promise<{content: string, config: object}>}
+ */
+async function generateStartConf(configId) {
+  const config = await prisma.config.findUnique({
+    where: { id: configId },
+    include: {
+      partitions: { orderBy: { position: 'asc' } },
+      osEntries: { orderBy: { position: 'asc' } },
+    },
+  });
+
+  if (!config) {
+    throw new Error('Configuration not found');
+  }
+
+  const lines = [];
+
+  // Header comment
+  lines.push(`# LINBO start.conf - ${config.name}`);
+  lines.push(`# Generated: ${new Date().toISOString()}`);
+  lines.push(`# Version: ${config.version}`);
+  lines.push('');
+
+  // [LINBO] section
+  lines.push('[LINBO]');
+  const linboSettings = config.linboSettings || {};
+  const defaultSettings = {
+    Cache: '/dev/sda4',
+    Server: process.env.LINBO_SERVER || '10.0.0.1',
+    Group: config.name,
+    RootTimeout: 600,
+    AutoPartition: 'no',
+    AutoFormat: 'no',
+    AutoInitCache: 'no',
+    DownloadType: 'torrent',
+    GuiDisabled: 'no',
+    UseMinimalLayout: 'no',
+    Locale: 'de-de',
+    SystemType: 'bios64',
+    KernelOptions: '',
+  };
+
+  for (const [key, defaultValue] of Object.entries(defaultSettings)) {
+    const value = linboSettings[key] !== undefined ? linboSettings[key] : defaultValue;
+    lines.push(`${key} = ${value}`);
+  }
+  lines.push('');
+
+  // [Partition] sections
+  for (const partition of config.partitions) {
+    lines.push('[Partition]');
+    lines.push(`Dev = ${partition.device}`);
+    if (partition.label) lines.push(`Label = ${partition.label}`);
+    if (partition.size) lines.push(`Size = ${partition.size}`);
+    if (partition.partitionId) lines.push(`Id = ${partition.partitionId}`);
+    if (partition.fsType) lines.push(`FSType = ${partition.fsType}`);
+    lines.push(`Bootable = ${partition.bootable ? 'yes' : 'no'}`);
+    lines.push('');
+  }
+
+  // [OS] sections
+  for (const os of config.osEntries) {
+    lines.push('[OS]');
+    lines.push(`Name = ${os.name}`);
+    if (os.description) lines.push(`Description = ${os.description}`);
+    if (os.iconName) lines.push(`IconName = ${os.iconName}`);
+    if (os.baseImage) lines.push(`BaseImage = ${os.baseImage}`);
+    if (os.differentialImage) lines.push(`DiffImage = ${os.differentialImage}`);
+    if (os.rootDevice) lines.push(`Boot = ${os.rootDevice}`);
+    if (os.kernel) lines.push(`Kernel = ${os.kernel}`);
+    if (os.initrd) lines.push(`Initrd = ${os.initrd}`);
+    if (os.append && os.append.length > 0) {
+      lines.push(`Append = ${os.append.join(' ')}`);
+    }
+    lines.push(`StartEnabled = ${os.startEnabled ? 'yes' : 'no'}`);
+    lines.push(`SyncEnabled = ${os.syncEnabled ? 'yes' : 'no'}`);
+    lines.push(`NewEnabled = ${os.newEnabled ? 'yes' : 'no'}`);
+    if (os.autostart) {
+      lines.push('Autostart = yes');
+      if (os.autostartTimeout > 0) {
+        lines.push(`AutostartTimeout = ${os.autostartTimeout}`);
+      }
+    }
+    if (os.defaultAction) lines.push(`DefaultAction = ${os.defaultAction}`);
+    lines.push('');
+  }
+
+  return { content: lines.join('\n'), config };
+}
+
+/**
+ * Deploy config as start.conf file to /srv/linbo/
+ * @param {string} configId - Config UUID
+ * @returns {Promise<{filepath: string, hash: string, size: number}>}
+ */
+async function deployConfig(configId) {
+  const { content, config } = await generateStartConf(configId);
+  const filename = `start.conf.${config.name}`;
+  const filepath = path.join(LINBO_DIR, filename);
+
+  // Ensure LINBO directory exists
+  await fs.mkdir(LINBO_DIR, { recursive: true });
+
+  // Backup existing file if different
+  try {
+    const existing = await fs.readFile(filepath, 'utf8');
+    if (existing !== content) {
+      const backupPath = `${filepath}.bak`;
+      await fs.writeFile(backupPath, existing);
+      console.log(`[ConfigService] Backup created: ${backupPath}`);
+    }
+  } catch (e) {
+    // File doesn't exist, no backup needed
+  }
+
+  // Write new config
+  await fs.writeFile(filepath, content, 'utf8');
+  console.log(`[ConfigService] Config deployed: ${filepath}`);
+
+  // Generate MD5 hash
+  const hash = crypto.createHash('md5').update(content).digest('hex');
+  await fs.writeFile(`${filepath}.md5`, hash);
+
+  return { filepath, hash, size: content.length };
+}
+
+/**
+ * Create IP-based symlinks for all hosts in a config's groups
+ * LINBO uses IP-based symlinks: start.conf-10.0.0.111 -> start.conf.win11_efi_sata
+ * @param {string} configId - Config UUID
+ * @returns {Promise<number>} Number of symlinks created
+ */
+async function createHostSymlinks(configId) {
+  const config = await prisma.config.findUnique({
+    where: { id: configId },
+    include: {
+      hosts: true,
+      hostGroups: {
+        include: {
+          hosts: true,
+        },
+      },
+    },
+  });
+
+  if (!config) {
+    throw new Error('Configuration not found');
+  }
+
+  const groupFile = `start.conf.${config.name}`;
+  let created = 0;
+
+  // Collect all hosts (directly assigned and from groups)
+  const allHosts = new Map();
+
+  // Hosts directly assigned to this config
+  for (const host of config.hosts) {
+    if (host.ipAddress) {
+      allHosts.set(host.ipAddress, host);
+    }
+  }
+
+  // Hosts from groups using this config as default
+  for (const group of config.hostGroups) {
+    for (const host of group.hosts) {
+      if (host.ipAddress) {
+        allHosts.set(host.ipAddress, host);
+      }
+    }
+  }
+
+  // Create IP-based symlinks
+  for (const [ipAddress, host] of allHosts) {
+    const ipLink = path.join(LINBO_DIR, `start.conf-${ipAddress}`);
+
+    try {
+      // Remove existing symlink
+      await fs.unlink(ipLink);
+    } catch (e) {
+      // Link doesn't exist
+    }
+
+    // Create new symlink (relative path)
+    await fs.symlink(groupFile, ipLink);
+    console.log(`[ConfigService] Symlink created: ${ipLink} -> ${groupFile}`);
+    created++;
+  }
+
+  return created;
+}
+
+/**
+ * Remove orphaned symlinks for hosts not in any config
+ * @returns {Promise<number>} Number of symlinks removed
+ */
+async function cleanupOrphanedSymlinks() {
+  const files = await fs.readdir(LINBO_DIR);
+  let removed = 0;
+
+  // Get all active host IPs
+  const hosts = await prisma.host.findMany({
+    select: { ipAddress: true },
+    where: { ipAddress: { not: null } },
+  });
+  const activeIPs = new Set(hosts.map(h => h.ipAddress));
+
+  for (const file of files) {
+    // Match IP-based symlinks (start.conf-X.X.X.X)
+    const match = file.match(/^start\.conf-(\d+\.\d+\.\d+\.\d+)$/);
+    if (match) {
+      const ip = match[1];
+      if (!activeIPs.has(ip)) {
+        const filepath = path.join(LINBO_DIR, file);
+        try {
+          await fs.unlink(filepath);
+          console.log(`[ConfigService] Orphaned symlink removed: ${filepath}`);
+          removed++;
+        } catch (e) {
+          console.error(`[ConfigService] Failed to remove: ${filepath}`, e.message);
+        }
+      }
+    }
+  }
+
+  return removed;
+}
+
+/**
+ * Deploy all active configs
+ * @returns {Promise<{deployed: number, symlinks: number}>}
+ */
+async function deployAllConfigs() {
+  const configs = await prisma.config.findMany({
+    where: { status: 'active' },
+  });
+
+  let deployed = 0;
+  let symlinks = 0;
+
+  for (const config of configs) {
+    try {
+      await deployConfig(config.id);
+      deployed++;
+      symlinks += await createHostSymlinks(config.id);
+    } catch (error) {
+      console.error(`[ConfigService] Failed to deploy ${config.name}:`, error.message);
+    }
+  }
+
+  return { deployed, symlinks };
+}
+
+/**
+ * List deployed configs in /srv/linbo/
+ * @returns {Promise<Array<{filename: string, hash: string, size: number, modifiedAt: Date}>>}
+ */
+async function listDeployedConfigs() {
+  const files = await fs.readdir(LINBO_DIR);
+  const configs = [];
+
+  for (const file of files) {
+    if (file.startsWith('start.conf.') && !file.endsWith('.md5') && !file.endsWith('.bak')) {
+      const filepath = path.join(LINBO_DIR, file);
+      try {
+        const stat = await fs.stat(filepath);
+        if (!stat.isSymbolicLink()) {
+          let hash = null;
+          try {
+            hash = await fs.readFile(`${filepath}.md5`, 'utf8');
+          } catch (e) {
+            // MD5 file doesn't exist
+          }
+
+          configs.push({
+            filename: file,
+            groupName: file.replace('start.conf.', ''),
+            hash: hash?.trim(),
+            size: stat.size,
+            modifiedAt: stat.mtime,
+          });
+        }
+      } catch (e) {
+        // Skip invalid files
+      }
+    }
+  }
+
+  return configs;
+}
+
+module.exports = {
+  generateStartConf,
+  deployConfig,
+  createHostSymlinks,
+  cleanupOrphanedSymlinks,
+  deployAllConfigs,
+  listDeployedConfigs,
+};

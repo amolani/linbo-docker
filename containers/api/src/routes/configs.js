@@ -14,6 +14,8 @@ const {
 } = require('../middleware/validate');
 const { auditAction } = require('../middleware/audit');
 const redis = require('../lib/redis');
+const ws = require('../lib/websocket');
+const configService = require('../services/config.service');
 
 /**
  * GET /configs
@@ -556,6 +558,149 @@ router.post(
           },
         });
       }
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /configs/:id/deploy
+ * Deploy config as start.conf file to /srv/linbo/ with optional host symlinks
+ */
+router.post(
+  '/:id/deploy',
+  authenticateToken,
+  requireRole(['admin', 'operator']),
+  auditAction('config.deploy'),
+  async (req, res, next) => {
+    try {
+      const { createSymlinks = true } = req.body || {};
+
+      // Verify config exists
+      const config = await prisma.config.findUnique({
+        where: { id: req.params.id },
+      });
+
+      if (!config) {
+        return res.status(404).json({
+          error: {
+            code: 'CONFIG_NOT_FOUND',
+            message: 'Configuration not found',
+          },
+        });
+      }
+
+      // Deploy config file
+      const result = await configService.deployConfig(req.params.id);
+
+      // Create symlinks if requested
+      let symlinkCount = 0;
+      if (createSymlinks) {
+        symlinkCount = await configService.createHostSymlinks(req.params.id);
+      }
+
+      // Update config status to 'active' and set deployedAt
+      await prisma.config.update({
+        where: { id: req.params.id },
+        data: {
+          status: 'active',
+          metadata: {
+            ...(config.metadata || {}),
+            deployedAt: new Date().toISOString(),
+            deployedBy: req.user.username,
+          },
+        },
+      });
+
+      // Broadcast deployment event
+      ws.broadcast('config.deployed', {
+        configId: req.params.id,
+        configName: config.name,
+        filepath: result.filepath,
+        symlinkCount,
+      });
+
+      res.json({
+        data: {
+          ...result,
+          configName: config.name,
+          symlinkCount,
+          message: `Config deployed successfully${symlinkCount > 0 ? ` with ${symlinkCount} symlinks` : ''}`,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /configs/deployed
+ * List all deployed configs in /srv/linbo/
+ */
+router.get(
+  '/deployed/list',
+  authenticateToken,
+  async (req, res, next) => {
+    try {
+      const configs = await configService.listDeployedConfigs();
+      res.json({ data: configs });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /configs/deploy-all
+ * Deploy all active configs
+ */
+router.post(
+  '/deploy-all',
+  authenticateToken,
+  requireRole(['admin']),
+  auditAction('config.deploy_all'),
+  async (req, res, next) => {
+    try {
+      const result = await configService.deployAllConfigs();
+
+      ws.broadcast('config.deploy_all_completed', {
+        deployed: result.deployed,
+        symlinks: result.symlinks,
+      });
+
+      res.json({
+        data: {
+          ...result,
+          message: `Deployed ${result.deployed} configs with ${result.symlinks} symlinks`,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /configs/cleanup-symlinks
+ * Remove orphaned symlinks
+ */
+router.post(
+  '/cleanup-symlinks',
+  authenticateToken,
+  requireRole(['admin']),
+  auditAction('config.cleanup_symlinks'),
+  async (req, res, next) => {
+    try {
+      const removed = await configService.cleanupOrphanedSymlinks();
+
+      res.json({
+        data: {
+          removed,
+          message: `Removed ${removed} orphaned symlinks`,
+        },
+      });
+    } catch (error) {
       next(error);
     }
   }

@@ -14,6 +14,7 @@ const {
 } = require('../middleware/validate');
 const { auditAction } = require('../middleware/audit');
 const redis = require('../lib/redis');
+const grubService = require('../services/grub.service');
 
 /**
  * GET /groups
@@ -113,6 +114,13 @@ router.post(
       // Invalidate cache
       await redis.delPattern('groups:*');
 
+      // Generate GRUB config for new group
+      try {
+        await grubService.generateGroupGrubConfig(group.name);
+      } catch (error) {
+        console.error('[Groups] Failed to generate GRUB config:', error.message);
+      }
+
       res.status(201).json({ data: group });
     } catch (error) {
       if (error.code === 'P2002') {
@@ -153,6 +161,13 @@ router.patch(
 
       // Invalidate cache
       await redis.delPattern('groups:*');
+
+      // Regenerate GRUB config for updated group
+      try {
+        await grubService.generateGroupGrubConfig(group.name);
+      } catch (error) {
+        console.error('[Groups] Failed to regenerate GRUB config:', error.message);
+      }
 
       res.json({
         data: {
@@ -218,12 +233,21 @@ router.delete(
         });
       }
 
+      const groupName = group.name;
+
       await prisma.hostGroup.delete({
         where: { id: req.params.id },
       });
 
       // Invalidate cache
       await redis.delPattern('groups:*');
+
+      // Delete GRUB config for deleted group
+      try {
+        await grubService.deleteGroupGrubConfig(groupName);
+      } catch (error) {
+        console.error('[Groups] Failed to delete GRUB config:', error.message);
+      }
 
       res.json({
         data: {

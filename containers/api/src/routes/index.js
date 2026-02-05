@@ -15,6 +15,8 @@ const configRoutes = require('./configs');
 const imageRoutes = require('./images');
 const operationRoutes = require('./operations');
 const statsRoutes = require('./stats');
+const systemRoutes = require('./system');
+const internalRoutes = require('./internal');
 
 // Mount routes
 router.use('/auth', authRoutes);
@@ -25,6 +27,8 @@ router.use('/configs', configRoutes);
 router.use('/images', imageRoutes);
 router.use('/operations', operationRoutes);
 router.use('/stats', statsRoutes);
+router.use('/system', systemRoutes);
+router.use('/internal', internalRoutes);
 
 // API info endpoint
 router.get('/', (req, res) => {
@@ -79,6 +83,10 @@ router.get('/', (req, res) => {
         'DELETE /configs/:id': 'Delete configuration',
         'POST /configs/:id/apply-to-groups': 'Apply to groups',
         'POST /configs/:id/clone': 'Clone configuration',
+        'POST /configs/:id/deploy': 'Deploy config to /srv/linbo',
+        'GET /configs/deployed/list': 'List deployed configs',
+        'POST /configs/deploy-all': 'Deploy all active configs',
+        'POST /configs/cleanup-symlinks': 'Remove orphaned symlinks',
       },
       images: {
         'GET /images': 'List all images',
@@ -104,6 +112,16 @@ router.get('/', (req, res) => {
         'GET /stats/operations': 'Operation statistics',
         'GET /stats/images': 'Image storage statistics',
         'GET /stats/audit': 'Audit log statistics',
+      },
+      system: {
+        'POST /system/update-linbofs': 'Update linbofs64 with keys',
+        'GET /system/linbofs-status': 'Check linbofs64 configuration',
+        'GET /system/linbofs-info': 'Get linbofs64 file info',
+        'GET /system/key-status': 'Check available SSH keys',
+        'POST /system/initialize-keys': 'Generate missing SSH keys',
+        'POST /system/generate-ssh-key': 'Generate specific SSH key',
+        'POST /system/generate-dropbear-key': 'Generate Dropbear key',
+        'POST /system/regenerate-grub-configs': 'Regenerate GRUB configs',
       },
     },
     documentation: '/docs',
