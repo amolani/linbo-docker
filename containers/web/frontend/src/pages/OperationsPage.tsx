@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { PlusIcon } from '@heroicons/react/24/outline';
 import { operationsApi } from '@/api/operations';
 import { Table, Pagination, OperationStatusBadge, Modal, Button, Select } from '@/components/ui';
+import { RemoteCommandModal, ScheduledCommandsSection } from '@/components/operations';
 import { notify } from '@/stores/notificationStore';
 import { useWsEventHandler } from '@/hooks/useWebSocket';
 import type { Operation, Session, Column, WsOperationProgressEvent } from '@/types';
@@ -42,8 +44,10 @@ export function OperationsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedOperation, setSelectedOperation] = useState<Operation | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isRemoteModalOpen, setIsRemoteModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'operations' | 'scheduled'>('operations');
 
-  const fetchOperations = async () => {
+  const fetchOperations = useCallback(async () => {
     try {
       const data = await operationsApi.list({
         page,
@@ -58,11 +62,11 @@ export function OperationsPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [page, limit, statusFilter]);
 
   useEffect(() => {
     fetchOperations();
-  }, [page, limit, statusFilter]);
+  }, [fetchOperations]);
 
   // Listen for real-time updates
   useWsEventHandler<WsOperationProgressEvent>('operation.progress', (event) => {
@@ -179,52 +183,88 @@ export function OperationsPage() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Operationen</h1>
-          <p className="text-gray-600">Übersicht der laufenden und abgeschlossenen Operationen</p>
+          <p className="text-gray-600">Remote-Befehle und Operationsübersicht</p>
         </div>
+        <Button onClick={() => setIsRemoteModalOpen(true)}>
+          <PlusIcon className="h-5 w-5 mr-2" />
+          Remote-Befehl
+        </Button>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white shadow rounded-lg p-4">
-        <div className="flex items-center space-x-4">
-          <Select
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              setPage(1);
-            }}
-            options={[
-              { value: '', label: 'Alle Status' },
-              { value: 'pending', label: 'Ausstehend' },
-              { value: 'running', label: 'Läuft' },
-              { value: 'completed', label: 'Abgeschlossen' },
-              { value: 'failed', label: 'Fehlgeschlagen' },
-              { value: 'cancelled', label: 'Abgebrochen' },
-            ]}
-          />
-          <Button variant="secondary" onClick={fetchOperations}>
-            Aktualisieren
-          </Button>
-        </div>
+      {/* Tabs */}
+      <div className="border-b border-gray-200">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab('operations')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'operations'
+                ? 'border-primary-500 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Operationen
+          </button>
+          <button
+            onClick={() => setActiveTab('scheduled')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'scheduled'
+                ? 'border-primary-500 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Geplante Befehle
+          </button>
+        </nav>
       </div>
 
-      {/* Table */}
-      <div className="bg-white shadow rounded-lg overflow-hidden">
-        <Table
-          columns={columns}
-          data={operations}
-          keyExtractor={(op) => op.id}
-          loading={isLoading}
-          emptyMessage="Keine Operationen gefunden"
-        />
-        <Pagination
-          page={page}
-          totalPages={totalPages}
-          total={total}
-          limit={limit}
-          onPageChange={setPage}
-          onLimitChange={setLimit}
-        />
-      </div>
+      {activeTab === 'operations' ? (
+        <>
+          {/* Filters */}
+          <div className="bg-white shadow rounded-lg p-4">
+            <div className="flex items-center space-x-4">
+              <Select
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value);
+                  setPage(1);
+                }}
+                options={[
+                  { value: '', label: 'Alle Status' },
+                  { value: 'pending', label: 'Ausstehend' },
+                  { value: 'running', label: 'Läuft' },
+                  { value: 'completed', label: 'Abgeschlossen' },
+                  { value: 'failed', label: 'Fehlgeschlagen' },
+                  { value: 'cancelled', label: 'Abgebrochen' },
+                ]}
+              />
+              <Button variant="secondary" onClick={fetchOperations}>
+                Aktualisieren
+              </Button>
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="bg-white shadow rounded-lg overflow-hidden">
+            <Table
+              columns={columns}
+              data={operations}
+              keyExtractor={(op) => op.id}
+              loading={isLoading}
+              emptyMessage="Keine Operationen gefunden"
+            />
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              total={total}
+              limit={limit}
+              onPageChange={setPage}
+              onLimitChange={setLimit}
+            />
+          </div>
+        </>
+      ) : (
+        <ScheduledCommandsSection />
+      )}
 
       {/* Detail Modal */}
       <Modal
@@ -333,6 +373,18 @@ export function OperationsPage() {
           </div>
         )}
       </Modal>
+
+      {/* Remote Command Modal */}
+      <RemoteCommandModal
+        isOpen={isRemoteModalOpen}
+        onClose={() => setIsRemoteModalOpen(false)}
+        onSuccess={() => {
+          fetchOperations();
+          if (activeTab === 'scheduled') {
+            // Will auto-refresh via the ScheduledCommandsSection
+          }
+        }}
+      />
     </div>
   );
 }

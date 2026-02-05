@@ -1,9 +1,12 @@
-import { useState, useEffect } from 'react';
-import { PlusIcon } from '@heroicons/react/24/outline';
+import { useState, useEffect, useCallback } from 'react';
+import { PlusIcon, ArrowDownTrayIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
 import { useHosts, useHostActions, useHostFilters } from '@/hooks/useHosts';
 import { roomsApi } from '@/api/rooms';
 import { groupsApi } from '@/api/groups';
+import { hostsApi } from '@/api/hosts';
 import { Button, Table, Pagination, StatusBadge, Modal, Input, Select, ConfirmModal } from '@/components/ui';
+import { ImportHostsModal } from '@/components/hosts';
+import { notify } from '@/stores/notificationStore';
 import type { Host, Room, HostGroup, Column } from '@/types';
 
 export function HostsPage() {
@@ -41,6 +44,8 @@ export function HostsPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [groups, setGroups] = useState<HostGroup[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [editingHost, setEditingHost] = useState<Host | null>(null);
   const [deleteConfirmHost, setDeleteConfirmHost] = useState<Host | null>(null);
   const [formData, setFormData] = useState({
@@ -110,6 +115,32 @@ export function HostsPage() {
       setDeleteConfirmHost(null);
     }
   };
+
+  const handleExport = useCallback(async () => {
+    setIsExporting(true);
+    try {
+      const blob = await hostsApi.export();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `hosts-export-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      notify.success('Export erfolgreich', 'CSV-Datei wurde heruntergeladen');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Export fehlgeschlagen';
+      notify.error('Export fehlgeschlagen', message);
+    } finally {
+      setIsExporting(false);
+    }
+  }, [notify]);
+
+  const handleImportSuccess = useCallback(() => {
+    // Refresh hosts list after import
+    setPage(1);
+  }, [setPage]);
 
   const columns: Column<Host>[] = [
     {
@@ -195,10 +226,20 @@ export function HostsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Hosts</h1>
           <p className="text-gray-600">Verwaltung der Client-Rechner</p>
         </div>
-        <Button onClick={() => handleOpenModal()}>
-          <PlusIcon className="h-5 w-5 mr-2" />
-          Neuer Host
-        </Button>
+        <div className="flex space-x-2">
+          <Button variant="secondary" onClick={handleExport} loading={isExporting}>
+            <ArrowDownTrayIcon className="h-5 w-5 mr-2" />
+            Export
+          </Button>
+          <Button variant="secondary" onClick={() => setIsImportModalOpen(true)}>
+            <ArrowUpTrayIcon className="h-5 w-5 mr-2" />
+            Import
+          </Button>
+          <Button onClick={() => handleOpenModal()}>
+            <PlusIcon className="h-5 w-5 mr-2" />
+            Neuer Host
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -365,6 +406,13 @@ export function HostsPage() {
         confirmLabel="Löschen"
         variant="danger"
         loading={isActionLoading}
+      />
+
+      {/* Import Modal */}
+      <ImportHostsModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onSuccess={handleImportSuccess}
       />
     </div>
   );

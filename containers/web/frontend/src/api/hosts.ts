@@ -1,6 +1,43 @@
 import apiClient from './client';
 import type { Host, PaginatedResponse, HostFilters } from '@/types';
 
+// Import/Export types
+export interface ImportResult {
+  success: boolean;
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: Array<{
+    line: number;
+    hostname?: string;
+    error: string;
+  }>;
+  hosts?: Host[];
+}
+
+export interface ImportValidationResult {
+  valid: boolean;
+  totalLines: number;
+  toCreate: number;
+  toUpdate: number;
+  toSkip: number;
+  errors: Array<{
+    line: number;
+    hostname?: string;
+    error: string;
+  }>;
+  preview: Array<{
+    line: number;
+    hostname: string;
+    mac: string;
+    ip?: string;
+    room?: string;
+    group?: string;
+    action: 'create' | 'update' | 'skip';
+    reason?: string;
+  }>;
+}
+
 export interface CreateHostData {
   hostname: string;
   macAddress: string;
@@ -152,5 +189,28 @@ export const hostsApi = {
       success: results.filter((r) => r.status === 'fulfilled').length,
       failed: results.filter((r) => r.status === 'rejected').length,
     };
+  },
+
+  // Device Import/Export (Phase 7c)
+  import: async (csv: string, options?: { dryRun?: boolean }): Promise<ImportResult> => {
+    const response = await apiClient.post<ApiResponse<ImportResult>>('/hosts/import', {
+      csv,
+      options,
+    });
+    return response.data.data;
+  },
+
+  importValidate: async (csv: string): Promise<ImportValidationResult> => {
+    const response = await apiClient.post<ApiResponse<ImportValidationResult>>('/hosts/import/validate', {
+      csv,
+    });
+    return response.data.data;
+  },
+
+  export: async (): Promise<Blob> => {
+    const response = await apiClient.get('/hosts/export', {
+      responseType: 'blob',
+    });
+    return response.data;
   },
 };

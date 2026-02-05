@@ -14,3 +14,6 @@ export { Badge, StatusBadge, OperationStatusBadge } from './Badge';
 export type { BadgeProps, StatusBadgeProps, OperationStatusBadgeProps } from './Badge';
 
 export { ToastContainer } from './Toast';
+
+export { FileUpload } from './FileUpload';
+export type { FileUploadProps } from './FileUpload';

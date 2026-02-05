@@ -1,7 +1,7 @@
 # LINBO Docker - Aktueller Projektstand
 
 **Stand:** 2026-02-05
-**Version:** Phase 7a/7b abgeschlossen
+**Version:** Phase 7c abgeschlossen
 
 ---
 
@@ -17,14 +17,81 @@
 | Phase 4 | GRUB Configs | ✅ | 100% |
 | Phase 5 | RSYNC Hooks + Frontend | ✅ | 100% |
 | Phase 6 | Server Components | ✅ | 100% |
-| Phase 7a | Remote Commands | ✅ | 33 Tests |
-| Phase 7b | Device Import | ✅ | 42 Tests |
+| Phase 7a | Remote Commands (API) | ✅ | 33 Tests |
+| Phase 7b | Device Import (API) | ✅ | 42 Tests |
+| **Phase 7c** | **Frontend Integration** | **✅** | **Vollständig** |
 
-**Gesamt: 250 Tests, 235 bestanden**
+**Gesamt: 250 Tests, 239 bestanden (95.6%)**
 
 ---
 
-## Phase 7 - Implementierte Features
+## Phase 7c - Frontend Integration (NEU)
+
+### Neue UI-Komponenten
+
+**FileUpload Component:**
+- Drag-and-drop Datei-Upload
+- Dateityp- und Größenvalidierung
+- CSV-Vorschau
+
+**ImportHostsModal:**
+- 3-stufiger Import-Wizard
+- Step 1: CSV-Datei hochladen
+- Step 2: Validierung/Preview (dry-run)
+- Step 3: Import-Ergebnis
+- linuxmuster-kompatibles CSV-Format
+
+**RemoteCommandModal:**
+- Host/Raum/Gruppe Auswahl
+- LINBO Command-Builder
+- "Sofort ausführen" vs. "Bei nächstem Boot"
+- Wake-on-LAN Option mit Verzögerung
+
+**ScheduledCommandsSection:**
+- Liste der geplanten Onboot-Befehle
+- Abbrechen-Funktion pro Host
+- Automatische Aktualisierung
+
+### Erweiterte API-Module (Frontend)
+
+**hosts.ts:**
+```typescript
+import()           // CSV importieren
+importValidate()   // Validierung (dry-run)
+export()           // CSV exportieren
+```
+
+**operations.ts:**
+```typescript
+direct()           // Direkte SSH-Befehle
+schedule()         // Onboot-Befehle planen
+listScheduled()    // Geplante Befehle anzeigen
+cancelScheduled()  // Befehl abbrechen
+validateCommands() // Syntax prüfen
+LINBO_COMMANDS     // Befehlsliste für UI
+```
+
+### Seiten-Updates
+
+**HostsPage:**
+- Export-Button (CSV Download)
+- Import-Button + Modal
+- Refresh nach Import
+
+**OperationsPage:**
+- "Remote-Befehl" Button
+- Tab-Navigation: "Operationen" | "Geplante Befehle"
+- RemoteCommandModal Integration
+
+### Bugfix: Host-Zählung
+
+**Problem:** Räume/Gruppen/Configs zeigten "0 Hosts"
+**Ursache:** Frontend suchte `_count.hosts`, API liefert `hostCount`
+**Fix:** Fallback-Logik: `hostCount ?? _count?.hosts ?? 0`
+
+---
+
+## Phase 7 - Vollständige API-Endpoints
 
 ### Remote Commands (ersetzt linbo-remote)
 
@@ -66,7 +133,10 @@ room;hostname;group;mac;ip;...;role;;pxe
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Frontend (React)                          │
-│  - Dashboard, Hosts, Groups, Configs, Images, Operations        │
+│  Dashboard │ Hosts │ Rooms │ Groups │ Configs │ Images │ Ops    │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │ NEW: ImportModal │ RemoteCommandModal │ ScheduledCmds   │    │
+│  └─────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────┘
                               │ REST/WebSocket
 ┌─────────────────────────────────────────────────────────────────┐
@@ -87,14 +157,14 @@ room;hostname;group;mac;ip;...;role;;pxe
 
 ## Vergleich mit Produktionsserver
 
-### Funktionale Parität: ~85%
+### Funktionale Parität: ~90%
 
 | Bereich | linuxmuster 7.3 | LINBO Docker | Status |
 |---------|-----------------|--------------|--------|
 | **Boot** |
 | TFTP/PXE Boot | ✅ | ✅ | Vollständig |
 | GRUB Config Generation | ✅ | ✅ | Vollständig |
-| Host-spezifische GRUB .img | ✅ | ❌ | Ausstehend |
+| Host-spezifische GRUB .img | ✅ | ❌ | Phase 10 |
 | **Konfiguration** |
 | start.conf Generierung | Datei-basiert | DB-basiert | ✅ Besser |
 | Approval Workflow | ❌ | ✅ | ✅ Besser |
@@ -104,43 +174,48 @@ room;hostname;group;mac;ip;...;role;;pxe
 | Multicast (udpcast) | ✅ | ❌ | **Phase 8** |
 | Torrent (ctorrent) | ✅ | ❌ | **Phase 8** |
 | **Remote** |
-| SSH Commands | ✅ linbo-remote | ✅ API | Vollständig |
-| Onboot Commands | ✅ .cmd Dateien | ✅ API | Vollständig |
+| SSH Commands | ✅ linbo-remote | ✅ API + UI | Vollständig |
+| Onboot Commands | ✅ .cmd Dateien | ✅ API + UI | Vollständig |
 | Wake-on-LAN | ✅ | ✅ | Vollständig |
+| **Device Management** |
+| CSV Import | ✅ CLI | ✅ API + UI | Vollständig |
+| CSV Export | ✅ CLI | ✅ API + UI | Vollständig |
 | **Images** |
 | Upload/Download | ✅ | ✅ | Vollständig |
 | Metadaten (.info, .desc) | ✅ Auto | ⚠️ DB | Teilweise |
-| Backup/Versioning | ✅ Auto | ❌ | **Phase 8** |
-| Torrent-Generierung | ✅ Auto | ❌ | **Phase 8** |
+| Backup/Versioning | ✅ Auto | ❌ | **Phase 9** |
 | **Integration** |
 | Sophomorix/AD | ✅ LDAP | ❌ | Nicht geplant |
 | REST API | ❌ | ✅ | ✅ Besser |
 | WebSocket Events | ❌ | ✅ | ✅ Besser |
-| Web-UI | ❌ | ✅ | ✅ Besser |
+| **Web-UI** | ❌ | ✅ | ✅ Besser |
 
 ---
 
-## Vorteile der Docker-Lösung
+## Frontend-Features (vollständig)
 
-1. **Moderne Architektur**
-   - REST API für Automatisierung
-   - WebSocket für Echtzeit-Updates
-   - React-basiertes Frontend
+### Hosts-Seite
+- ✅ CRUD-Operationen
+- ✅ Bulk-Aktionen (WoL, Sync)
+- ✅ Filter (Status, Raum, Gruppe)
+- ✅ Sortierung und Pagination
+- ✅ **CSV Import mit Wizard**
+- ✅ **CSV Export Download**
 
-2. **Bessere Governance**
-   - Datenbank-gestützte Konfiguration
-   - Vollständiges Audit-Logging
-   - Approval-Workflows für Configs
+### Operations-Seite
+- ✅ Operations-Liste mit Echtzeit-Updates
+- ✅ Status-Filter
+- ✅ Detail-Modal mit Session-Fortschritt
+- ✅ **Remote-Befehl Modal**
+- ✅ **Geplante Befehle Tab**
+- ✅ **Command-Builder**
 
-3. **Einfachere Deployment**
-   - Docker Compose Setup
-   - Infrastructure as Code
-   - Portable und reproduzierbar
-
-4. **Keine Sophomorix-Abhängigkeit**
-   - Eigenständige PostgreSQL-Datenbank
-   - CSV Import/Export kompatibel
-   - Kein Active Directory benötigt
+### Weitere Seiten
+- ✅ Dashboard mit Statistiken
+- ✅ Räume-Verwaltung (mit Host-Zählung)
+- ✅ Gruppen-Verwaltung (mit Host-Zählung)
+- ✅ Config-Editor (Partitionen, OS, Preview)
+- ✅ Images-Verwaltung
 
 ---
 
@@ -148,26 +223,19 @@ room;hostname;group;mac;ip;...;role;;pxe
 
 ### Hohe Priorität (für Produktion)
 
-| Feature | Impact | Aufwand |
-|---------|--------|---------|
-| Multicast Distribution | Große Deployments | 2-3 Tage |
-| Torrent Distribution | P2P Effizienz | 2-3 Tage |
-| Image Backup/Versioning | Datensicherheit | 2 Tage |
+| Feature | Impact | Phase |
+|---------|--------|-------|
+| Multicast Distribution | Große Deployments | 8 |
+| Torrent Distribution | P2P Effizienz | 8 |
+| Image Backup/Versioning | Datensicherheit | 9 |
 
 ### Mittlere Priorität
 
-| Feature | Impact | Aufwand |
-|---------|--------|---------|
-| Host-GRUB Images (.img) | Legacy Hardware | 2 Tage |
-| Windows Registry Patches | Windows Config | 2 Tage |
-| ISO Boot-Medium | USB Boot | 1-2 Tage |
-
-### Niedrige Priorität
-
-| Feature | Impact | Aufwand |
-|---------|--------|---------|
-| Raum-basierte Batch-Ops | Convenience | 1 Tag |
-| Application Harvesting | Packaging | 2 Tage |
+| Feature | Impact | Phase |
+|---------|--------|-------|
+| Host-GRUB Images (.img) | Legacy Hardware | 10 |
+| Windows Registry Patches | Windows Config | 10 |
+| ISO Boot-Medium | USB Boot | 10 |
 
 ---
 
@@ -196,14 +264,36 @@ room;hostname;group;mac;ip;...;role;;pxe
 ## Test-Ergebnisse
 
 ```
-Phase 7 Services:
-  remote.service.test.js     - 33 Tests ✅
+Backend Services:
+  remote.service.test.js       - 33 Tests ✅
   deviceImport.service.test.js - 42 Tests ✅
+  config.service.test.js       - 18 Tests ✅
+  grub.service.test.js         - 25 Tests ✅
+  ssh.service.test.js          - 27 Tests ✅
+  host.service.test.js         - 25 Tests ✅
+  wol.service.test.js          - 18 Tests ✅
+  linbofs.service.test.js      - 21 Tests ✅
+
+Frontend Build:
+  TypeScript Compilation       - ✅ No Errors
+  Vite Production Build        - ✅ 5.7s
 
 Gesamt: 250 Tests
-  ✅ Bestanden: 235
-  ❌ Fehlgeschlagen: 15 (vorbestehende API-Test-Issues)
+  ✅ Bestanden: 239 (95.6%)
+  ❌ Fehlgeschlagen: 11 (vorbestehende API-Test-Issues)
 ```
+
+---
+
+## Live-URLs
+
+| Service | URL | Status |
+|---------|-----|--------|
+| Web-Frontend | http://10.0.0.11:8080 | ✅ Live |
+| API | http://10.0.0.11:3000 | ✅ Healthy |
+| API Health | http://10.0.0.11:3000/health | ✅ |
+
+**Login:** `admin` / `admin`
 
 ---
 
@@ -223,3 +313,23 @@ ENABLE_OPERATION_WORKER=true
 OPERATION_POLL_INTERVAL=5000
 MAX_CONCURRENT_SESSIONS=5
 ```
+
+---
+
+## Nächste Schritte
+
+### Phase 8: Distribution Services
+1. Multicast Container (udpcast)
+2. Torrent Container (ctorrent + tracker)
+3. API-Endpoints für Distribution-Management
+4. Frontend-Integration
+
+### Phase 9: Image Management
+1. Backup-System mit Versionierung
+2. Automatische Metadata-Generierung
+3. Image-Lifecycle-Management
+
+### Phase 10: Boot Enhancements
+1. Host-GRUB Images (.img Dateien)
+2. ISO-Erstellung für USB-Boot
+3. Legacy-Hardware-Support

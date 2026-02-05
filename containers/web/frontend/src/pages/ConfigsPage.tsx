@@ -208,7 +208,7 @@ export function ConfigsPage() {
     {
       key: 'hosts',
       header: 'Hosts',
-      render: (config) => config._count?.hosts || 0,
+      render: (config) => (config as Config & { hostCount?: number }).hostCount ?? config._count?.hosts ?? 0,
     },
     {
       key: 'actions',

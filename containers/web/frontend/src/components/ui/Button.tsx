@@ -5,6 +5,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: 'sm' | 'md' | 'lg';
   loading?: boolean;
   fullWidth?: boolean;
+  type?: 'button' | 'submit' | 'reset';
 }
 
 function clsxFn(...classes: (string | boolean | undefined)[]) {
@@ -21,6 +22,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       fullWidth = false,
       disabled,
       children,
+      type = 'button', // Default to 'button' to prevent accidental form submission
       ...props
     },
     ref
@@ -45,6 +47,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <button
         ref={ref}
+        type={type}
         className={clsxFn(
           baseStyles,
           variants[variant],
