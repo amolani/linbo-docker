@@ -7,7 +7,6 @@ import { LoginPage } from '@/pages/LoginPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { HostsPage } from '@/pages/HostsPage';
 import { RoomsPage } from '@/pages/RoomsPage';
-import { GroupsPage } from '@/pages/GroupsPage';
 import { ConfigsPage } from '@/pages/ConfigsPage';
 import { ImagesPage } from '@/pages/ImagesPage';
 import { OperationsPage } from '@/pages/OperationsPage';
@@ -50,16 +49,6 @@ export function AppRoutes() {
         }
       />
 
-      <Route
-        path="/groups"
-        element={
-          <ProtectedRoute>
-            <AppLayout>
-              <GroupsPage />
-            </AppLayout>
-          </ProtectedRoute>
-        }
-      />
 
       <Route
         path="/configs"

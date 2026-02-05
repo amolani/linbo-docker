@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   ComputerDesktopIcon,
   BuildingOfficeIcon,
-  UsersIcon,
+  Cog6ToothIcon,
   CircleStackIcon,
 } from '@heroicons/react/24/outline';
 import { statsApi } from '@/api/stats';
@@ -78,11 +78,11 @@ export function DashboardPage() {
       link: '/rooms',
     },
     {
-      name: 'Gruppen',
-      value: stats?.groups || 0,
-      icon: UsersIcon,
+      name: 'Konfigurationen',
+      value: stats?.configs || 0,
+      icon: Cog6ToothIcon,
       color: 'bg-purple-500',
-      link: '/groups',
+      link: '/configs',
     },
     {
       name: 'Images',

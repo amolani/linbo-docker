@@ -22,7 +22,6 @@ async function getHostById(id) {
     where: { id },
     include: {
       room: { select: { id: true, name: true } },
-      group: { select: { id: true, name: true } },
       config: { select: { id: true, name: true } },
     },
   });
@@ -48,7 +47,6 @@ async function getHostByHostname(hostname) {
     where: { hostname },
     include: {
       room: { select: { id: true, name: true } },
-      group: { select: { id: true, name: true } },
       config: { select: { id: true, name: true } },
     },
   });
@@ -75,7 +73,6 @@ async function getHostByMac(macAddress) {
     where: { macAddress: { equals: normalizedMac, mode: 'insensitive' } },
     include: {
       room: { select: { id: true, name: true } },
-      group: { select: { id: true, name: true } },
       config: { select: { id: true, name: true } },
     },
   });
@@ -204,23 +201,13 @@ async function getHostConfig(id) {
           osEntries: { orderBy: { position: 'asc' } },
         },
       },
-      group: {
-        include: {
-          defaultConfig: {
-            include: {
-              partitions: { orderBy: { position: 'asc' } },
-              osEntries: { orderBy: { position: 'asc' } },
-            },
-          },
-        },
-      },
     },
   });
 
   if (!host) return null;
 
-  // Use host-specific config, or fall back to group default
-  return host.config || host.group?.defaultConfig || null;
+  // Use host config
+  return host.config || null;
 }
 
 /**
@@ -262,7 +249,6 @@ async function getHostsByRoom(roomId) {
     where: { roomId },
     orderBy: { hostname: 'asc' },
     include: {
-      group: { select: { id: true, name: true } },
       config: { select: { id: true, name: true } },
     },
   });
@@ -276,12 +262,12 @@ async function getHostsByRoom(roomId) {
 }
 
 /**
- * Get hosts by group with status counts
- * @param {string} groupId - Group UUID
+ * Get hosts by config with status counts
+ * @param {string} configId - Config UUID
  */
-async function getHostsByGroup(groupId) {
+async function getHostsByConfig(configId) {
   const hosts = await prisma.host.findMany({
-    where: { groupId },
+    where: { configId },
     orderBy: { hostname: 'asc' },
     include: {
       room: { select: { id: true, name: true } },
@@ -308,5 +294,5 @@ module.exports = {
   getHostConfig,
   getSyncProgress,
   getHostsByRoom,
-  getHostsByGroup,
+  getHostsByConfig,
 };

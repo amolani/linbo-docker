@@ -1,10 +1,10 @@
 import { Input, Select, Button } from '@/components/ui';
-import type { HostFilters as HostFiltersType, Room, HostGroup } from '@/types';
+import type { HostFilters as HostFiltersType, Room, Config } from '@/types';
 
 interface HostFiltersProps {
   filters: HostFiltersType;
   rooms: Room[];
-  groups: HostGroup[];
+  configs: Config[];
   onFilterChange: (key: keyof HostFiltersType, value: string | undefined) => void;
   onClearFilters: () => void;
 }
@@ -12,7 +12,7 @@ interface HostFiltersProps {
 export function HostFilters({
   filters,
   rooms,
-  groups,
+  configs,
   onFilterChange,
   onClearFilters,
 }: HostFiltersProps) {
@@ -44,11 +44,11 @@ export function HostFilters({
           ]}
         />
         <Select
-          value={filters.groupId || ''}
-          onChange={(e) => onFilterChange('groupId', e.target.value || undefined)}
+          value={filters.configId || ''}
+          onChange={(e) => onFilterChange('configId', e.target.value || undefined)}
           options={[
-            { value: '', label: 'Alle Gruppen' },
-            ...groups.map((g) => ({ value: g.id, label: g.name })),
+            { value: '', label: 'Alle Konfigurationen' },
+            ...configs.map((c) => ({ value: c.id, label: c.name })),
           ]}
         />
         <Button variant="secondary" onClick={onClearFilters}>

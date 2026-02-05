@@ -55,10 +55,9 @@ export const configsApi = {
     await apiClient.delete(`/configs/${id}`);
   },
 
-  applyToGroups: async (id: string, groupIds: string[]): Promise<{ success: boolean; updated: number }> => {
-    const response = await apiClient.post<ApiResponse<{ success: boolean; updated: number }>>(
-      `/configs/${id}/apply-to-groups`,
-      { groupIds }
+  wakeAll: async (id: string): Promise<{ successful: number; failed: number; configName: string }> => {
+    const response = await apiClient.post<ApiResponse<{ successful: number; failed: number; configName: string }>>(
+      `/configs/${id}/wake-all`
     );
     return response.data.data;
   },

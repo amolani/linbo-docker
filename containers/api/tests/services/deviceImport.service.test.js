@@ -25,7 +25,7 @@ jest.mock('../../src/lib/prisma', () => ({
       findMany: jest.fn(),
       create: jest.fn(),
     },
-    hostGroup: {
+    config: {
       findUnique: jest.fn(),
       findMany: jest.fn(),
       create: jest.fn(),
@@ -236,7 +236,7 @@ room1;pc02;group1;aa:bb:cc:dd:ee:02;10.0.0.2`;
       expect(result.valid).toBe(true);
       expect(result.data.room).toBe('room1');
       expect(result.data.hostname).toBe('pc01');
-      expect(result.data.group).toBe('group1');
+      expect(result.data.configName).toBe('group1');
       expect(result.data.macAddress).toBe('aa:bb:cc:dd:ee:ff');
       expect(result.data.ipAddress).toBe('10.0.0.1');
     });
@@ -300,9 +300,9 @@ room1;pc02;group1;aa:bb:cc:dd:ee:02;10.0.0.2`;
       const result = deviceImportService.validateCsvRow(row);
 
       expect(result.valid).toBe(true);
-      expect(result.data.group).toBeNull();
+      expect(result.data.configName).toBeNull();
       expect(result.data.isPxeEnabled).toBe(false);
-      expect(result.warnings.some(w => w.includes('no PXE group'))).toBe(true);
+      expect(result.warnings.some(w => w.includes('no PXE config'))).toBe(true);
     });
   });
 
@@ -372,15 +372,13 @@ room1;pc01;group1;aa:bb:cc:dd:ee:02;10.0.0.2`;
 
       prisma.room.findUnique.mockResolvedValue(null);
       prisma.room.create.mockResolvedValue({ id: 'room-1', name: 'room1' });
-      prisma.hostGroup.findUnique.mockResolvedValue(null);
-      prisma.hostGroup.create.mockResolvedValue({ id: 'group-1', name: 'group1' });
+      prisma.config.findMany.mockResolvedValue([{ id: 'config-1', name: 'group1' }]);
       prisma.host.findUnique.mockResolvedValue(null);
       prisma.host.create.mockResolvedValue({ id: 'host-1', hostname: 'pc01' });
 
       const result = await deviceImportService.importFromCsv(csv, {
         dryRun: false,
         createRooms: true,
-        createGroups: true,
       });
 
       expect(result.success).toBe(true);
@@ -392,7 +390,7 @@ room1;pc01;group1;aa:bb:cc:dd:ee:02;10.0.0.2`;
       const csv = `room1;pc01;group1;aa:bb:cc:dd:ee:01;10.0.0.1`;
 
       prisma.room.findUnique.mockResolvedValue({ id: 'room-1' });
-      prisma.hostGroup.findUnique.mockResolvedValue({ id: 'group-1' });
+      prisma.config.findMany.mockResolvedValue([{ id: 'config-1', name: 'group1' }]);
       prisma.host.findUnique.mockResolvedValue(null);
       prisma.host.create.mockResolvedValue({ id: 'host-1' });
 
@@ -415,7 +413,7 @@ room1;pc01;group1;aa:bb:cc:dd:ee:02;10.0.0.2`;
           macAddress: 'aa:bb:cc:dd:ee:01',
           ipAddress: '10.0.0.1',
           room: { name: 'room1' },
-          group: { name: 'group1' },
+          config: { name: 'group1' },
           metadata: { computerType: 'student', pxeFlag: 1 },
         },
       ]);
@@ -433,7 +431,7 @@ room1;pc01;group1;aa:bb:cc:dd:ee:02;10.0.0.2`;
           macAddress: 'aa:bb:cc:dd:ee:01',
           ipAddress: null,
           room: null,
-          group: null,
+          config: null,
           metadata: {},
         },
       ]);
@@ -448,7 +446,7 @@ room1;pc01;group1;aa:bb:cc:dd:ee:02;10.0.0.2`;
     test('should have correct column indices', () => {
       expect(deviceImportService.CSV_COLUMNS.ROOM).toBe(0);
       expect(deviceImportService.CSV_COLUMNS.HOSTNAME).toBe(1);
-      expect(deviceImportService.CSV_COLUMNS.GROUP).toBe(2);
+      expect(deviceImportService.CSV_COLUMNS.CONFIG).toBe(2);
       expect(deviceImportService.CSV_COLUMNS.MAC).toBe(3);
       expect(deviceImportService.CSV_COLUMNS.IP).toBe(4);
       expect(deviceImportService.CSV_COLUMNS.PXE_FLAG).toBe(11);

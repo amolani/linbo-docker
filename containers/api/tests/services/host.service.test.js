@@ -315,33 +315,10 @@ describe('Host Service', () => {
       expect(result).toEqual(mockHostWithConfig.config);
     });
 
-    test('should fall back to group default config', async () => {
-      const hostWithGroupConfig = {
-        ...mockHost,
-        config: null,
-        group: {
-          id: 'group-1',
-          name: 'win11_efi_sata',
-          defaultConfig: {
-            id: 'default-config',
-            name: 'default',
-            partitions: [],
-            osEntries: [],
-          },
-        },
-      };
-      prisma.host.findUnique.mockResolvedValue(hostWithGroupConfig);
-
-      const result = await hostService.getHostConfig(mockHost.id);
-
-      expect(result).toEqual(hostWithGroupConfig.group.defaultConfig);
-    });
-
     test('should return null if no config available', async () => {
       const hostWithoutConfig = {
         ...mockHost,
         config: null,
-        group: { defaultConfig: null },
       };
       prisma.host.findUnique.mockResolvedValue(hostWithoutConfig);
 
@@ -418,17 +395,17 @@ describe('Host Service', () => {
     });
   });
 
-  describe('getHostsByGroup', () => {
-    test('should return hosts in group with status counts', async () => {
-      const groupHosts = [
+  describe('getHostsByConfig', () => {
+    test('should return hosts in config with status counts', async () => {
+      const configHosts = [
         { ...mockHost, status: 'syncing' },
         { ...mockHost, id: '2', hostname: 'pc-02', status: 'syncing' },
       ];
-      prisma.host.findMany.mockResolvedValue(groupHosts);
+      prisma.host.findMany.mockResolvedValue(configHosts);
 
-      const result = await hostService.getHostsByGroup('group-1');
+      const result = await hostService.getHostsByConfig('config-1');
 
-      expect(result.hosts).toEqual(groupHosts);
+      expect(result.hosts).toEqual(configHosts);
       expect(result.total).toBe(2);
       expect(result.statusCounts.syncing).toBe(2);
     });

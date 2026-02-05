@@ -160,12 +160,12 @@ router.get(
   validateQuery(hostQuerySchema),
   async (req, res, next) => {
     try {
-      const { page, limit, sortBy, sortOrder, roomId, groupId, status, search } = req.query;
+      const { page, limit, sortBy, sortOrder, roomId, configId, status, search } = req.query;
 
       // Build where clause
       const where = {};
       if (roomId) where.roomId = roomId;
-      if (groupId) where.groupId = groupId;
+      if (configId) where.configId = configId;
       if (status) where.status = status;
       if (search) {
         where.OR = [
@@ -187,7 +187,6 @@ router.get(
           take: limit,
           include: {
             room: { select: { id: true, name: true } },
-            group: { select: { id: true, name: true } },
             config: { select: { id: true, name: true } },
           },
         }),
@@ -219,7 +218,6 @@ router.get('/:id', authenticateToken, async (req, res, next) => {
       where: { id: req.params.id },
       include: {
         room: true,
-        group: true,
         config: {
           include: {
             partitions: { orderBy: { position: 'asc' } },
@@ -258,7 +256,6 @@ router.get('/by-name/:hostname', authenticateToken, async (req, res, next) => {
       where: { hostname: req.params.hostname },
       include: {
         room: { select: { id: true, name: true } },
-        group: { select: { id: true, name: true } },
         config: { select: { id: true, name: true } },
       },
     });
@@ -293,7 +290,6 @@ router.get('/by-mac/:mac', authenticateToken, async (req, res, next) => {
       },
       include: {
         room: { select: { id: true, name: true } },
-        group: { select: { id: true, name: true } },
         config: { select: { id: true, name: true } },
       },
     });
@@ -338,7 +334,6 @@ router.post(
         },
         include: {
           room: { select: { id: true, name: true } },
-          group: { select: { id: true, name: true } },
           config: { select: { id: true, name: true } },
         },
       });
@@ -347,9 +342,9 @@ router.post(
       await redis.delPattern('hosts:*');
 
       // Generate GRUB config for new host
-      if (host.group) {
+      if (host.config) {
         try {
-          await grubService.generateHostGrubConfig(host.hostname, host.group.name);
+          await grubService.generateHostGrubConfig(host.hostname, host.config.name);
         } catch (error) {
           console.error('[Hosts] Failed to generate GRUB config:', error.message);
         }
@@ -397,7 +392,6 @@ router.patch(
         data,
         include: {
           room: { select: { id: true, name: true } },
-          group: { select: { id: true, name: true } },
           config: { select: { id: true, name: true } },
         },
       });
@@ -406,9 +400,9 @@ router.patch(
       await redis.delPattern('hosts:*');
 
       // Regenerate GRUB config for updated host
-      if (host.group) {
+      if (host.config) {
         try {
-          await grubService.generateHostGrubConfig(host.hostname, host.group.name);
+          await grubService.generateHostGrubConfig(host.hostname, host.config.name);
         } catch (error) {
           console.error('[Hosts] Failed to regenerate GRUB config:', error.message);
         }

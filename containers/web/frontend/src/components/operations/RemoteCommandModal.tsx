@@ -6,15 +6,15 @@ import {
   ClockIcon,
   ComputerDesktopIcon,
   BuildingOfficeIcon,
-  UserGroupIcon,
+  Cog6ToothIcon,
 } from '@heroicons/react/24/outline';
 import { Modal, Button, Input, Select } from '@/components/ui';
 import { operationsApi, LINBO_COMMANDS, DirectCommandRequest, ScheduleCommandRequest } from '@/api/operations';
 import { hostsApi } from '@/api/hosts';
 import { roomsApi } from '@/api/rooms';
-import { groupsApi } from '@/api/groups';
+import { configsApi } from '@/api/configs';
 import { notify } from '@/stores/notificationStore';
-import type { Host, Room, HostGroup } from '@/types';
+import type { Host, Room, Config } from '@/types';
 
 interface RemoteCommandModalProps {
   isOpen: boolean;
@@ -23,7 +23,7 @@ interface RemoteCommandModalProps {
   preselectedHostIds?: string[];
 }
 
-type TargetType = 'hosts' | 'room' | 'group';
+type TargetType = 'hosts' | 'room' | 'config';
 type ExecutionType = 'direct' | 'scheduled';
 
 interface CommandItem {
@@ -42,7 +42,7 @@ export function RemoteCommandModal({
   const [executionType, setExecutionType] = useState<ExecutionType>('direct');
   const [selectedHostIds, setSelectedHostIds] = useState<string[]>(preselectedHostIds);
   const [selectedRoomId, setSelectedRoomId] = useState<string>('');
-  const [selectedGroupId, setSelectedGroupId] = useState<string>('');
+  const [selectedConfigId, setSelectedConfigId] = useState<string>('');
   const [commands, setCommands] = useState<CommandItem[]>([]);
   const [wakeOnLan, setWakeOnLan] = useState(false);
   const [wolDelay, setWolDelay] = useState(30);
@@ -50,7 +50,7 @@ export function RemoteCommandModal({
 
   const [hosts, setHosts] = useState<Host[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [groups, setGroups] = useState<HostGroup[]>([]);
+  const [configs, setConfigs] = useState<Config[]>([]);
   const [hostsLoading, setHostsLoading] = useState(true);
 
   // Load options on mount
@@ -58,14 +58,14 @@ export function RemoteCommandModal({
     const loadOptions = async () => {
       setHostsLoading(true);
       try {
-        const [hostsData, roomsData, groupsData] = await Promise.all([
+        const [hostsData, roomsData, configsData] = await Promise.all([
           hostsApi.list({ limit: 500 }),
           roomsApi.list(),
-          groupsApi.list(),
+          configsApi.list(),
         ]);
         setHosts(hostsData.data);
         setRooms(roomsData);
-        setGroups(groupsData);
+        setConfigs(configsData);
       } catch {
         notify.error('Fehler beim Laden der Optionen');
       } finally {
@@ -88,7 +88,7 @@ export function RemoteCommandModal({
   const handleClose = useCallback(() => {
     setSelectedHostIds([]);
     setSelectedRoomId('');
-    setSelectedGroupId('');
+    setSelectedConfigId('');
     setCommands([]);
     setWakeOnLan(false);
     setWolDelay(30);
@@ -134,14 +134,14 @@ export function RemoteCommandModal({
         return selectedRoomId
           ? hosts.filter((h) => h.roomId === selectedRoomId).length
           : 0;
-      case 'group':
-        return selectedGroupId
-          ? hosts.filter((h) => h.groupId === selectedGroupId).length
+      case 'config':
+        return selectedConfigId
+          ? hosts.filter((h) => h.configId === selectedConfigId).length
           : 0;
       default:
         return 0;
     }
-  }, [targetType, selectedHostIds, selectedRoomId, selectedGroupId, hosts]);
+  }, [targetType, selectedHostIds, selectedRoomId, selectedConfigId, hosts]);
 
   const isValid = useMemo(() => {
     if (commands.length === 0) return false;
@@ -172,8 +172,8 @@ export function RemoteCommandModal({
         case 'room':
           requestData = { ...baseData, roomId: selectedRoomId };
           break;
-        case 'group':
-          requestData = { ...baseData, groupId: selectedGroupId };
+        case 'config':
+          requestData = { ...baseData, configId: selectedConfigId };
           break;
       }
 
@@ -270,15 +270,15 @@ export function RemoteCommandModal({
             </button>
             <button
               type="button"
-              onClick={() => setTargetType('group')}
+              onClick={() => setTargetType('config')}
               className={`flex-1 py-2 px-3 text-sm flex items-center justify-center gap-2 ${
-                targetType === 'group'
+                targetType === 'config'
                   ? 'bg-gray-100 font-medium'
                   : 'bg-white text-gray-600 hover:bg-gray-50'
               }`}
             >
-              <UserGroupIcon className="h-4 w-4" />
-              Gruppe
+              <Cog6ToothIcon className="h-4 w-4" />
+              Konfiguration
             </button>
           </div>
 
@@ -329,15 +329,15 @@ export function RemoteCommandModal({
             />
           )}
 
-          {targetType === 'group' && (
+          {targetType === 'config' && (
             <Select
-              value={selectedGroupId}
-              onChange={(e) => setSelectedGroupId(e.target.value)}
+              value={selectedConfigId}
+              onChange={(e) => setSelectedConfigId(e.target.value)}
               options={[
-                { value: '', label: 'Gruppe auswählen...' },
-                ...groups.map((g) => ({
-                  value: g.id,
-                  label: `${g.name} (${hosts.filter((h) => h.groupId === g.id).length} Hosts)`,
+                { value: '', label: 'Konfiguration auswählen...' },
+                ...configs.map((c) => ({
+                  value: c.id,
+                  label: `${c.name} (${hosts.filter((h) => h.configId === c.id).length} Hosts)`,
                 })),
               ]}
             />

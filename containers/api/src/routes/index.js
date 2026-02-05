@@ -9,7 +9,6 @@ const router = express.Router();
 // Import route modules
 const authRoutes = require('./auth');
 const hostRoutes = require('./hosts');
-const groupRoutes = require('./groups');
 const roomRoutes = require('./rooms');
 const configRoutes = require('./configs');
 const imageRoutes = require('./images');
@@ -21,7 +20,6 @@ const internalRoutes = require('./internal');
 // Mount routes
 router.use('/auth', authRoutes);
 router.use('/hosts', hostRoutes);
-router.use('/groups', groupRoutes);
 router.use('/rooms', roomRoutes);
 router.use('/configs', configRoutes);
 router.use('/images', imageRoutes);
@@ -56,15 +54,6 @@ router.get('/', (req, res) => {
         'POST /hosts/:id/start': 'Start OS on host',
         'PATCH /hosts/:id/status': 'Update host status',
       },
-      groups: {
-        'GET /groups': 'List all groups',
-        'GET /groups/:id': 'Get group with hosts',
-        'POST /groups': 'Create group',
-        'PATCH /groups/:id': 'Update group',
-        'DELETE /groups/:id': 'Delete group',
-        'POST /groups/:id/apply-config': 'Apply config to group',
-        'POST /groups/:id/wake-all': 'Wake all hosts in group',
-      },
       rooms: {
         'GET /rooms': 'List all rooms',
         'GET /rooms/:id': 'Get room with hosts',
@@ -81,9 +70,9 @@ router.get('/', (req, res) => {
         'POST /configs': 'Create configuration',
         'PATCH /configs/:id': 'Update configuration',
         'DELETE /configs/:id': 'Delete configuration',
-        'POST /configs/:id/apply-to-groups': 'Apply to groups',
         'POST /configs/:id/clone': 'Clone configuration',
         'POST /configs/:id/deploy': 'Deploy config to /srv/linbo',
+        'POST /configs/:id/wake-all': 'Wake all hosts using this config',
         'GET /configs/deployed/list': 'List deployed configs',
         'POST /configs/deploy-all': 'Deploy all active configs',
         'POST /configs/cleanup-symlinks': 'Remove orphaned symlinks',

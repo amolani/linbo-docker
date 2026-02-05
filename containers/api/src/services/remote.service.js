@@ -5,7 +5,7 @@
  * Funktionen:
  * - Direkte Befehle via SSH an LINBO-Clients
  * - Onboot-Commands (.cmd Dateien) für verzögerte Ausführung
- * - Gruppen-/Raum-basierte Massenoperationen
+ * - Config-/Raum-basierte Massenoperationen
  */
 
 const path = require('path');
@@ -677,11 +677,11 @@ async function executeDirectCommands(hostIds, commandString, options = {}) {
 }
 
 /**
- * Holt Hosts nach Filter (Raum, Gruppe, oder IDs)
+ * Holt Hosts nach Filter (Raum, Config, oder IDs)
  * @param {Object} filter
  * @param {string[]} filter.hostIds - Direkte Host-IDs
  * @param {string} filter.roomId - Raum-ID
- * @param {string} filter.groupId - Gruppen-ID
+ * @param {string} filter.configId - Config-ID
  * @returns {Promise<Array>}
  */
 async function getHostsByFilter(filter) {
@@ -691,8 +691,8 @@ async function getHostsByFilter(filter) {
     where.id = { in: filter.hostIds };
   } else if (filter.roomId) {
     where.roomId = filter.roomId;
-  } else if (filter.groupId) {
-    where.groupId = filter.groupId;
+  } else if (filter.configId) {
+    where.configId = filter.configId;
   } else {
     throw new Error('No filter specified');
   }

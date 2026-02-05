@@ -231,28 +231,23 @@ function getOsLabel(partitions, rootDevice) {
 // =============================================================================
 
 /**
- * Generate GRUB config for a host group
- * Creates: /boot/grub/{groupname}.cfg
+ * Generate GRUB config for a config (formerly "group")
+ * Creates: /boot/grub/{configname}.cfg
  *
- * @param {string} groupName - Name of the host group
+ * @param {string} configName - Name of the config
  * @param {object} options - Additional options
  * @returns {Promise<{filepath: string, content: string}>}
  */
-async function generateGroupGrubConfig(groupName, options = {}) {
-  // Get group config with partitions and OS entries
-  const group = await prisma.hostGroup.findFirst({
-    where: { name: groupName },
+async function generateConfigGrubConfig(configName, options = {}) {
+  // Get config with partitions and OS entries
+  const config = await prisma.config.findFirst({
+    where: { name: configName },
     include: {
-      defaultConfig: {
-        include: {
-          partitions: { orderBy: { position: 'asc' } },
-          osEntries: { orderBy: { position: 'asc' } },
-        },
-      },
+      partitions: { orderBy: { position: 'asc' } },
+      osEntries: { orderBy: { position: 'asc' } },
     },
   });
 
-  const config = group?.defaultConfig;
   const partitions = config?.partitions || [];
   const osEntries = config?.osEntries || [];
 
@@ -277,7 +272,7 @@ async function generateGroupGrubConfig(groupName, options = {}) {
   // Load and process global template
   const globalTemplate = await loadTemplate('grub.cfg.global');
   let content = applyTemplate(globalTemplate, {
-    group: groupName,
+    group: configName,
     timestamp: new Date().toISOString(),
     cachelabel: cacheLabel,
     cacheroot: cacheRoot,
@@ -296,7 +291,7 @@ async function generateGroupGrubConfig(groupName, options = {}) {
     const partnr = getOsPartitionIndex(partitions, os.root);
 
     const osContent = applyTemplate(osTemplate, {
-      group: groupName,
+      group: configName,
       osname: os.name || `OS ${osnr}`,
       ostype: getGrubOstype(os.name),
       oslabel: osLabel,
@@ -315,29 +310,29 @@ async function generateGroupGrubConfig(groupName, options = {}) {
   // Ensure GRUB directory exists
   await fs.mkdir(GRUB_DIR, { recursive: true });
 
-  const filepath = path.join(GRUB_DIR, `${groupName}.cfg`);
+  const filepath = path.join(GRUB_DIR, `${configName}.cfg`);
   await fs.writeFile(filepath, content, 'utf8');
 
-  console.log(`[GrubService] Generated group config: ${filepath}`);
+  console.log(`[GrubService] Generated config GRUB: ${filepath}`);
 
   return { filepath, content };
 }
 
 /**
  * Generate GRUB config symlink for a specific host
- * Creates: /boot/grub/hostcfg/{hostname}.cfg -> ../{groupname}.cfg
+ * Creates: /boot/grub/hostcfg/{hostname}.cfg -> ../{configname}.cfg
  *
  * @param {string} hostname - Hostname
- * @param {string} groupName - Group name for this host
+ * @param {string} configName - Config name for this host
  * @param {object} options - Additional options
  * @returns {Promise<{filepath: string, target: string, isSymlink: boolean}>}
  */
-async function generateHostGrubConfig(hostname, groupName, options = {}) {
+async function generateHostGrubConfig(hostname, configName, options = {}) {
   // Ensure host config directory exists
   await fs.mkdir(HOSTCFG_DIR, { recursive: true });
 
   const filepath = path.join(HOSTCFG_DIR, `${hostname}.cfg`);
-  const target = `../${groupName}.cfg`;
+  const target = `../${configName}.cfg`;
 
   // Remove existing file/symlink if exists
   try {
@@ -379,43 +374,39 @@ async function generateMainGrubConfig() {
 }
 
 /**
- * Regenerate all GRUB configs for all groups and hosts
- * @returns {Promise<{groups: number, hosts: number, configs: Array}>}
+ * Regenerate all GRUB configs for all configs and hosts
+ * @returns {Promise<{configs: number, hosts: number, results: Array}>}
  */
 async function regenerateAllGrubConfigs() {
   const results = [];
-  let groupCount = 0;
+  let configCount = 0;
   let hostCount = 0;
 
   // Generate main grub.cfg
   await generateMainGrubConfig();
   results.push({ type: 'main', name: 'grub.cfg' });
 
-  // Get all groups with their hosts
-  const groups = await prisma.hostGroup.findMany({
+  // Get all configs with their hosts
+  const configs = await prisma.config.findMany({
     include: {
       hosts: true,
-      defaultConfig: {
-        include: {
-          partitions: { orderBy: { position: 'asc' } },
-          osEntries: { orderBy: { position: 'asc' } },
-        },
-      },
+      partitions: { orderBy: { position: 'asc' } },
+      osEntries: { orderBy: { position: 'asc' } },
     },
   });
 
-  for (const group of groups) {
+  for (const config of configs) {
     try {
-      // Generate group config
-      await generateGroupGrubConfig(group.name);
-      results.push({ type: 'group', name: group.name });
-      groupCount++;
+      // Generate config GRUB file
+      await generateConfigGrubConfig(config.name);
+      results.push({ type: 'config', name: config.name });
+      configCount++;
 
-      // Generate host symlinks for each host in the group
-      for (const host of group.hosts) {
+      // Generate host symlinks for each host using this config
+      for (const host of config.hosts) {
         try {
-          await generateHostGrubConfig(host.hostname, group.name);
-          results.push({ type: 'host', name: host.hostname, group: group.name, isSymlink: true });
+          await generateHostGrubConfig(host.hostname, config.name);
+          results.push({ type: 'host', name: host.hostname, config: config.name, isSymlink: true });
           hostCount++;
         } catch (error) {
           console.error(`[GrubService] Failed to generate config for host ${host.hostname}:`, error.message);
@@ -423,20 +414,20 @@ async function regenerateAllGrubConfigs() {
         }
       }
     } catch (error) {
-      console.error(`[GrubService] Failed to generate config for group ${group.name}:`, error.message);
-      results.push({ type: 'group', name: group.name, error: error.message });
+      console.error(`[GrubService] Failed to generate GRUB for config ${config.name}:`, error.message);
+      results.push({ type: 'config', name: config.name, error: error.message });
     }
   }
 
-  // Also handle hosts without a group (orphaned hosts)
+  // Also handle hosts without a config (orphaned hosts)
   const orphanedHosts = await prisma.host.findMany({
-    where: { groupId: null },
+    where: { configId: null },
   });
 
   for (const host of orphanedHosts) {
     try {
       await generateHostGrubConfig(host.hostname, 'default');
-      results.push({ type: 'host', name: host.hostname, group: 'default', isSymlink: true });
+      results.push({ type: 'host', name: host.hostname, config: 'default', isSymlink: true });
       hostCount++;
     } catch (error) {
       console.error(`[GrubService] Failed to generate config for orphaned host ${host.hostname}:`, error.message);
@@ -444,18 +435,18 @@ async function regenerateAllGrubConfigs() {
     }
   }
 
-  console.log(`[GrubService] Regenerated ${groupCount} group configs and ${hostCount} host symlinks`);
+  console.log(`[GrubService] Regenerated ${configCount} config GRUB files and ${hostCount} host symlinks`);
 
   return {
-    groups: groupCount,
+    configs: configCount,
     hosts: hostCount,
-    configs: results,
+    results,
   };
 }
 
 /**
  * Migrate existing host config files to symlinks
- * Converts all regular files in hostcfg/ to symlinks pointing to group configs
+ * Converts all regular files in hostcfg/ to symlinks pointing to config GRUB files
  *
  * @returns {Promise<{migrated: number, skipped: number, errors: Array}>}
  */
@@ -467,17 +458,17 @@ async function migrateHostConfigsToSymlinks() {
     errors: [],
   };
 
-  // Get all hosts with their groups
+  // Get all hosts with their configs
   const hosts = await prisma.host.findMany({
     include: {
-      group: true,
+      config: true,
     },
   });
 
   for (const host of hosts) {
     const filepath = path.join(HOSTCFG_DIR, `${host.hostname}.cfg`);
-    const groupName = host.group?.name || 'default';
-    const target = `../${groupName}.cfg`;
+    const configName = host.config?.name || 'default';
+    const target = `../${configName}.cfg`;
 
     try {
       // Check if file exists
@@ -526,15 +517,15 @@ async function migrateHostConfigsToSymlinks() {
 }
 
 /**
- * Delete GRUB config for a group
- * @param {string} groupName - Group name
+ * Delete GRUB config for a config
+ * @param {string} configName - Config name
  * @returns {Promise<boolean>}
  */
-async function deleteGroupGrubConfig(groupName) {
-  const filepath = path.join(GRUB_DIR, `${groupName}.cfg`);
+async function deleteConfigGrubConfig(configName) {
+  const filepath = path.join(GRUB_DIR, `${configName}.cfg`);
   try {
     await fs.unlink(filepath);
-    console.log(`[GrubService] Deleted group config: ${filepath}`);
+    console.log(`[GrubService] Deleted config GRUB: ${filepath}`);
     return true;
   } catch (error) {
     if (error.code !== 'ENOENT') {
@@ -565,18 +556,18 @@ async function deleteHostGrubConfig(hostname) {
 
 /**
  * List all GRUB configs
- * @returns {Promise<{groups: string[], hosts: Array<{name: string, isSymlink: boolean, target?: string}>}>}
+ * @returns {Promise<{configs: string[], hosts: Array<{name: string, isSymlink: boolean, target?: string}>}>}
  */
 async function listGrubConfigs() {
-  const groups = [];
+  const configs = [];
   const hosts = [];
 
-  // List group configs
+  // List config GRUB files
   try {
     const files = await fs.readdir(GRUB_DIR);
     for (const file of files) {
       if (file.endsWith('.cfg') && file !== 'grub.cfg') {
-        groups.push(file.replace('.cfg', ''));
+        configs.push(file.replace('.cfg', ''));
       }
     }
   } catch (error) {
@@ -608,36 +599,36 @@ async function listGrubConfigs() {
     // Directory doesn't exist
   }
 
-  return { groups, hosts };
+  return { configs, hosts };
 }
 
 /**
  * Cleanup orphaned GRUB configs
- * Removes configs for groups/hosts that no longer exist in the database
- * @returns {Promise<{removedGroups: string[], removedHosts: string[]}>}
+ * Removes configs for configs/hosts that no longer exist in the database
+ * @returns {Promise<{removedConfigs: string[], removedHosts: string[]}>}
  */
 async function cleanupOrphanedConfigs() {
-  const removedGroups = [];
+  const removedConfigs = [];
   const removedHosts = [];
 
-  // Get current groups and hosts from database
-  const [dbGroups, dbHosts] = await Promise.all([
-    prisma.hostGroup.findMany({ select: { name: true } }),
+  // Get current configs and hosts from database
+  const [dbConfigs, dbHosts] = await Promise.all([
+    prisma.config.findMany({ select: { name: true } }),
     prisma.host.findMany({ select: { hostname: true } }),
   ]);
 
-  const validGroups = new Set(dbGroups.map(g => g.name));
+  const validConfigs = new Set(dbConfigs.map(c => c.name));
   const validHosts = new Set(dbHosts.map(h => h.hostname));
 
-  // List and check group configs
+  // List and check config GRUB files
   try {
     const files = await fs.readdir(GRUB_DIR);
     for (const file of files) {
       if (file.endsWith('.cfg') && file !== 'grub.cfg') {
-        const groupName = file.replace('.cfg', '');
-        if (!validGroups.has(groupName)) {
-          await deleteGroupGrubConfig(groupName);
-          removedGroups.push(groupName);
+        const configName = file.replace('.cfg', '');
+        if (!validConfigs.has(configName)) {
+          await deleteConfigGrubConfig(configName);
+          removedConfigs.push(configName);
         }
       }
     }
@@ -661,9 +652,9 @@ async function cleanupOrphanedConfigs() {
     // Directory doesn't exist
   }
 
-  console.log(`[GrubService] Cleanup: removed ${removedGroups.length} group configs, ${removedHosts.length} host configs`);
+  console.log(`[GrubService] Cleanup: removed ${removedConfigs.length} config GRUB files, ${removedHosts.length} host configs`);
 
-  return { removedGroups, removedHosts };
+  return { removedConfigs, removedHosts };
 }
 
 module.exports = {
@@ -679,12 +670,12 @@ module.exports = {
   getLinboSetting,
 
   // Main functions
-  generateGroupGrubConfig,
+  generateConfigGrubConfig,
   generateHostGrubConfig,
   generateMainGrubConfig,
   regenerateAllGrubConfigs,
   migrateHostConfigsToSymlinks,
-  deleteGroupGrubConfig,
+  deleteConfigGrubConfig,
   deleteHostGrubConfig,
   listGrubConfigs,
   cleanupOrphanedConfigs,

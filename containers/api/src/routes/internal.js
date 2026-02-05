@@ -46,7 +46,7 @@ router.post('/rsync-event', authenticateInternal, async (req, res, next) => {
       host = await prisma.host.findFirst({
         where: { ipAddress: clientIp },
         include: {
-          group: { select: { id: true, name: true } },
+          config: { select: { id: true, name: true } },
         },
       });
     }
@@ -289,7 +289,7 @@ router.post('/client-status', authenticateInternal, async (req, res, next) => {
       data: {
         registered: true,
         hostname: host.hostname,
-        group: host.groupId,
+        config: host.configId,
       },
     });
   } catch (error) {
@@ -321,16 +321,6 @@ router.get('/config/:identifier', async (req, res, next) => {
             osEntries: { orderBy: { position: 'asc' } },
           },
         },
-        group: {
-          include: {
-            defaultConfig: {
-              include: {
-                partitions: { orderBy: { position: 'asc' } },
-                osEntries: { orderBy: { position: 'asc' } },
-              },
-            },
-          },
-        },
       },
     });
 
@@ -343,8 +333,8 @@ router.get('/config/:identifier', async (req, res, next) => {
       });
     }
 
-    // Prefer host-specific config, fallback to group default
-    const config = host.config || host.group?.defaultConfig;
+    // Use host config
+    const config = host.config;
 
     if (!config) {
       return res.status(404).json({
@@ -422,14 +412,15 @@ router.post('/register-host', authenticateInternal, async (req, res, next) => {
       });
     }
 
-    // Find group if specified
-    let groupId = null;
+    // Find config if specified
+    let configId = null;
     if (groupName) {
-      const group = await prisma.hostGroup.findFirst({
+      // groupName is kept for backwards compatibility, but maps to config
+      const config = await prisma.config.findFirst({
         where: { name: groupName },
       });
-      if (group) {
-        groupId = group.id;
+      if (config) {
+        configId = config.id;
       }
     }
 
@@ -441,7 +432,7 @@ router.post('/register-host', authenticateInternal, async (req, res, next) => {
         hostname: generatedHostname,
         macAddress: normalizedMac,
         ipAddress,
-        groupId,
+        configId,
         status: 'online',
         lastSeen: new Date(),
       },
