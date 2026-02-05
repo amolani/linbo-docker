@@ -1,5 +1,40 @@
 # Claude Project Instructions for LINBO Docker
 
+## CRITICAL: Workflow Requirements
+
+### 1. Session Start - Always Explore First
+At the beginning of EVERY new session, launch multiple parallel agents to understand the current project state:
+
+```
+1. Explore Agent: Project structure and recent changes (git log, git status)
+2. Explore Agent: API architecture (containers/api/)
+3. Explore Agent: Frontend architecture (containers/web/frontend/)
+4. Explore Agent: Production LINBO setup (/srv/linbo/, /etc/linuxmuster/)
+```
+
+This ensures you always have current context before making any changes.
+
+### 2. New Features/Requirements - ALWAYS Use Plan Mode
+**NEVER start coding immediately when the user requests a new feature or change.**
+
+Instead:
+1. Enter Plan Mode (`EnterPlanMode`)
+2. Explore the codebase to understand current implementation
+3. Research how production linuxmuster.net handles it (if applicable)
+4. Write a detailed plan with:
+   - What needs to change
+   - Which files will be affected
+   - Potential risks or breaking changes
+   - Testing approach
+5. Discuss the plan with the user
+6. Only after approval, exit plan mode and implement
+
+### 3. Bug Fixes
+For simple, obvious bugs: Fix directly with explanation.
+For complex bugs or unclear root cause: Use Plan Mode first.
+
+---
+
 ## Allowed Operations
 
 ### File System Access
