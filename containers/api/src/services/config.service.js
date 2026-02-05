@@ -65,6 +65,7 @@ async function generateStartConf(configId) {
     AutoPartition: 'no',
     AutoFormat: 'no',
     AutoInitCache: 'no',
+    Autostart: 'no',
     DownloadType: 'torrent',
     GuiDisabled: 'no',
     UseMinimalLayout: 'no',
