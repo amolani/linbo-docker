@@ -82,8 +82,9 @@ if [ -f "${LINBO_DIR}/VERSION" ]; then
 fi
 echo "${VERSION}" > "${MARKER_FILE}"
 
-# Set permissions
+# Set permissions - linbo user (uid 1001) needs write access
 chmod -R 755 "${LINBO_DIR}"
+chown -R 1001:1001 "${LINBO_DIR}"
 
 # Cleanup
 rm -rf "${TEMP_DIR}"
