@@ -706,4 +706,116 @@ router.post(
   }
 );
 
+/**
+ * GET /configs/:id/raw
+ * Get raw start.conf content from deployed file
+ */
+router.get('/:id/raw', authenticateToken, async (req, res, next) => {
+  try {
+    const config = await prisma.config.findUnique({
+      where: { id: req.params.id },
+    });
+
+    if (!config) {
+      return res.status(404).json({
+        error: {
+          code: 'CONFIG_NOT_FOUND',
+          message: 'Configuration not found',
+        },
+      });
+    }
+
+    // Get raw content from deployed file
+    const result = await configService.getRawConfig(config.name);
+
+    res.json({
+      data: {
+        configId: config.id,
+        configName: config.name,
+        content: result.content,
+        filepath: result.filepath,
+        exists: result.exists,
+        lastModified: result.lastModified,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PUT /configs/:id/raw
+ * Save raw start.conf content directly to file
+ */
+router.put(
+  '/:id/raw',
+  authenticateToken,
+  requireRole(['admin', 'operator']),
+  auditAction('config.update_raw', {
+    getTargetName: (req, data) => data?.data?.configName,
+  }),
+  async (req, res, next) => {
+    try {
+      const { content } = req.body;
+
+      if (!content || typeof content !== 'string') {
+        return res.status(400).json({
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Content is required and must be a string',
+          },
+        });
+      }
+
+      const config = await prisma.config.findUnique({
+        where: { id: req.params.id },
+      });
+
+      if (!config) {
+        return res.status(404).json({
+          error: {
+            code: 'CONFIG_NOT_FOUND',
+            message: 'Configuration not found',
+          },
+        });
+      }
+
+      // Save raw content to file
+      const result = await configService.saveRawConfig(config.name, content);
+
+      // Update config metadata
+      await prisma.config.update({
+        where: { id: req.params.id },
+        data: {
+          metadata: {
+            ...(config.metadata || {}),
+            rawEditedAt: new Date().toISOString(),
+            rawEditedBy: req.user.username,
+          },
+        },
+      });
+
+      // Broadcast update event
+      ws.broadcast('config.raw_updated', {
+        configId: config.id,
+        configName: config.name,
+        filepath: result.filepath,
+      });
+
+      res.json({
+        data: {
+          configId: config.id,
+          configName: config.name,
+          filepath: result.filepath,
+          size: result.size,
+          hash: result.hash,
+          message: 'Raw config saved successfully',
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 module.exports = router;
