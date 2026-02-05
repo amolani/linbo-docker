@@ -392,15 +392,19 @@ function parseStartConf(content) {
         position: result.partitions.length,
       });
     } else if (currentSection === 'os') {
+      // Build description with version if present
+      let desc = currentData.description || '';
+      if (currentData.version && !desc.includes(currentData.version)) {
+        desc = desc ? `${desc} (${currentData.version})` : currentData.version;
+      }
+
       result.osEntries.push({
         name: currentData.name || 'Unknown OS',
-        description: currentData.description || '',
-        version: currentData.version || '',
+        description: desc,
         iconName: currentData.iconname || '',
         baseImage: currentData.baseimage || currentData.image || '',
         differentialImage: currentData.diffimage || '',
         rootDevice: currentData.root || currentData.boot || '',
-        bootDevice: currentData.boot || '',
         kernel: currentData.kernel || '',
         initrd: currentData.initrd || '',
         append: currentData.append ? [currentData.append] : [],
