@@ -102,32 +102,41 @@ const partitionSchema = z.object({
   bootable: z.boolean().default(false),
 });
 
+// Helper to coerce null to empty string for optional string fields
+const nullableString = (maxLen = 255) => z.preprocess(
+  (val) => (val === null ? '' : val),
+  z.string().max(maxLen).optional()
+);
+
 const osSchema = z.object({
   position: z.number().int().min(0),
   name: z.string().min(1).max(255),
-  version: z.string().max(50).nullable().optional(),
-  description: z.string().nullable().optional(),
-  osType: z.string().max(50).nullable().optional(),
-  iconName: z.string().max(255).nullable().optional(),
-  image: z.string().max(255).nullable().optional(),
-  baseImage: z.string().max(255).nullable().optional(),
-  differentialImage: z.string().max(255).nullable().optional(),
-  rootDevice: z.string().max(50).nullable().optional(),
-  root: z.string().max(50).nullable().optional(),
-  kernel: z.string().max(255).nullable().optional(),
-  initrd: z.string().max(255).nullable().optional(),
-  append: z.union([z.array(z.string()), z.string()]).default([]),
+  version: nullableString(50),
+  description: nullableString(1000),
+  osType: nullableString(50),
+  iconName: nullableString(255),
+  image: nullableString(255),
+  baseImage: nullableString(255),
+  differentialImage: nullableString(255),
+  rootDevice: nullableString(50),
+  root: nullableString(50),
+  kernel: nullableString(255),
+  initrd: nullableString(255),
+  append: z.preprocess(
+    (val) => (val === null ? [] : val),
+    z.union([z.array(z.string()), z.string()]).default([])
+  ),
   startEnabled: z.boolean().default(true),
   syncEnabled: z.boolean().default(true),
   newEnabled: z.boolean().default(true),
   autostart: z.boolean().default(false),
   autostartTimeout: z.number().int().min(0).default(0),
-  defaultAction: z.string().max(50).nullable().optional(),
+  defaultAction: nullableString(50),
   restoreOpsiState: z.boolean().default(false),
-  forceOpsiSetup: z.string().max(255).nullable().optional(),
+  forceOpsiSetup: nullableString(255),
   hidden: z.boolean().default(false),
-  prestartScript: z.string().nullable().optional(),
-  postsyncScript: z.string().nullable().optional(),
+  prestartScript: nullableString(10000),
+  postsyncScript: nullableString(10000),
 });
 
 const createConfigSchema = z.object({

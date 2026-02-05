@@ -430,6 +430,12 @@ function parseStartConf(content) {
         position: result.partitions.length,
       });
     } else if (currentSection === 'os') {
+      // Convert append string to array (split by spaces, filter empty)
+      let appendArray = [];
+      if (currentData.append) {
+        appendArray = currentData.append.split(/\s+/).filter(s => s.length > 0);
+      }
+
       result.osEntries.push({
         name: currentData.name || 'Unknown OS',
         version: currentData.version || '',
@@ -442,7 +448,7 @@ function parseStartConf(content) {
         root: currentData.root || '',
         kernel: currentData.kernel || '',
         initrd: currentData.initrd || '',
-        append: currentData.append || '',
+        append: appendArray,
         startEnabled: currentData.startenabled !== false,
         syncEnabled: currentData.syncenabled !== false,
         newEnabled: currentData.newenabled !== false,
@@ -538,16 +544,18 @@ async function saveRawConfig(configName, content, configId = null) {
   if (configId) {
     try {
       const parsed = parseStartConf(content);
+      console.log('[ConfigService] Parsed linboSettings:', JSON.stringify(parsed.linboSettings, null, 2));
 
       // Update config with parsed data in a transaction
       await prisma.$transaction(async (tx) => {
-        // Update linboSettings
-        await tx.config.update({
+        // Update linboSettings - REPLACE entire JSON, not merge
+        const updateResult = await tx.config.update({
           where: { id: configId },
           data: {
             linboSettings: parsed.linboSettings,
           },
         });
+        console.log('[ConfigService] DB updated, linboSettings:', JSON.stringify(updateResult.linboSettings, null, 2));
 
         // Delete existing partitions and recreate
         await tx.configPartition.deleteMany({

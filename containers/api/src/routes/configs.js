@@ -43,9 +43,10 @@ router.get('/', authenticateToken, async (req, res, next) => {
       },
     });
 
-    // Transform data
+    // Transform data and normalize linboSettings
     const data = configs.map(config => ({
       ...config,
+      linboSettings: normalizeLinboSettings(config.linboSettings),
       hostCount: config._count.hosts,
       groupCount: config._count.hostGroups,
       partitionCount: config._count.partitions,
@@ -53,11 +54,27 @@ router.get('/', authenticateToken, async (req, res, next) => {
       _count: undefined,
     }));
 
+    // Prevent caching to ensure fresh data
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.set('Pragma', 'no-cache');
     res.json({ data });
   } catch (error) {
     next(error);
   }
 });
+
+/**
+ * Normalize linboSettings keys to lowercase for frontend compatibility
+ * The frontend uses lowercase keys, but database might have PascalCase
+ */
+function normalizeLinboSettings(settings) {
+  if (!settings || typeof settings !== 'object') return settings;
+  const normalized = {};
+  for (const [key, value] of Object.entries(settings)) {
+    normalized[key.toLowerCase()] = value;
+  }
+  return normalized;
+}
 
 /**
  * GET /configs/:id
@@ -90,7 +107,16 @@ router.get('/:id', authenticateToken, async (req, res, next) => {
       });
     }
 
-    res.json({ data: config });
+    // Normalize linboSettings keys to lowercase for frontend
+    const normalizedConfig = {
+      ...config,
+      linboSettings: normalizeLinboSettings(config.linboSettings),
+    };
+
+    // Prevent caching to ensure fresh data
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.json({ data: normalizedConfig });
   } catch (error) {
     next(error);
   }
@@ -98,19 +124,22 @@ router.get('/:id', authenticateToken, async (req, res, next) => {
 
 /**
  * GET /configs/:id/preview
- * Preview config as start.conf text
+ * Preview config as start.conf text (uses same generator as deploy)
  */
 router.get('/:id/preview', authenticateToken, async (req, res, next) => {
   try {
-    const config = await prisma.config.findUnique({
-      where: { id: req.params.id },
-      include: {
-        partitions: { orderBy: { position: 'asc' } },
-        osEntries: { orderBy: { position: 'asc' } },
-      },
-    });
+    // Use the same generateStartConf function as deploy for consistency
+    const { content } = await configService.generateStartConf(req.params.id);
 
-    if (!config) {
+    // Set content type based on format query param
+    const format = req.query.format || 'text';
+    if (format === 'json') {
+      res.json({ data: { content, lines: content.split('\n').length } });
+    } else {
+      res.type('text/plain').send(content);
+    }
+  } catch (error) {
+    if (error.message === 'Configuration not found') {
       return res.status(404).json({
         error: {
           code: 'CONFIG_NOT_FOUND',
@@ -118,90 +147,6 @@ router.get('/:id/preview', authenticateToken, async (req, res, next) => {
         },
       });
     }
-
-    // Generate start.conf format
-    const lines = [];
-
-    // Header comment
-    lines.push(`# LINBO start.conf - ${config.name}`);
-    lines.push(`# Generated: ${new Date().toISOString()}`);
-    lines.push(`# Version: ${config.version}`);
-    lines.push('');
-
-    // [LINBO] section
-    lines.push('[LINBO]');
-    const linboSettings = config.linboSettings || {};
-    const defaultSettings = {
-      Cache: '/dev/sda4',
-      Server: process.env.LINBO_SERVER || '10.0.0.1',
-      Group: config.name,
-      RootTimeout: 600,
-      AutoPartition: 'no',
-      AutoFormat: 'no',
-      AutoInitCache: 'no',
-      DownloadType: 'torrent',
-      GuiDisabled: 'no',
-      UseMinimalLayout: 'no',
-      Locale: 'de-de',
-      SystemType: 'bios64',
-      KernelOptions: '',
-    };
-
-    for (const [key, defaultValue] of Object.entries(defaultSettings)) {
-      const value = linboSettings[key] !== undefined ? linboSettings[key] : defaultValue;
-      lines.push(`${key} = ${value}`);
-    }
-    lines.push('');
-
-    // [Partition] sections
-    for (const partition of config.partitions) {
-      lines.push('[Partition]');
-      lines.push(`Dev = ${partition.device}`);
-      if (partition.label) lines.push(`Label = ${partition.label}`);
-      if (partition.size) lines.push(`Size = ${partition.size}`);
-      if (partition.partitionId) lines.push(`Id = ${partition.partitionId}`);
-      if (partition.fsType) lines.push(`FSType = ${partition.fsType}`);
-      lines.push(`Bootable = ${partition.bootable ? 'yes' : 'no'}`);
-      lines.push('');
-    }
-
-    // [OS] sections
-    for (const os of config.osEntries) {
-      lines.push('[OS]');
-      lines.push(`Name = ${os.name}`);
-      if (os.description) lines.push(`Description = ${os.description}`);
-      if (os.iconName) lines.push(`IconName = ${os.iconName}`);
-      if (os.baseImage) lines.push(`BaseImage = ${os.baseImage}`);
-      if (os.differentialImage) lines.push(`DiffImage = ${os.differentialImage}`);
-      if (os.rootDevice) lines.push(`Boot = ${os.rootDevice}`);
-      if (os.kernel) lines.push(`Kernel = ${os.kernel}`);
-      if (os.initrd) lines.push(`Initrd = ${os.initrd}`);
-      if (os.append && os.append.length > 0) {
-        lines.push(`Append = ${os.append.join(' ')}`);
-      }
-      lines.push(`StartEnabled = ${os.startEnabled ? 'yes' : 'no'}`);
-      lines.push(`SyncEnabled = ${os.syncEnabled ? 'yes' : 'no'}`);
-      lines.push(`NewEnabled = ${os.newEnabled ? 'yes' : 'no'}`);
-      if (os.autostart) {
-        lines.push('Autostart = yes');
-        if (os.autostartTimeout > 0) {
-          lines.push(`AutostartTimeout = ${os.autostartTimeout}`);
-        }
-      }
-      if (os.defaultAction) lines.push(`DefaultAction = ${os.defaultAction}`);
-      lines.push('');
-    }
-
-    const content = lines.join('\n');
-
-    // Set content type based on format query param
-    const format = req.query.format || 'text';
-    if (format === 'json') {
-      res.json({ data: { content, lines: lines.length } });
-    } else {
-      res.type('text/plain').send(content);
-    }
-  } catch (error) {
     next(error);
   }
 });
@@ -782,6 +727,9 @@ router.put(
 
       // Save raw content to file and sync to database
       const result = await configService.saveRawConfig(config.name, content, config.id);
+
+      // Invalidate cache to ensure fresh data on next fetch
+      await redis.delPattern('configs:*');
 
       // Update config metadata
       await prisma.config.update({
