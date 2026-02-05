@@ -31,7 +31,8 @@ export const configsApi = {
   },
 
   get: async (id: string): Promise<Config> => {
-    const response = await apiClient.get<ApiResponse<Config>>(`/configs/${id}`);
+    // Add cache-busting timestamp to ensure fresh data
+    const response = await apiClient.get<ApiResponse<Config>>(`/configs/${id}?_t=${Date.now()}`);
     return response.data.data;
   },
 
