@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { PlusIcon, TrashIcon, PencilIcon } from '@heroicons/react/24/outline';
 import { Button, Input, Select, Modal } from '@/components/ui';
 import { imagesApi } from '@/api/images';
@@ -221,13 +221,23 @@ export function OsEntriesEditor({ osEntries, partitions, onChange }: OsEntriesEd
                   </div>
                   <div className="flex space-x-2">
                     <button
-                      onClick={() => handleOpenModal(index)}
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleOpenModal(index);
+                      }}
                       className="text-primary-600 hover:text-primary-900"
                     >
                       <PencilIcon className="h-4 w-4" />
                     </button>
                     <button
-                      onClick={() => handleDelete(index)}
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleDelete(index);
+                      }}
                       className="text-red-600 hover:text-red-900"
                     >
                       <TrashIcon className="h-4 w-4" />
