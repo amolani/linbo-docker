@@ -15,12 +15,15 @@ interface OsEntriesEditorProps {
 const defaultOsEntry: OsEntryData = {
   position: 0,
   name: '',
+  version: '',
   description: '',
   osType: 'windows',
   iconName: 'windows.svg',
+  image: '',
   baseImage: '',
   differentialImage: '',
   rootDevice: '/dev/sda1',
+  root: '',
   kernel: '',
   initrd: '',
   append: [],
@@ -30,6 +33,9 @@ const defaultOsEntry: OsEntryData = {
   autostart: false,
   autostartTimeout: 5,
   defaultAction: 'sync',
+  restoreOpsiState: false,
+  forceOpsiSetup: '',
+  hidden: false,
 };
 
 const osTypeOptions = [
@@ -87,8 +93,17 @@ export function OsEntriesEditor({ osEntries, partitions, onChange }: OsEntriesEd
     if (index !== undefined) {
       setEditingIndex(index);
       const entry = osEntries[index];
-      setFormData(entry);
-      setAppendText(entry.append?.join('\n') || '');
+      // Merge with defaults to ensure all fields exist
+      setFormData({ ...defaultOsEntry, ...entry });
+      // Handle append as string or array
+      const appendValue = entry.append;
+      if (Array.isArray(appendValue)) {
+        setAppendText(appendValue.join('\n'));
+      } else if (typeof appendValue === 'string') {
+        setAppendText(appendValue);
+      } else {
+        setAppendText('');
+      }
     } else {
       setEditingIndex(null);
       const nextPosition = osEntries.length > 0
@@ -340,10 +355,10 @@ export function OsEntriesEditor({ osEntries, partitions, onChange }: OsEntriesEd
             </div>
           </div>
 
-          {/* Autostart */}
+          {/* Autostart & Visibility */}
           <div className="border-t pt-4">
-            <h4 className="text-sm font-medium text-gray-700 mb-3">Autostart</h4>
-            <div className="grid grid-cols-3 gap-4">
+            <h4 className="text-sm font-medium text-gray-700 mb-3">Autostart & Sichtbarkeit</h4>
+            <div className="grid grid-cols-2 gap-4 mb-4">
               <label className="flex items-center">
                 <input
                   type="checkbox"
@@ -353,11 +368,22 @@ export function OsEntriesEditor({ osEntries, partitions, onChange }: OsEntriesEd
                 />
                 <span className="text-sm text-gray-700">Autostart aktivieren</span>
               </label>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 mr-2"
+                  checked={formData.hidden || false}
+                  onChange={(e) => setFormData({ ...formData, hidden: e.target.checked })}
+                />
+                <span className="text-sm text-gray-700">In LINBO GUI verstecken</span>
+              </label>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
               <Input
                 label="Timeout (Sek.)"
                 type="number"
                 value={formData.autostartTimeout}
-                onChange={(e) => setFormData({ ...formData, autostartTimeout: parseInt(e.target.value) || 5 })}
+                onChange={(e) => setFormData({ ...formData, autostartTimeout: parseInt(e.target.value) || 0 })}
                 disabled={!formData.autostart}
               />
               <Select
@@ -365,6 +391,12 @@ export function OsEntriesEditor({ osEntries, partitions, onChange }: OsEntriesEd
                 value={formData.defaultAction || 'sync'}
                 onChange={(e) => setFormData({ ...formData, defaultAction: e.target.value })}
                 options={defaultActionOptions}
+              />
+              <Input
+                label="Version (optional)"
+                value={formData.version || ''}
+                onChange={(e) => setFormData({ ...formData, version: e.target.value })}
+                placeholder="z.B. 22H2"
               />
             </div>
           </div>

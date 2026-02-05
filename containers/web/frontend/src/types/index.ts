@@ -143,21 +143,27 @@ export interface ConfigOs {
   configId?: string;
   position: number;
   name: string;
+  version?: string;
   description?: string;
   osType?: string;
   iconName?: string;
+  image?: string;
   baseImage?: string;
   differentialImage?: string;
   rootDevice?: string;
+  root?: string;
   kernel?: string;
   initrd?: string;
-  append?: string[];
+  append?: string[] | string;
   startEnabled: boolean;
   syncEnabled: boolean;
   newEnabled: boolean;
   autostart: boolean;
   autostartTimeout: number;
   defaultAction?: string;
+  restoreOpsiState?: boolean;
+  forceOpsiSetup?: string;
+  hidden?: boolean;
   prestartScript?: string;
   postsyncScript?: string;
 }
