@@ -616,6 +616,8 @@ class ProvisionProcessor:
 
         # 13. Verify per host and mark completed/failed
         domain = self._get_domain()
+        verify_ok = 0
+        verify_fail = 0
         for _, op_id, options in valid_jobs_final:
             hostname = options.get('hostname', '')
             action = options.get('action', 'create')
@@ -644,10 +646,12 @@ class ProvisionProcessor:
 
             if success:
                 self.api.update_status(op_id, 'completed', result=result_data)
+                verify_ok += 1
             else:
                 self.api.update_status(op_id, 'failed',
                                        error=f'Verify failed: {json.dumps(verify)}',
                                        result=result_data)
+                verify_fail += 1
 
         # 14. ACK all messages
         self.redis_client.ack_batch(all_msg_ids)
@@ -659,7 +663,8 @@ class ProvisionProcessor:
         # 15. Process deferred messages
         self._process_deferred(deferred_msgs)
 
-        logging.info(f"[Provision] Batch complete: {len(valid_jobs_final)} succeeded")
+        logging.info(f"[Provision] Batch complete: "
+                     f"{verify_ok} verified OK, {verify_fail} failed verify")
         return True
 
     def _process_deferred(self, deferred_msgs: List[Tuple[str, Dict[str, str]]]):
@@ -753,24 +758,46 @@ class ProvisionProcessor:
         return len(parts) >= 2 and parts[1].strip().lower() == hostname.lower()
 
     def _format_csv_line(self, options: Dict[str, Any]) -> str:
-        """Format minimal 5-column CSV line"""
+        """Format full 15-column CSV line compatible with sophomorix-device.
+
+        Column layout (from sophomorix-device Perl parser):
+          0: room, 1: hostname, 2: device_group (config), 3: MAC, 4: IP,
+          5: ms_office_key, 6: ms_windows_key, 7: unused,
+          8: sophomorix_role, 9: unused_2, 10: pxe_flag,
+          11: option, 12: field_13, 13: field_14, 14: sophomorix_comment
+        """
+        pxe = str(options.get('pxeFlag', 1))
+        role = options.get('role', '')
         return ';'.join([
-            options.get('csvCol0', ''),
-            options.get('hostname', ''),
-            options.get('configName', '') or 'nopxe',
-            (options.get('mac', '') or '').upper(),
-            options.get('ip', '') or 'DHCP',
+            options.get('csvCol0', ''),              # 0: room
+            options.get('hostname', ''),              # 1: hostname
+            options.get('configName', '') or 'nopxe', # 2: device group
+            (options.get('mac', '') or '').upper(),   # 3: MAC
+            options.get('ip', '') or 'DHCP',          # 4: IP
+            '',                                       # 5: ms_office_key
+            '',                                       # 6: ms_windows_key
+            '',                                       # 7: unused
+            role,                                     # 8: sophomorix_role
+            '',                                       # 9: unused_2
+            pxe,                                      # 10: pxe_flag (REQUIRED)
+            '',                                       # 11: option
+            '',                                       # 12: field_13
+            '',                                       # 13: field_14
+            '',                                       # 14: sophomorix_comment
         ])
+
+    # Columns managed by linbo-docker (patched from delta into master)
+    MANAGED_COLS = {0, 1, 2, 3, 4, 8, 10}  # room, host, config, mac, ip, role, pxe
 
     def _merge(self, master_lines: List[str], delta_lines: List[str]) -> List[str]:
         """
         Patch-Merge: Master + Delta
-        - Delta patches Master entries (cols 0-4 from delta, cols 5+ from master)
+        - Delta patches Master entries (MANAGED_COLS from delta, rest from master)
         - Master entries without Delta match stay unchanged
         - Deleted hostnames (in self._deleted_hosts) are removed
         - New delta entries (not in master) appended, padded to master col count
         """
-        delta_map = {}  # hostname -> [col0, col1, col2, col3, col4]
+        delta_map = {}  # hostname -> full column list
         for line in delta_lines:
             stripped = line.strip()
             if not stripped or stripped.startswith('#'):
@@ -806,14 +833,15 @@ class ProvisionProcessor:
             if hostname in self._deleted_hosts:
                 continue  # Remove deleted hosts
             elif hostname in delta_map:
-                # PATCH: cols 0-4 from delta, cols 5+ from master
+                # PATCH: managed cols from delta, rest preserved from master
                 delta_parts = delta_map[hostname]
                 patched = list(parts)
-                for i in range(min(5, len(delta_parts))):
-                    if i < len(patched):
+                # Extend patched to at least delta length
+                while len(patched) < len(delta_parts):
+                    patched.append('')
+                for i in self.MANAGED_COLS:
+                    if i < len(delta_parts):
                         patched[i] = delta_parts[i]
-                    else:
-                        patched.append(delta_parts[i])
                 merged.append(';'.join(patched) + '\n')
             else:
                 merged.append(line)
@@ -863,6 +891,15 @@ class ProvisionProcessor:
     # Import Script
     # -------------------------------------------------------------------------
 
+    # Patterns in import-devices output that indicate sophomorix-device failure.
+    # The upstream script ignores subProc() return values, so exit code 0 does
+    # NOT guarantee success.  We must scan stdout/stderr for known errors.
+    _ERROR_PATTERNS = [
+        'ERROR:',                          # sophomorix-device validation errors
+        'errors detected',                 # linuxmuster-import-devices own message
+        'syntax check failed',             # future-proof
+    ]
+
     def _run_import_script(self) -> Dict[str, Any]:
         """Execute linuxmuster-import-devices"""
         script = self.config.import_script
@@ -880,19 +917,36 @@ class ProvisionProcessor:
                 timeout=600  # 10 minute timeout
             )
 
-            if result.returncode == 0:
-                logging.info(f"[Provision] import-devices completed successfully")
-                return {
-                    'success': True,
-                    'stdout': result.stdout,
-                    'stderr': result.stderr,
-                }
-            else:
+            combined = (result.stdout or '') + (result.stderr or '')
+
+            if result.returncode != 0:
                 return {
                     'success': False,
                     'error': result.stderr or f'Exit code {result.returncode}',
                     'stdout': result.stdout,
                 }
+
+            # Workaround for upstream bug: linuxmuster-import-devices ignores
+            # the return value of subProc('sophomorix-device --sync') and exits
+            # with code 0 even when sophomorix-device fails.  Detect this by
+            # scanning the combined output for error patterns.
+            for pattern in self._ERROR_PATTERNS:
+                if pattern in combined:
+                    logging.error(f"[Provision] import-devices returned 0 but "
+                                  f"output contains '{pattern}'")
+                    return {
+                        'success': False,
+                        'error': f'import-devices output contains error: {pattern}',
+                        'stdout': result.stdout,
+                        'stderr': result.stderr,
+                    }
+
+            logging.info(f"[Provision] import-devices completed successfully")
+            return {
+                'success': True,
+                'stdout': result.stdout,
+                'stderr': result.stderr,
+            }
         except subprocess.TimeoutExpired:
             return {'success': False, 'error': 'Script timed out after 10 minutes'}
         except Exception as e:
