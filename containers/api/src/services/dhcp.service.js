@@ -202,6 +202,7 @@ async function generateIscDhcpConfig(options = {}) {
       lines.push(`    option host-name "${host.hostname}";`);
 
       if (isPxeEnabled(host)) {
+        lines.push(`    next-server ${settings.serverIp};`);
         lines.push(`    option extensions-path "${host.config.name}";`);
         lines.push(`    option nis-domain "${host.config.name}";`);
       }
@@ -275,11 +276,8 @@ function generateDnsmasqProxy(lines, settings, hosts, options) {
   lines.push(`dhcp-boot=tag:efi64,boot/grub/x86_64-efi/core.efi,${settings.serverIp}`);
   lines.push('');
 
-  // TFTP server
-  lines.push(`# TFTP server`);
-  lines.push(`tftp-root=/srv/linbo`);
-  lines.push(`enable-tftp`);
-  lines.push('');
+  // Note: TFTP is handled by separate linbo-tftp container, not dnsmasq
+  // Do NOT add enable-tftp here to avoid port 69 conflicts
 
   // Per-host config tags (only PXE-enabled hosts)
   const pxeHosts = hosts.filter(isPxeEnabled);

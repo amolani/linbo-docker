@@ -261,8 +261,9 @@ async function generateConfigGrubConfig(configName, options = {}) {
   // Get server address
   const server = getLinboSetting(config?.linboSettings, 'Server') || '$pxe_default_server';
 
-  // Build kernel options string
-  const kopts = `${kernelOptions} server=${server}`.trim();
+  // Build kernel options string (strip any existing server= to avoid duplicates)
+  const cleanKopts = kernelOptions.replace(/\bserver=\S+/g, '').replace(/\s+/g, ' ').trim();
+  const kopts = `${cleanKopts} server=${server}`.trim();
 
   // Find cache partition
   const cachePartition = findCachePartition(partitions);

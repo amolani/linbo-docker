@@ -232,6 +232,18 @@ router.patch(
     try {
       const { partitions, osEntries, ...configData } = req.body;
 
+      // Capture old name before update for GRUB cleanup on rename
+      let oldConfigName = null;
+      if (configData.name) {
+        const existing = await prisma.config.findUnique({
+          where: { id: req.params.id },
+          select: { name: true },
+        });
+        if (existing && existing.name !== configData.name) {
+          oldConfigName = existing.name;
+        }
+      }
+
       // Update in transaction
       const config = await prisma.$transaction(async (tx) => {
         // Update main config
@@ -276,6 +288,16 @@ router.patch(
 
       // Invalidate cache
       await redis.delPattern('configs:*');
+
+      // If config was renamed, remove old GRUB file and start.conf
+      if (oldConfigName) {
+        try {
+          await grubService.deleteConfigGrubConfig(oldConfigName);
+          console.log(`[Configs] Removed old GRUB config: ${oldConfigName}.cfg`);
+        } catch (error) {
+          console.error('[Configs] Failed to remove old GRUB config:', error.message);
+        }
+      }
 
       // Regenerate GRUB configs for groups using this config
       await regenerateGrubForConfig(req.params.id);

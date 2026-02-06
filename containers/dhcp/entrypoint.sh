@@ -4,6 +4,7 @@ set -e
 API_URL="${API_URL:-http://localhost:3000}"
 LINBO_SERVER_IP="${LINBO_SERVER_IP:-10.0.0.1}"
 DHCP_INTERFACE="${DHCP_INTERFACE:-eth0}"
+INTERNAL_API_KEY="${INTERNAL_API_KEY:-linbo-internal-secret}"
 CONFIG_DIR="/etc/dnsmasq.d"
 CONFIG_FILE="${CONFIG_DIR}/linbo.conf"
 
@@ -44,16 +45,18 @@ if [ -f "${SHARED_CONFIG}" ]; then
   echo "[DHCP] Using pre-generated config from ${SHARED_CONFIG}"
   cp "${SHARED_CONFIG}" "${CONFIG_FILE}"
 else
-  # Fetch config from API (using internal endpoint without auth)
+  # Fetch config from API using internal API key for authentication
   echo "[DHCP] Fetching proxy config from API..."
-  INTERNAL_KEY="${INTERNAL_API_KEY:-linbo-internal-secret}"
+
+  # Try with API_TOKEN first (explicit token), then INTERNAL_API_KEY
+  AUTH_TOKEN="${API_TOKEN:-${INTERNAL_API_KEY}}"
 
   HTTP_CODE=$(curl -sf -w "%{http_code}" \
-    -H "Authorization: Bearer ${API_TOKEN}" \
+    -H "Authorization: Bearer ${AUTH_TOKEN}" \
     -o "${CONFIG_FILE}" \
-    "${API_URL}/api/v1/dhcp/export/dnsmasq-proxy" 2>/dev/null || echo "000")
+    "${API_URL}/api/v1/dhcp/export/dnsmasq-proxy?interface=${DHCP_INTERFACE}" 2>/dev/null || echo "000")
 
-  if [ "${HTTP_CODE}" != "200" ] && [ ! -s "${CONFIG_FILE}" ]; then
+  if [ "${HTTP_CODE}" != "200" ] || [ ! -s "${CONFIG_FILE}" ]; then
     echo "[DHCP] WARNING: Could not fetch config from API (HTTP ${HTTP_CODE})"
     echo "[DHCP] Generating minimal proxy config..."
 
@@ -72,8 +75,6 @@ dhcp-match=set:efi64,option:client-arch,9
 dhcp-boot=tag:bios,boot/grub/i386-pc/core.0,${LINBO_SERVER_IP}
 dhcp-boot=tag:efi32,boot/grub/i386-efi/core.efi,${LINBO_SERVER_IP}
 dhcp-boot=tag:efi64,boot/grub/x86_64-efi/core.efi,${LINBO_SERVER_IP}
-tftp-root=/srv/linbo
-enable-tftp
 EOF
   fi
 fi

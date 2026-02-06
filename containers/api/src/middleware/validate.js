@@ -194,6 +194,7 @@ const dhcpExportQuerySchema = z.object({
   format: z.enum(['text', 'file']).default('text'),
   configId: uuidSchema.optional(),
   roomId: uuidSchema.optional(),
+  interface: z.string().regex(/^[a-zA-Z0-9._-]+$/).optional(),
   pxeOnly: z.preprocess(
     (val) => val === 'true' || val === true,
     z.boolean().default(false)

@@ -54,6 +54,7 @@ async function comparePassword(password, hash) {
 
 /**
  * Middleware: Authenticate JWT token from Authorization header
+ * Also accepts INTERNAL_API_KEY as Bearer token for container-to-container auth
  */
 function authenticateToken(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -66,6 +67,13 @@ function authenticateToken(req, res, next) {
         message: 'Access token required',
       },
     });
+  }
+
+  // Check for internal API key (container-to-container auth)
+  const internalKey = process.env.INTERNAL_API_KEY;
+  if (internalKey && token === internalKey) {
+    req.user = { id: 'internal', username: 'internal-service', role: 'admin' };
+    return next();
   }
 
   try {
