@@ -61,41 +61,41 @@ export function LinboSettingsForm({ settings, onChange, serverIp = '10.0.0.1' }:
       </div>
 
       <div className="border-t pt-4">
-        <h4 className="text-sm font-medium text-gray-700 mb-3">Automatische Aktionen</h4>
+        <h4 className="text-sm font-medium text-foreground mb-3">Automatische Aktionen</h4>
         <div className="space-y-3">
           <label className="flex items-center">
             <input
               type="checkbox"
-              className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 mr-2"
+              className="rounded border-border text-primary focus:ring-ring mr-2"
               checked={settings.autopartition || false}
               onChange={(e) => handleChange('autopartition', e.target.checked)}
             />
-            <span className="text-sm text-gray-700">Automatisch partitionieren</span>
+            <span className="text-sm text-foreground">Automatisch partitionieren</span>
           </label>
           <label className="flex items-center">
             <input
               type="checkbox"
-              className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 mr-2"
+              className="rounded border-border text-primary focus:ring-ring mr-2"
               checked={settings.autoformat || false}
               onChange={(e) => handleChange('autoformat', e.target.checked)}
             />
-            <span className="text-sm text-gray-700">Automatisch formatieren</span>
+            <span className="text-sm text-foreground">Automatisch formatieren</span>
           </label>
           <label className="flex items-center">
             <input
               type="checkbox"
-              className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 mr-2"
+              className="rounded border-border text-primary focus:ring-ring mr-2"
               checked={settings.autoinitcache || false}
               onChange={(e) => handleChange('autoinitcache', e.target.checked)}
             />
-            <span className="text-sm text-gray-700">Cache automatisch initialisieren</span>
+            <span className="text-sm text-foreground">Cache automatisch initialisieren</span>
           </label>
 {/* Autostart is per-OS setting, not global LINBO setting */}
         </div>
       </div>
 
       <div className="border-t pt-4">
-        <h4 className="text-sm font-medium text-gray-700 mb-3">Kernel-Optionen</h4>
+        <h4 className="text-sm font-medium text-foreground mb-3">Kernel-Optionen</h4>
         <Input
           label="KernelOptions"
           value={settings.kerneloptions || ''}
@@ -106,7 +106,7 @@ export function LinboSettingsForm({ settings, onChange, serverIp = '10.0.0.1' }:
       </div>
 
       <div className="border-t pt-4">
-        <h4 className="text-sm font-medium text-gray-700 mb-3">Darstellung (Optional)</h4>
+        <h4 className="text-sm font-medium text-foreground mb-3">Darstellung (Optional)</h4>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Input
             label="Hintergrundfarbe"

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { PlusIcon, DocumentDuplicateIcon, EyeIcon, CodeBracketIcon, CloudArrowUpIcon } from '@heroicons/react/24/outline';
+import { Plus, Copy, Eye, Code, CloudUpload } from 'lucide-react';
 import { configsApi } from '@/api/configs';
 import { Button, Table, Modal, Input, Textarea, Badge, ConfirmModal } from '@/components/ui';
 import { LinboSettingsForm, PartitionsEditor, OsEntriesEditor, RawConfigEditorModal } from '@/components/configs';
@@ -198,8 +198,8 @@ export function ConfigsPage() {
       header: 'Name',
       render: (config) => (
         <div>
-          <div className="font-medium text-gray-900">{config.name}</div>
-          <div className="text-gray-500 text-xs">Version {config.version}</div>
+          <div className="font-medium text-foreground">{config.name}</div>
+          <div className="text-muted-foreground text-xs">Version {config.version}</div>
         </div>
       ),
     },
@@ -235,41 +235,41 @@ export function ConfigsPage() {
         <div className="flex space-x-2">
           <button
             onClick={() => handleDeploy(config.id, config.name)}
-            className="text-green-600 hover:text-green-900"
+            className="text-green-400 hover:text-green-300"
             title="Deploy (start.conf schreiben)"
           >
-            <CloudArrowUpIcon className="h-4 w-4" />
+            <CloudUpload className="h-4 w-4" />
           </button>
           <button
             onClick={() => handlePreview(config.id)}
-            className="text-primary-600 hover:text-primary-900"
+            className="text-primary hover:text-primary/80"
             title="Vorschau"
           >
-            <EyeIcon className="h-4 w-4" />
+            <Eye className="h-4 w-4" />
           </button>
           <button
             onClick={() => setRawEditorConfig(config)}
-            className="text-primary-600 hover:text-primary-900"
+            className="text-primary hover:text-primary/80"
             title="Raw Editor"
           >
-            <CodeBracketIcon className="h-4 w-4" />
+            <Code className="h-4 w-4" />
           </button>
           <button
             onClick={() => handleClone(config.id, config.name)}
-            className="text-primary-600 hover:text-primary-900"
+            className="text-primary hover:text-primary/80"
             title="Klonen"
           >
-            <DocumentDuplicateIcon className="h-4 w-4" />
+            <Copy className="h-4 w-4" />
           </button>
           <button
             onClick={() => handleOpenModal(config)}
-            className="text-gray-600 hover:text-gray-900 text-sm"
+            className="text-muted-foreground hover:text-foreground text-sm"
           >
             Bearbeiten
           </button>
           <button
             onClick={() => setDeleteConfirmConfig(config)}
-            className="text-red-600 hover:text-red-900 text-sm"
+            className="text-red-400 hover:text-red-300 text-sm"
           >
             Loeschen
           </button>
@@ -282,16 +282,16 @@ export function ConfigsPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Konfigurationen</h1>
-          <p className="text-gray-600">Verwaltung der start.conf Konfigurationen</p>
+          <h1 className="text-2xl font-bold text-foreground">Konfigurationen</h1>
+          <p className="text-muted-foreground">Verwaltung der start.conf Konfigurationen</p>
         </div>
         <Button onClick={() => handleOpenModal()}>
-          <PlusIcon className="h-5 w-5 mr-2" />
+          <Plus className="h-5 w-5 mr-2" />
           Neue Konfiguration
         </Button>
       </div>
 
-      <div className="bg-white shadow rounded-lg overflow-hidden">
+      <div className="bg-card shadow-sm rounded-lg overflow-hidden">
         <Table
           columns={columns}
           data={configs}
@@ -310,7 +310,7 @@ export function ConfigsPage() {
       >
         <form onSubmit={handleSubmit}>
           {/* Tabs */}
-          <div className="border-b border-gray-200 mb-4">
+          <div className="border-b border-border mb-4">
             <nav className="-mb-px flex space-x-8" aria-label="Tabs">
               {tabs.map((tab) => (
                 <button
@@ -319,14 +319,14 @@ export function ConfigsPage() {
                   onClick={() => setActiveTab(tab.id)}
                   className={`${
                     activeTab === tab.id
-                      ? 'border-primary-500 text-primary-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      ? 'border-primary text-primary'
+                      : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
                   } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
                 >
                   {tab.label}
                   {tab.count !== undefined && (
                     <span className={`${
-                      activeTab === tab.id ? 'bg-primary-100 text-primary-600' : 'bg-gray-100 text-gray-900'
+                      activeTab === tab.id ? 'bg-primary/10 text-primary' : 'bg-background text-foreground'
                     } ml-2 py-0.5 px-2.5 rounded-full text-xs font-medium`}>
                       {tab.count}
                     </span>
@@ -381,7 +381,7 @@ export function ConfigsPage() {
 
           {/* Footer */}
           <div className="flex justify-between items-center pt-4 mt-4 border-t">
-            <div className="text-sm text-gray-500">
+            <div className="text-sm text-muted-foreground">
               {partitions.length} Partition(en), {osEntries.length} Betriebssystem(e)
             </div>
             <div className="flex space-x-3">

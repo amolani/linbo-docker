@@ -11,25 +11,21 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Initialize WebSocket and event handlers
   useWebSocket();
   useHostStatusUpdates();
   useNotificationEvents();
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="flex h-screen bg-background">
       <MobileSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar />
 
-      <div className="flex">
-        <Sidebar />
+      <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
+        <Header onMenuClick={() => setSidebarOpen(true)} />
 
-        <div className="flex-1 flex flex-col min-h-screen">
-          <Header onMenuClick={() => setSidebarOpen(true)} />
-
-          <main className="flex-1 p-6">
-            {children}
-          </main>
-        </div>
+        <main className="flex-1 overflow-y-auto p-6">
+          {children}
+        </main>
       </div>
 
       <ToastContainer />

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { PlusIcon, ArrowDownTrayIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
+import { Plus, Download, Upload, Trash2 } from 'lucide-react';
 import { useHosts, useHostActions, useHostFilters } from '@/hooks/useHosts';
 import { roomsApi } from '@/api/rooms';
 import { configsApi } from '@/api/configs';
@@ -36,6 +36,7 @@ export function HostsPage() {
     startHost,
     bulkWakeOnLan,
     bulkSync,
+    bulkDelete,
     deleteHost,
     createHost,
     updateHost,
@@ -48,6 +49,7 @@ export function HostsPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [editingHost, setEditingHost] = useState<Host | null>(null);
   const [deleteConfirmHost, setDeleteConfirmHost] = useState<Host | null>(null);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   const [formData, setFormData] = useState({
     hostname: '',
     macAddress: '',
@@ -149,11 +151,11 @@ export function HostsPage() {
       sortable: true,
       render: (host) => (
         <div>
-          <div className="font-medium text-gray-900 flex items-center gap-2">
+          <div className="font-medium text-foreground flex items-center gap-2">
             {host.hostname}
             <ProvisionBadge status={host.provisionStatus} opId={host.provisionOpId} />
           </div>
-          <div className="text-gray-500 text-xs">{host.macAddress}</div>
+          <div className="text-muted-foreground text-xs">{host.macAddress}</div>
         </div>
       ),
     },
@@ -186,34 +188,34 @@ export function HostsPage() {
         <div className="flex space-x-2">
           <button
             onClick={() => wakeOnLan(host.id)}
-            className="text-primary-600 hover:text-primary-900 text-sm"
+            className="text-primary hover:text-primary text-sm"
             disabled={isActionLoading}
           >
             WoL
           </button>
           <button
             onClick={() => syncHost(host.id)}
-            className="text-primary-600 hover:text-primary-900 text-sm"
+            className="text-primary hover:text-primary text-sm"
             disabled={isActionLoading || host.status !== 'online'}
           >
             Sync
           </button>
           <button
             onClick={() => startHost(host.id)}
-            className="text-primary-600 hover:text-primary-900 text-sm"
+            className="text-primary hover:text-primary text-sm"
             disabled={isActionLoading || host.status !== 'online'}
           >
             Start
           </button>
           <button
             onClick={() => handleOpenModal(host)}
-            className="text-gray-600 hover:text-gray-900 text-sm"
+            className="text-muted-foreground hover:text-foreground text-sm"
           >
             Bearbeiten
           </button>
           <button
             onClick={() => setDeleteConfirmHost(host)}
-            className="text-red-600 hover:text-red-900 text-sm"
+            className="text-destructive hover:text-destructive text-sm"
           >
             Löschen
           </button>
@@ -226,27 +228,27 @@ export function HostsPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Hosts</h1>
-          <p className="text-gray-600">Verwaltung der Client-Rechner</p>
+          <h1 className="text-2xl font-bold text-foreground">Hosts</h1>
+          <p className="text-muted-foreground">Verwaltung der Client-Rechner</p>
         </div>
         <div className="flex space-x-2">
           <Button variant="secondary" onClick={handleExport} loading={isExporting}>
-            <ArrowDownTrayIcon className="h-5 w-5 mr-2" />
+            <Download className="h-5 w-5 mr-2" />
             Export
           </Button>
           <Button variant="secondary" onClick={() => setIsImportModalOpen(true)}>
-            <ArrowUpTrayIcon className="h-5 w-5 mr-2" />
+            <Upload className="h-5 w-5 mr-2" />
             Import
           </Button>
           <Button onClick={() => handleOpenModal()}>
-            <PlusIcon className="h-5 w-5 mr-2" />
+            <Plus className="h-5 w-5 mr-2" />
             Neuer Host
           </Button>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="bg-white shadow rounded-lg p-4">
+      <div className="bg-card shadow-sm rounded-lg p-4">
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <Input
             placeholder="Suche..."
@@ -288,8 +290,8 @@ export function HostsPage() {
 
       {/* Bulk Actions */}
       {selectedHosts.length > 0 && (
-        <div className="bg-primary-50 border border-primary-200 rounded-lg p-4 flex items-center justify-between">
-          <span className="text-primary-700">
+        <div className="bg-primary/10 border border-primary/30 rounded-lg p-4 flex items-center justify-between">
+          <span className="text-primary">
             {selectedHosts.length} Host(s) ausgewählt
           </span>
           <div className="flex space-x-2">
@@ -307,6 +309,14 @@ export function HostsPage() {
             >
               Sync
             </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => setBulkDeleteConfirm(true)}
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              Löschen
+            </Button>
             <Button size="sm" variant="secondary" onClick={deselectAll}>
               Auswahl aufheben
             </Button>
@@ -315,7 +325,7 @@ export function HostsPage() {
       )}
 
       {/* Table */}
-      <div className="bg-white shadow rounded-lg overflow-hidden">
+      <div className="bg-card shadow-sm rounded-lg overflow-hidden">
         <Table
           columns={columns}
           data={hosts}
@@ -406,6 +416,22 @@ export function HostsPage() {
         onConfirm={handleDelete}
         title="Host löschen"
         message={`Möchten Sie den Host "${deleteConfirmHost?.hostname}" wirklich löschen?`}
+        confirmLabel="Löschen"
+        variant="danger"
+        loading={isActionLoading}
+      />
+
+      {/* Bulk Delete Confirmation */}
+      <ConfirmModal
+        isOpen={bulkDeleteConfirm}
+        onClose={() => setBulkDeleteConfirm(false)}
+        onConfirm={async () => {
+          await bulkDelete(selectedHosts);
+          deselectAll();
+          setBulkDeleteConfirm(false);
+        }}
+        title="Hosts löschen"
+        message={`Möchten Sie ${selectedHosts.length} Host(s) wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`}
         confirmLabel="Löschen"
         variant="danger"
         loading={isActionLoading}

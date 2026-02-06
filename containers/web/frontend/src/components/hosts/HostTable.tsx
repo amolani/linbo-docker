@@ -53,8 +53,8 @@ export function HostTable({
       sortable: true,
       render: (host) => (
         <div>
-          <div className="font-medium text-gray-900">{host.hostname}</div>
-          <div className="text-gray-500 text-xs">{host.macAddress}</div>
+          <div className="font-medium text-foreground">{host.hostname}</div>
+          <div className="text-muted-foreground text-xs">{host.macAddress}</div>
         </div>
       ),
     },
@@ -87,34 +87,34 @@ export function HostTable({
         <div className="flex space-x-2">
           <button
             onClick={() => onWakeOnLan(host.id)}
-            className="text-primary-600 hover:text-primary-900 text-sm"
+            className="text-primary hover:text-primary text-sm"
             disabled={isActionLoading}
           >
             WoL
           </button>
           <button
             onClick={() => onSync(host.id)}
-            className="text-primary-600 hover:text-primary-900 text-sm"
+            className="text-primary hover:text-primary text-sm"
             disabled={isActionLoading || host.status !== 'online'}
           >
             Sync
           </button>
           <button
             onClick={() => onStart(host.id)}
-            className="text-primary-600 hover:text-primary-900 text-sm"
+            className="text-primary hover:text-primary text-sm"
             disabled={isActionLoading || host.status !== 'online'}
           >
             Start
           </button>
           <button
             onClick={() => onEdit(host)}
-            className="text-gray-600 hover:text-gray-900 text-sm"
+            className="text-muted-foreground hover:text-foreground text-sm"
           >
             Bearbeiten
           </button>
           <button
             onClick={() => onDelete(host)}
-            className="text-red-600 hover:text-red-900 text-sm"
+            className="text-destructive hover:text-destructive text-sm"
           >
             Löschen
           </button>
@@ -124,7 +124,7 @@ export function HostTable({
   ];
 
   return (
-    <div className="bg-white shadow rounded-lg overflow-hidden">
+    <div className="bg-card shadow-sm rounded-lg overflow-hidden">
       <Table
         columns={columns}
         data={hosts}

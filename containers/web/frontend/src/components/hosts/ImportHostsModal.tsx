@@ -1,9 +1,9 @@
 import { useState, useCallback } from 'react';
 import {
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
-  XCircleIcon,
-} from '@heroicons/react/24/outline';
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
+} from 'lucide-react';
 import { Modal, Button, FileUpload } from '@/components/ui';
 import { hostsApi, ImportResult, ImportValidationResult } from '@/api/hosts';
 import { notify } from '@/stores/notificationStore';
@@ -124,24 +124,24 @@ export function ImportHostsModal({ isOpen, onClose, onSuccess }: ImportHostsModa
             />
 
             {csvContent && (
-              <div className="bg-gray-50 rounded-lg p-3">
-                <p className="text-sm text-gray-600">
+              <div className="bg-secondary rounded-lg p-3">
+                <p className="text-sm text-muted-foreground">
                   {csvContent.split('\n').filter((l) => l.trim()).length} Zeilen erkannt
                 </p>
               </div>
             )}
 
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h4 className="text-sm font-medium text-blue-800 mb-2">CSV-Format</h4>
-              <pre className="text-xs text-blue-700 whitespace-pre-wrap font-mono">
+            <div className="bg-primary/10 border border-primary/30 rounded-lg p-4">
+              <h4 className="text-sm font-medium text-primary mb-2">CSV-Format</h4>
+              <pre className="text-xs text-primary whitespace-pre-wrap font-mono">
                 {CSV_FORMAT_HELP}
               </pre>
             </div>
 
             {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start">
-                <XCircleIcon className="h-5 w-5 text-red-500 mr-2 flex-shrink-0" />
-                <p className="text-sm text-red-700">{error}</p>
+              <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 flex items-start">
+                <XCircle className="h-5 w-5 text-red-400 mr-2 flex-shrink-0" />
+                <p className="text-sm text-red-400">{error}</p>
               </div>
             )}
 
@@ -167,40 +167,40 @@ export function ImportHostsModal({ isOpen, onClose, onSuccess }: ImportHostsModa
               <>
                 {/* Summary */}
                 <div className="grid grid-cols-4 gap-4">
-                  <div className="bg-gray-50 rounded-lg p-3 text-center">
-                    <p className="text-2xl font-bold text-gray-900">
+                  <div className="bg-secondary rounded-lg p-3 text-center">
+                    <p className="text-2xl font-bold text-foreground">
                       {validationResult.totalLines}
                     </p>
-                    <p className="text-xs text-gray-500">Gesamt</p>
+                    <p className="text-xs text-muted-foreground">Gesamt</p>
                   </div>
-                  <div className="bg-green-50 rounded-lg p-3 text-center">
-                    <p className="text-2xl font-bold text-green-600">
+                  <div className="bg-green-600/20 rounded-lg p-3 text-center">
+                    <p className="text-2xl font-bold text-green-400">
                       {validationResult.toCreate}
                     </p>
-                    <p className="text-xs text-gray-500">Neu</p>
+                    <p className="text-xs text-muted-foreground">Neu</p>
                   </div>
-                  <div className="bg-blue-50 rounded-lg p-3 text-center">
-                    <p className="text-2xl font-bold text-blue-600">
+                  <div className="bg-primary/20 rounded-lg p-3 text-center">
+                    <p className="text-2xl font-bold text-blue-400">
                       {validationResult.toUpdate}
                     </p>
-                    <p className="text-xs text-gray-500">Update</p>
+                    <p className="text-xs text-muted-foreground">Update</p>
                   </div>
-                  <div className="bg-yellow-50 rounded-lg p-3 text-center">
-                    <p className="text-2xl font-bold text-yellow-600">
+                  <div className="bg-yellow-600/20 rounded-lg p-3 text-center">
+                    <p className="text-2xl font-bold text-yellow-400">
                       {validationResult.toSkip}
                     </p>
-                    <p className="text-xs text-gray-500">Übersprungen</p>
+                    <p className="text-xs text-muted-foreground">Übersprungen</p>
                   </div>
                 </div>
 
                 {/* Errors */}
                 {validationResult.errors.length > 0 && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <h4 className="text-sm font-medium text-red-800 mb-2 flex items-center">
-                      <ExclamationTriangleIcon className="h-5 w-5 mr-2" />
+                  <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4">
+                    <h4 className="text-sm font-medium text-red-400 mb-2 flex items-center">
+                      <AlertTriangle className="h-5 w-5 mr-2" />
                       {validationResult.errors.length} Fehler gefunden
                     </h4>
-                    <ul className="text-sm text-red-700 space-y-1 max-h-32 overflow-y-auto">
+                    <ul className="text-sm text-red-400 space-y-1 max-h-32 overflow-y-auto">
                       {validationResult.errors.map((err, i) => (
                         <li key={i}>
                           Zeile {err.line}: {err.hostname && `${err.hostname} - `}
@@ -213,50 +213,50 @@ export function ImportHostsModal({ isOpen, onClose, onSuccess }: ImportHostsModa
 
                 {/* Preview */}
                 {validationResult.preview.length > 0 && (
-                  <div className="border rounded-lg overflow-hidden">
-                    <div className="bg-gray-50 px-4 py-2 border-b">
-                      <h4 className="text-sm font-medium text-gray-700">
+                  <div className="border border-border rounded-lg overflow-hidden">
+                    <div className="bg-secondary px-4 py-2 border-b border-border">
+                      <h4 className="text-sm font-medium text-foreground">
                         Vorschau (erste 10 Einträge)
                       </h4>
                     </div>
                     <div className="max-h-48 overflow-y-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                      <table className="min-w-full divide-y divide-border">
+                        <thead className="bg-secondary">
                           <tr>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">
+                            <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
                               #
                             </th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">
+                            <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
                               Hostname
                             </th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">
+                            <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
                               MAC
                             </th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">
+                            <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
                               Aktion
                             </th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-200">
+                        <tbody className="divide-y divide-border">
                           {validationResult.preview.slice(0, 10).map((item) => (
                             <tr key={item.line}>
-                              <td className="px-3 py-2 text-xs text-gray-500">
+                              <td className="px-3 py-2 text-xs text-muted-foreground">
                                 {item.line}
                               </td>
-                              <td className="px-3 py-2 text-sm text-gray-900">
+                              <td className="px-3 py-2 text-sm text-foreground">
                                 {item.hostname}
                               </td>
-                              <td className="px-3 py-2 text-xs text-gray-500 font-mono">
+                              <td className="px-3 py-2 text-xs text-muted-foreground font-mono">
                                 {item.mac}
                               </td>
                               <td className="px-3 py-2">
                                 <span
                                   className={`inline-flex px-2 py-0.5 text-xs rounded-full ${
                                     item.action === 'create'
-                                      ? 'bg-green-100 text-green-700'
+                                      ? 'bg-green-600/20 text-green-400'
                                       : item.action === 'update'
-                                      ? 'bg-blue-100 text-blue-700'
-                                      : 'bg-gray-100 text-gray-700'
+                                      ? 'bg-primary/20 text-blue-400'
+                                      : 'bg-background text-foreground'
                                   }`}
                                 >
                                   {item.action === 'create'
@@ -303,17 +303,17 @@ export function ImportHostsModal({ isOpen, onClose, onSuccess }: ImportHostsModa
               <>
                 <div
                   className={`rounded-lg p-6 text-center ${
-                    importResult.success ? 'bg-green-50' : 'bg-red-50'
+                    importResult.success ? 'bg-green-600/20' : 'bg-destructive/10'
                   }`}
                 >
                   {importResult.success ? (
-                    <CheckCircleIcon className="h-16 w-16 text-green-500 mx-auto mb-4" />
+                    <CheckCircle2 className="h-16 w-16 text-green-400 mx-auto mb-4" />
                   ) : (
-                    <XCircleIcon className="h-16 w-16 text-red-500 mx-auto mb-4" />
+                    <XCircle className="h-16 w-16 text-red-400 mx-auto mb-4" />
                   )}
                   <h3
                     className={`text-xl font-semibold ${
-                      importResult.success ? 'text-green-800' : 'text-red-800'
+                      importResult.success ? 'text-green-400' : 'text-red-400'
                     }`}
                   >
                     {importResult.success ? 'Import erfolgreich!' : 'Import fehlgeschlagen'}
@@ -321,32 +321,32 @@ export function ImportHostsModal({ isOpen, onClose, onSuccess }: ImportHostsModa
                 </div>
 
                 <div className="grid grid-cols-3 gap-4">
-                  <div className="bg-green-50 rounded-lg p-4 text-center">
-                    <p className="text-3xl font-bold text-green-600">
+                  <div className="bg-green-600/20 rounded-lg p-4 text-center">
+                    <p className="text-3xl font-bold text-green-400">
                       {importResult.created}
                     </p>
-                    <p className="text-sm text-gray-600">Erstellt</p>
+                    <p className="text-sm text-muted-foreground">Erstellt</p>
                   </div>
-                  <div className="bg-blue-50 rounded-lg p-4 text-center">
-                    <p className="text-3xl font-bold text-blue-600">
+                  <div className="bg-primary/20 rounded-lg p-4 text-center">
+                    <p className="text-3xl font-bold text-blue-400">
                       {importResult.updated}
                     </p>
-                    <p className="text-sm text-gray-600">Aktualisiert</p>
+                    <p className="text-sm text-muted-foreground">Aktualisiert</p>
                   </div>
-                  <div className="bg-yellow-50 rounded-lg p-4 text-center">
-                    <p className="text-3xl font-bold text-yellow-600">
+                  <div className="bg-yellow-600/20 rounded-lg p-4 text-center">
+                    <p className="text-3xl font-bold text-yellow-400">
                       {importResult.skipped}
                     </p>
-                    <p className="text-sm text-gray-600">Übersprungen</p>
+                    <p className="text-sm text-muted-foreground">Übersprungen</p>
                   </div>
                 </div>
 
                 {importResult.errors.length > 0 && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <h4 className="text-sm font-medium text-red-800 mb-2">
+                  <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4">
+                    <h4 className="text-sm font-medium text-red-400 mb-2">
                       {importResult.errors.length} Fehler
                     </h4>
-                    <ul className="text-sm text-red-700 space-y-1 max-h-32 overflow-y-auto">
+                    <ul className="text-sm text-red-400 space-y-1 max-h-32 overflow-y-auto">
                       {importResult.errors.map((err, i) => (
                         <li key={i}>
                           Zeile {err.line}: {err.error}
@@ -392,14 +392,14 @@ export function ImportHostsModal({ isOpen, onClose, onSuccess }: ImportHostsModa
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
                   step === s
-                    ? 'bg-primary-600 text-white'
+                    ? 'bg-primary text-white'
                     : ['upload', 'validate', 'result'].indexOf(step) > i
                     ? 'bg-green-500 text-white'
-                    : 'bg-gray-200 text-gray-600'
+                    : 'bg-border text-muted-foreground'
                 }`}
               >
                 {['upload', 'validate', 'result'].indexOf(step) > i ? (
-                  <CheckCircleIcon className="h-5 w-5" />
+                  <CheckCircle2 className="h-5 w-5" />
                 ) : (
                   i + 1
                 )}
@@ -409,14 +409,14 @@ export function ImportHostsModal({ isOpen, onClose, onSuccess }: ImportHostsModa
                   className={`w-16 h-1 mx-2 ${
                     ['upload', 'validate', 'result'].indexOf(step) > i
                       ? 'bg-green-500'
-                      : 'bg-gray-200'
+                      : 'bg-border'
                   }`}
                 />
               )}
             </div>
           ))}
         </div>
-        <div className="flex justify-center space-x-8 mt-2 text-xs text-gray-500">
+        <div className="flex justify-center space-x-8 mt-2 text-xs text-muted-foreground">
           <span>Datei</span>
           <span>Prüfen</span>
           <span>Fertig</span>

@@ -1,15 +1,12 @@
 import { ButtonHTMLAttributes, forwardRef } from 'react';
+import { cn } from '@/lib/utils';
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'danger' | 'success' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'destructive' | 'danger' | 'success' | 'ghost' | 'outline';
   size?: 'sm' | 'md' | 'lg';
   loading?: boolean;
   fullWidth?: boolean;
   type?: 'button' | 'submit' | 'reset';
-}
-
-function clsxFn(...classes: (string | boolean | undefined)[]) {
-  return classes.filter(Boolean).join(' ');
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
@@ -22,20 +19,22 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       fullWidth = false,
       disabled,
       children,
-      type = 'button', // Default to 'button' to prevent accidental form submission
+      type = 'button',
       ...props
     },
     ref
   ) => {
     const baseStyles =
-      'inline-flex items-center justify-center font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
+      'inline-flex items-center justify-center font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background disabled:opacity-50 disabled:cursor-not-allowed';
 
     const variants = {
-      primary: 'bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500',
-      secondary: 'bg-gray-200 text-gray-900 hover:bg-gray-300 focus:ring-gray-500',
-      danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
-      success: 'bg-green-600 text-white hover:bg-green-700 focus:ring-green-500',
-      ghost: 'bg-transparent text-gray-700 hover:bg-gray-100 focus:ring-gray-500',
+      primary: 'bg-primary text-primary-foreground hover:bg-primary/90',
+      secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
+      destructive: 'bg-destructive text-white hover:bg-destructive/90',
+      danger: 'bg-destructive text-white hover:bg-destructive/90',
+      success: 'bg-green-600 text-white hover:bg-green-700',
+      ghost: 'bg-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+      outline: 'border border-border bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground',
     };
 
     const sizes = {
@@ -48,7 +47,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         type={type}
-        className={clsxFn(
+        className={cn(
           baseStyles,
           variants[variant],
           sizes[size],

@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  ComputerDesktopIcon,
-  BuildingOfficeIcon,
-  Cog6ToothIcon,
-  CircleStackIcon,
-} from '@heroicons/react/24/outline';
+  Monitor,
+  Building2,
+  Settings,
+  HardDrive,
+} from 'lucide-react';
 import { statsApi } from '@/api/stats';
 import { operationsApi } from '@/api/operations';
 import type { DashboardStats, Operation } from '@/types';
@@ -56,7 +56,7 @@ export function DashboardPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600" />
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
       </div>
     );
   }
@@ -66,21 +66,21 @@ export function DashboardPage() {
       name: 'Hosts Online',
       value: stats?.hosts.online || 0,
       total: stats?.hosts.total || 0,
-      icon: ComputerDesktopIcon,
+      icon: Monitor,
       color: 'bg-green-500',
       link: '/hosts',
     },
     {
       name: 'Räume',
       value: stats?.rooms || 0,
-      icon: BuildingOfficeIcon,
+      icon: Building2,
       color: 'bg-blue-500',
       link: '/rooms',
     },
     {
       name: 'Konfigurationen',
       value: stats?.configs || 0,
-      icon: Cog6ToothIcon,
+      icon: Settings,
       color: 'bg-purple-500',
       link: '/configs',
     },
@@ -88,7 +88,7 @@ export function DashboardPage() {
       name: 'Images',
       value: stats?.images.total || 0,
       subtitle: formatBytes(stats?.images.totalSize || 0),
-      icon: CircleStackIcon,
+      icon: HardDrive,
       color: 'bg-orange-500',
       link: '/images',
     },
@@ -97,8 +97,8 @@ export function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-600">Übersicht über das LINBO System</p>
+        <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+        <p className="text-muted-foreground">Übersicht über das LINBO System</p>
       </div>
 
       {/* Stats Cards */}
@@ -107,7 +107,7 @@ export function DashboardPage() {
           <Link
             key={stat.name}
             to={stat.link}
-            className="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow"
+            className="bg-card overflow-hidden shadow-sm rounded-lg hover:shadow-md transition-shadow"
           >
             <div className="p-5">
               <div className="flex items-center">
@@ -116,20 +116,20 @@ export function DashboardPage() {
                 </div>
                 <div className="ml-5 w-0 flex-1">
                   <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">
+                    <dt className="text-sm font-medium text-muted-foreground truncate">
                       {stat.name}
                     </dt>
                     <dd className="flex items-baseline">
-                      <div className="text-2xl font-semibold text-gray-900">
+                      <div className="text-2xl font-semibold text-foreground">
                         {stat.value}
                       </div>
                       {stat.total !== undefined && (
-                        <span className="ml-2 text-sm text-gray-500">
+                        <span className="ml-2 text-sm text-muted-foreground">
                           / {stat.total}
                         </span>
                       )}
                       {stat.subtitle && (
-                        <span className="ml-2 text-sm text-gray-500">
+                        <span className="ml-2 text-sm text-muted-foreground">
                           ({stat.subtitle})
                         </span>
                       )}
@@ -144,28 +144,28 @@ export function DashboardPage() {
 
       {/* Host Status Overview */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <div className="bg-white shadow rounded-lg p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Host Status</h3>
+        <div className="bg-card shadow-sm rounded-lg p-6">
+          <h3 className="text-lg font-medium text-foreground mb-4">Host Status</h3>
           <div className="space-y-3">
             <div className="flex justify-between items-center">
-              <span className="text-gray-600">Online</span>
-              <span className="font-medium text-green-600">
+              <span className="text-muted-foreground">Online</span>
+              <span className="font-medium text-green-400">
                 {stats?.hosts.online || 0}
               </span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-gray-600">Offline</span>
-              <span className="font-medium text-gray-500">
+              <span className="text-muted-foreground">Offline</span>
+              <span className="font-medium text-muted-foreground">
                 {stats?.hosts.offline || 0}
               </span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-gray-600">Synchronisiert</span>
-              <span className="font-medium text-blue-600">
+              <span className="text-muted-foreground">Synchronisiert</span>
+              <span className="font-medium text-blue-400">
                 {stats?.hosts.syncing || 0}
               </span>
             </div>
-            <div className="h-2 bg-gray-200 rounded-full mt-4 overflow-hidden">
+            <div className="h-2 bg-secondary rounded-full mt-4 overflow-hidden">
               {stats && stats.hosts.total > 0 && (
                 <>
                   <div
@@ -187,26 +187,26 @@ export function DashboardPage() {
         </div>
 
         {/* Operations Overview */}
-        <div className="bg-white shadow rounded-lg p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">
+        <div className="bg-card shadow-sm rounded-lg p-6">
+          <h3 className="text-lg font-medium text-foreground mb-4">
             Operationen Übersicht
           </h3>
           <div className="space-y-3">
             <div className="flex justify-between items-center">
-              <span className="text-gray-600">Laufend</span>
-              <span className="font-medium text-blue-600">
+              <span className="text-muted-foreground">Laufend</span>
+              <span className="font-medium text-blue-400">
                 {stats?.operations.running || 0}
               </span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-gray-600">Abgeschlossen</span>
-              <span className="font-medium text-green-600">
+              <span className="text-muted-foreground">Abgeschlossen</span>
+              <span className="font-medium text-green-400">
                 {stats?.operations.completed || 0}
               </span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-gray-600">Fehlgeschlagen</span>
-              <span className="font-medium text-red-600">
+              <span className="text-muted-foreground">Fehlgeschlagen</span>
+              <span className="font-medium text-red-400">
                 {stats?.operations.failed || 0}
               </span>
             </div>
@@ -215,23 +215,23 @@ export function DashboardPage() {
       </div>
 
       {/* Recent Operations */}
-      <div className="bg-white shadow rounded-lg">
-        <div className="px-6 py-4 border-b border-gray-200">
+      <div className="bg-card shadow-sm rounded-lg">
+        <div className="px-6 py-4 border-b border-border">
           <div className="flex justify-between items-center">
-            <h3 className="text-lg font-medium text-gray-900">
+            <h3 className="text-lg font-medium text-foreground">
               Letzte Operationen
             </h3>
             <Link
               to="/operations"
-              className="text-sm text-primary-600 hover:text-primary-700"
+              className="text-sm text-primary hover:text-primary/80"
             >
               Alle anzeigen
             </Link>
           </div>
         </div>
-        <div className="divide-y divide-gray-200">
+        <div className="divide-y divide-border">
           {recentOperations.length === 0 ? (
-            <div className="px-6 py-8 text-center text-gray-500">
+            <div className="px-6 py-8 text-center text-muted-foreground">
               Keine Operationen vorhanden
             </div>
           ) : (
@@ -241,23 +241,23 @@ export function DashboardPage() {
                 className="px-6 py-4 flex items-center justify-between"
               >
                 <div>
-                  <p className="text-sm font-medium text-gray-900">
+                  <p className="text-sm font-medium text-foreground">
                     {op.commands.join(', ')}
                   </p>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-muted-foreground">
                     {op.targetHosts.length} Host(s) - {formatDate(op.createdAt)}
                   </p>
                 </div>
                 <div className="flex items-center space-x-4">
                   {op.status === 'running' && (
                     <div className="w-24">
-                      <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div className="h-2 bg-secondary rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-primary-600 transition-all"
+                          className="h-full bg-primary transition-all"
                           style={{ width: `${op.progress}%` }}
                         />
                       </div>
-                      <p className="text-xs text-gray-500 mt-1 text-center">
+                      <p className="text-xs text-muted-foreground mt-1 text-center">
                         {op.progress}%
                       </p>
                     </div>

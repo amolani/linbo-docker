@@ -1,16 +1,13 @@
 import { useCallback, useRef, useState, DragEvent, ChangeEvent } from 'react';
-import { ArrowUpTrayIcon, DocumentTextIcon, XMarkIcon } from '@heroicons/react/24/outline';
-
-function clsxFn(...classes: (string | boolean | undefined)[]) {
-  return classes.filter(Boolean).join(' ');
-}
+import { Upload, FileText, X } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export interface FileUploadProps {
   label?: string;
   error?: string;
   helperText?: string;
   accept?: string;
-  maxSize?: number; // in bytes
+  maxSize?: number;
   onFileSelect: (file: File | null) => void;
   disabled?: boolean;
 }
@@ -28,7 +25,7 @@ export function FileUpload({
   error,
   helperText,
   accept = '.csv',
-  maxSize = 10 * 1024 * 1024, // 10MB default
+  maxSize = 10 * 1024 * 1024,
   onFileSelect,
   disabled = false,
 }: FileUploadProps) {
@@ -39,7 +36,6 @@ export function FileUpload({
 
   const validateFile = useCallback(
     (file: File): string | null => {
-      // Check file extension
       if (accept) {
         const acceptedExtensions = accept.split(',').map((ext) => ext.trim().toLowerCase());
         const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
@@ -47,7 +43,6 @@ export function FileUpload({
           return `Ungültiger Dateityp. Erlaubt: ${accept}`;
         }
       }
-      // Check file size
       if (file.size > maxSize) {
         return `Datei zu groß. Maximal: ${formatFileSize(maxSize)}`;
       }
@@ -132,18 +127,18 @@ export function FileUpload({
   return (
     <div className="w-full">
       {label && (
-        <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+        <label className="block text-sm font-medium text-foreground mb-1">{label}</label>
       )}
       <div
         onClick={handleClick}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={clsxFn(
+        className={cn(
           'relative border-2 border-dashed rounded-lg p-6 transition-colors cursor-pointer',
-          isDragging && 'border-primary-500 bg-primary-50',
-          !!displayError && 'border-red-300 bg-red-50',
-          !isDragging && !displayError && 'border-gray-300 hover:border-gray-400',
+          isDragging && 'border-primary bg-primary/10',
+          !!displayError && 'border-destructive bg-destructive/10',
+          !isDragging && !displayError && 'border-border hover:border-muted-foreground',
           disabled && 'opacity-50 cursor-not-allowed'
         )}
       >
@@ -158,10 +153,10 @@ export function FileUpload({
         {selectedFile ? (
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <DocumentTextIcon className="h-10 w-10 text-primary-500" />
+              <FileText className="h-10 w-10 text-primary" />
               <div>
-                <p className="text-sm font-medium text-gray-900">{selectedFile.name}</p>
-                <p className="text-xs text-gray-500">{formatFileSize(selectedFile.size)}</p>
+                <p className="text-sm font-medium text-foreground">{selectedFile.name}</p>
+                <p className="text-xs text-muted-foreground">{formatFileSize(selectedFile.size)}</p>
               </div>
             </div>
             <button
@@ -170,32 +165,32 @@ export function FileUpload({
                 e.stopPropagation();
                 handleClear();
               }}
-              className="p-1 hover:bg-gray-100 rounded-full"
+              className="p-1 hover:bg-muted/50 rounded-full"
               disabled={disabled}
             >
-              <XMarkIcon className="h-5 w-5 text-gray-500" />
+              <X className="h-5 w-5 text-muted-foreground" />
             </button>
           </div>
         ) : (
           <div className="text-center">
-            <ArrowUpTrayIcon className="mx-auto h-12 w-12 text-gray-400" />
+            <Upload className="mx-auto h-12 w-12 text-muted-foreground" />
             <div className="mt-2">
-              <p className="text-sm text-gray-600">
-                <span className="font-medium text-primary-600 hover:text-primary-500">
+              <p className="text-sm text-muted-foreground">
+                <span className="font-medium text-primary hover:text-primary/80">
                   Datei auswählen
                 </span>{' '}
                 oder hierher ziehen
               </p>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 {accept} bis zu {formatFileSize(maxSize)}
               </p>
             </div>
           </div>
         )}
       </div>
-      {displayError && <p className="mt-1 text-sm text-red-600">{displayError}</p>}
+      {displayError && <p className="mt-1 text-sm text-destructive">{displayError}</p>}
       {helperText && !displayError && (
-        <p className="mt-1 text-sm text-gray-500">{helperText}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{helperText}</p>
       )}
     </div>
   );

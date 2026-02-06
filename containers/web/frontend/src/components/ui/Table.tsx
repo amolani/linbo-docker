@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { ChevronUpIcon, ChevronDownIcon } from '@heroicons/react/24/outline';
+import { ChevronUp, ChevronDown } from 'lucide-react';
 
 export interface Column<T> {
   key: string;
@@ -43,14 +43,14 @@ export function Table<T>({
 
   return (
     <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
+      <table className="min-w-full divide-y divide-border">
+        <thead className="bg-card">
           <tr>
             {selectable && (
               <th scope="col" className="w-12 px-4 py-3">
                 <input
                   type="checkbox"
-                  className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  className="h-4 w-4 rounded border-border bg-input text-primary focus:ring-ring"
                   checked={allSelected}
                   ref={(el) => {
                     if (el) el.indeterminate = someSelected;
@@ -63,8 +63,8 @@ export function Table<T>({
               <th
                 key={column.key}
                 scope="col"
-                className={`px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${
-                  column.sortable ? 'cursor-pointer select-none hover:bg-gray-100' : ''
+                className={`px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider ${
+                  column.sortable ? 'cursor-pointer select-none hover:bg-muted/50' : ''
                 } ${column.className || ''}`}
                 onClick={() => column.sortable && onSort?.(column.key)}
               >
@@ -73,9 +73,9 @@ export function Table<T>({
                   {column.sortable && sortKey === column.key && (
                     <span className="ml-1">
                       {sortOrder === 'asc' ? (
-                        <ChevronUpIcon className="h-4 w-4" />
+                        <ChevronUp className="h-4 w-4" />
                       ) : (
-                        <ChevronDownIcon className="h-4 w-4" />
+                        <ChevronDown className="h-4 w-4" />
                       )}
                     </span>
                   )}
@@ -84,7 +84,7 @@ export function Table<T>({
             ))}
           </tr>
         </thead>
-        <tbody className="bg-white divide-y divide-gray-200">
+        <tbody className="divide-y divide-border">
           {loading ? (
             <tr>
               <td
@@ -93,7 +93,7 @@ export function Table<T>({
               >
                 <div className="flex justify-center">
                   <svg
-                    className="animate-spin h-8 w-8 text-primary-600"
+                    className="animate-spin h-8 w-8 text-primary"
                     xmlns="http://www.w3.org/2000/svg"
                     fill="none"
                     viewBox="0 0 24 24"
@@ -119,7 +119,7 @@ export function Table<T>({
             <tr>
               <td
                 colSpan={columns.length + (selectable ? 1 : 0)}
-                className="px-4 py-12 text-center text-gray-500"
+                className="px-4 py-12 text-center text-muted-foreground"
               >
                 {emptyMessage}
               </td>
@@ -131,13 +131,13 @@ export function Table<T>({
               return (
                 <tr
                   key={key}
-                  className={`hover:bg-gray-50 ${isSelected ? 'bg-primary-50' : ''}`}
+                  className={`hover:bg-muted/50 ${isSelected ? 'bg-primary/10' : ''}`}
                 >
                   {selectable && (
                     <td className="w-12 px-4 py-3">
                       <input
                         type="checkbox"
-                        className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                        className="h-4 w-4 rounded border-border bg-input text-primary focus:ring-ring"
                         checked={isSelected}
                         onChange={() => onSelect?.(key)}
                       />
@@ -146,7 +146,7 @@ export function Table<T>({
                   {columns.map((column) => (
                     <td
                       key={column.key}
-                      className={`px-4 py-3 text-sm text-gray-900 ${column.className || ''}`}
+                      className={`px-4 py-3 text-sm text-foreground ${column.className || ''}`}
                     >
                       {column.render
                         ? column.render(item)
@@ -184,14 +184,14 @@ export function Pagination({
   const end = Math.min(page * limit, total);
 
   return (
-    <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200 sm:px-6">
-      <div className="flex items-center text-sm text-gray-700">
+    <div className="flex items-center justify-between px-4 py-3 border-t border-border sm:px-6">
+      <div className="flex items-center text-sm text-muted-foreground">
         <span>
           Zeige {start} bis {end} von {total} Ergebnissen
         </span>
         {onLimitChange && (
           <select
-            className="ml-4 border-gray-300 rounded-md text-sm focus:ring-primary-500 focus:border-primary-500"
+            className="ml-4 border-border bg-input text-foreground rounded-md text-sm focus:ring-ring focus:border-ring"
             value={limit}
             onChange={(e) => onLimitChange(Number(e.target.value))}
           >
@@ -204,17 +204,17 @@ export function Pagination({
       </div>
       <div className="flex space-x-2">
         <button
-          className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-3 py-1 text-sm border border-border text-foreground rounded-md hover:bg-muted/50 disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={() => onPageChange(page - 1)}
           disabled={page <= 1}
         >
           Zurück
         </button>
-        <span className="px-3 py-1 text-sm">
+        <span className="px-3 py-1 text-sm text-muted-foreground">
           Seite {page} von {totalPages}
         </span>
         <button
-          className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-3 py-1 text-sm border border-border text-foreground rounded-md hover:bg-muted/50 disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={() => onPageChange(page + 1)}
           disabled={page >= totalPages}
         >

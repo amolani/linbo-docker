@@ -188,6 +188,16 @@ export const hostsApi = {
     };
   },
 
+  bulkDelete: async (hostIds: string[]): Promise<{ success: number; failed: number }> => {
+    const results = await Promise.allSettled(
+      hostIds.map((id) => apiClient.delete(`/hosts/${id}`))
+    );
+    return {
+      success: results.filter((r) => r.status === 'fulfilled').length,
+      failed: results.filter((r) => r.status === 'rejected').length,
+    };
+  },
+
   // Device Import/Export (Phase 7c)
   import: async (csv: string, options?: { dryRun?: boolean }): Promise<ImportResult> => {
     const response = await apiClient.post<ApiResponse<ImportResult>>('/hosts/import', {

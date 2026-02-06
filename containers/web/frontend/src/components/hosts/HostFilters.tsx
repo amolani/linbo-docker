@@ -17,7 +17,7 @@ export function HostFilters({
   onClearFilters,
 }: HostFiltersProps) {
   return (
-    <div className="bg-white shadow rounded-lg p-4">
+    <div className="bg-card shadow-sm rounded-lg p-4">
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Input
           placeholder="Suche..."

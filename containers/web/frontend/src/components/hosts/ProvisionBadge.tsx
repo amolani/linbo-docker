@@ -20,22 +20,22 @@ export function ProvisionBadge({ status, opId }: ProvisionBadgeProps) {
     pending: {
       dot: 'bg-yellow-400',
       text: 'Queued',
-      classes: 'text-yellow-700 bg-yellow-50 border-yellow-200',
+      classes: 'text-yellow-400 bg-yellow-600/20 border-yellow-600/30',
     },
     running: {
       dot: 'bg-blue-400 animate-pulse',
       text: 'Provisioning...',
-      classes: 'text-blue-700 bg-blue-50 border-blue-200',
+      classes: 'text-blue-400 bg-primary/20 border-blue-600/30',
     },
     synced: {
       dot: 'bg-green-400',
       text: 'Synced',
-      classes: 'text-green-700 bg-green-50 border-green-200',
+      classes: 'text-green-400 bg-green-600/20 border-green-600/30',
     },
     failed: {
       dot: 'bg-red-400',
       text: 'Failed',
-      classes: 'text-red-700 bg-red-50 border-red-200',
+      classes: 'text-red-400 bg-destructive/10 border-destructive/30',
     },
   };
 

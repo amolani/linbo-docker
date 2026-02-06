@@ -1,6 +1,6 @@
 import { Fragment, ReactNode } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
-import { XMarkIcon } from '@heroicons/react/24/outline';
+import { X } from 'lucide-react';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -39,7 +39,7 @@ export function Modal({
           leaveFrom="opacity-100"
           leaveTo="opacity-0"
         >
-          <div className="fixed inset-0 bg-black bg-opacity-25" />
+          <div className="fixed inset-0 bg-black/60" />
         </Transition.Child>
 
         <div className="fixed inset-0 overflow-y-auto">
@@ -54,31 +54,31 @@ export function Modal({
               leaveTo="opacity-0 scale-95"
             >
               <Dialog.Panel
-                className={`w-full ${sizes[size]} transform overflow-hidden rounded-lg bg-white p-6 text-left align-middle shadow-xl transition-all`}
+                className={`w-full ${sizes[size]} transform overflow-hidden rounded-lg bg-card border border-border p-6 text-left align-middle shadow-xl transition-all`}
               >
                 <div className="flex items-start justify-between">
                   <div>
                     {title && (
                       <Dialog.Title
                         as="h3"
-                        className="text-lg font-medium leading-6 text-gray-900"
+                        className="text-lg font-medium leading-6 text-foreground"
                       >
                         {title}
                       </Dialog.Title>
                     )}
                     {description && (
-                      <Dialog.Description className="mt-1 text-sm text-gray-500">
+                      <Dialog.Description className="mt-1 text-sm text-muted-foreground">
                         {description}
                       </Dialog.Description>
                     )}
                   </div>
                   <button
                     type="button"
-                    className="ml-4 rounded-md text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    className="ml-4 rounded-md text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                     onClick={onClose}
                   >
                     <span className="sr-only">Schließen</span>
-                    <XMarkIcon className="h-6 w-6" aria-hidden="true" />
+                    <X className="h-5 w-5" aria-hidden="true" />
                   </button>
                 </div>
 
@@ -116,18 +116,18 @@ export function ConfirmModal({
   loading = false,
 }: ConfirmModalProps) {
   const variantStyles = {
-    danger: 'bg-red-600 hover:bg-red-700 focus:ring-red-500',
+    danger: 'bg-destructive hover:bg-destructive/90 focus:ring-destructive',
     warning: 'bg-yellow-600 hover:bg-yellow-700 focus:ring-yellow-500',
-    info: 'bg-primary-600 hover:bg-primary-700 focus:ring-primary-500',
+    info: 'bg-primary hover:bg-primary/90 focus:ring-ring',
   };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm">
-      <p className="text-sm text-gray-500">{message}</p>
+      <p className="text-sm text-muted-foreground">{message}</p>
       <div className="mt-6 flex justify-end space-x-3">
         <button
           type="button"
-          className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500"
+          className="px-4 py-2 text-sm font-medium text-foreground bg-secondary rounded-md hover:bg-secondary/80 focus:outline-none focus:ring-2 focus:ring-ring"
           onClick={onClose}
           disabled={loading}
         >
@@ -135,7 +135,7 @@ export function ConfirmModal({
         </button>
         <button
           type="button"
-          className={`px-4 py-2 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 ${variantStyles[variant]}`}
+          className={`px-4 py-2 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background disabled:opacity-50 ${variantStyles[variant]}`}
           onClick={onConfirm}
           disabled={loading}
         >

@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  PlusIcon,
-  XMarkIcon,
-  PlayIcon,
-  ClockIcon,
-  ComputerDesktopIcon,
-  BuildingOfficeIcon,
-  Cog6ToothIcon,
-} from '@heroicons/react/24/outline';
+  Plus,
+  X,
+  Play,
+  Clock,
+  Monitor,
+  Building2,
+  Settings,
+} from 'lucide-react';
 import { Modal, Button, Input, Select } from '@/components/ui';
 import { operationsApi, LINBO_COMMANDS, DirectCommandRequest, ScheduleCommandRequest } from '@/api/operations';
 import { hostsApi } from '@/api/hosts';
@@ -211,17 +211,17 @@ export function RemoteCommandModal({
     <Modal isOpen={isOpen} onClose={handleClose} title="Remote-Befehl" size="xl">
       <div className="space-y-6">
         {/* Execution Type Toggle */}
-        <div className="flex rounded-lg overflow-hidden border">
+        <div className="flex rounded-lg overflow-hidden border border-border">
           <button
             type="button"
             onClick={() => setExecutionType('direct')}
             className={`flex-1 py-2 px-4 text-sm font-medium flex items-center justify-center gap-2 ${
               executionType === 'direct'
-                ? 'bg-primary-600 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-50'
+                ? 'bg-primary text-white'
+                : 'bg-card text-foreground hover:bg-muted/50'
             }`}
           >
-            <PlayIcon className="h-4 w-4" />
+            <Play className="h-4 w-4" />
             Sofort ausführen
           </button>
           <button
@@ -229,31 +229,31 @@ export function RemoteCommandModal({
             onClick={() => setExecutionType('scheduled')}
             className={`flex-1 py-2 px-4 text-sm font-medium flex items-center justify-center gap-2 ${
               executionType === 'scheduled'
-                ? 'bg-primary-600 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-50'
+                ? 'bg-primary text-white'
+                : 'bg-card text-foreground hover:bg-muted/50'
             }`}
           >
-            <ClockIcon className="h-4 w-4" />
+            <Clock className="h-4 w-4" />
             Bei nächstem Boot
           </button>
         </div>
 
         {/* Target Selection */}
         <div className="space-y-3">
-          <label className="block text-sm font-medium text-gray-700">Ziel auswählen</label>
+          <label className="block text-sm font-medium text-foreground">Ziel auswählen</label>
 
           {/* Target Type Tabs */}
-          <div className="flex rounded-lg overflow-hidden border">
+          <div className="flex rounded-lg overflow-hidden border border-border">
             <button
               type="button"
               onClick={() => setTargetType('hosts')}
               className={`flex-1 py-2 px-3 text-sm flex items-center justify-center gap-2 ${
                 targetType === 'hosts'
-                  ? 'bg-gray-100 font-medium'
-                  : 'bg-white text-gray-600 hover:bg-gray-50'
+                  ? 'bg-secondary font-medium'
+                  : 'bg-card text-muted-foreground hover:bg-muted/50'
               }`}
             >
-              <ComputerDesktopIcon className="h-4 w-4" />
+              <Monitor className="h-4 w-4" />
               Hosts
             </button>
             <button
@@ -261,11 +261,11 @@ export function RemoteCommandModal({
               onClick={() => setTargetType('room')}
               className={`flex-1 py-2 px-3 text-sm flex items-center justify-center gap-2 ${
                 targetType === 'room'
-                  ? 'bg-gray-100 font-medium'
-                  : 'bg-white text-gray-600 hover:bg-gray-50'
+                  ? 'bg-secondary font-medium'
+                  : 'bg-card text-muted-foreground hover:bg-muted/50'
               }`}
             >
-              <BuildingOfficeIcon className="h-4 w-4" />
+              <Building2 className="h-4 w-4" />
               Raum
             </button>
             <button
@@ -273,38 +273,38 @@ export function RemoteCommandModal({
               onClick={() => setTargetType('config')}
               className={`flex-1 py-2 px-3 text-sm flex items-center justify-center gap-2 ${
                 targetType === 'config'
-                  ? 'bg-gray-100 font-medium'
-                  : 'bg-white text-gray-600 hover:bg-gray-50'
+                  ? 'bg-secondary font-medium'
+                  : 'bg-card text-muted-foreground hover:bg-muted/50'
               }`}
             >
-              <Cog6ToothIcon className="h-4 w-4" />
+              <Settings className="h-4 w-4" />
               Konfiguration
             </button>
           </div>
 
           {/* Target Selection Content */}
           {targetType === 'hosts' && (
-            <div className="border rounded-lg max-h-48 overflow-y-auto">
+            <div className="border border-border rounded-lg max-h-48 overflow-y-auto">
               {hostsLoading ? (
-                <div className="p-4 text-center text-gray-500">Laden...</div>
+                <div className="p-4 text-center text-muted-foreground">Laden...</div>
               ) : hosts.length === 0 ? (
-                <div className="p-4 text-center text-gray-500">Keine Hosts vorhanden</div>
+                <div className="p-4 text-center text-muted-foreground">Keine Hosts vorhanden</div>
               ) : (
-                <div className="divide-y">
+                <div className="divide-y divide-border">
                   {hosts.map((host) => (
                     <label
                       key={host.id}
-                      className="flex items-center px-4 py-2 hover:bg-gray-50 cursor-pointer"
+                      className="flex items-center px-4 py-2 hover:bg-muted/50 cursor-pointer"
                     >
                       <input
                         type="checkbox"
                         checked={selectedHostIds.includes(host.id)}
                         onChange={() => toggleHostSelection(host.id)}
-                        className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                        className="rounded border-border text-primary focus:ring-ring"
                       />
                       <span className="ml-3 text-sm">
                         <span className="font-medium">{host.hostname}</span>
-                        <span className="text-gray-500 ml-2">
+                        <span className="text-muted-foreground ml-2">
                           {host.ipAddress || host.macAddress}
                         </span>
                       </span>
@@ -343,7 +343,7 @@ export function RemoteCommandModal({
             />
           )}
 
-          <div className="text-sm text-gray-500">
+          <div className="text-sm text-muted-foreground">
             {targetCount} Host(s) ausgewählt
           </div>
         </div>
@@ -351,18 +351,18 @@ export function RemoteCommandModal({
         {/* Command Builder */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <label className="block text-sm font-medium text-gray-700">Befehle</label>
+            <label className="block text-sm font-medium text-foreground">Befehle</label>
             <Button size="sm" variant="secondary" onClick={addCommand}>
-              <PlusIcon className="h-4 w-4 mr-1" />
+              <Plus className="h-4 w-4 mr-1" />
               Befehl hinzufügen
             </Button>
           </div>
 
           {commands.length === 0 ? (
-            <div className="text-center py-6 border-2 border-dashed rounded-lg">
-              <p className="text-gray-500 text-sm">Keine Befehle ausgewählt</p>
+            <div className="text-center py-6 border-2 border-dashed border-border rounded-lg">
+              <p className="text-muted-foreground text-sm">Keine Befehle ausgewählt</p>
               <Button size="sm" variant="secondary" onClick={addCommand} className="mt-2">
-                <PlusIcon className="h-4 w-4 mr-1" />
+                <Plus className="h-4 w-4 mr-1" />
                 Befehl hinzufügen
               </Button>
             </div>
@@ -372,7 +372,7 @@ export function RemoteCommandModal({
                 const cmdDef = LINBO_COMMANDS.find((c) => c.value === cmd.command);
                 return (
                   <div key={cmd.id} className="flex items-start gap-2">
-                    <span className="text-gray-400 text-sm pt-2 w-6">{idx + 1}.</span>
+                    <span className="text-muted-foreground text-sm pt-2 w-6">{idx + 1}.</span>
                     <div className="flex-1">
                       <Select
                         value={cmd.command}
@@ -412,9 +412,9 @@ export function RemoteCommandModal({
                     <button
                       type="button"
                       onClick={() => removeCommand(cmd.id)}
-                      className="p-2 text-gray-400 hover:text-red-500"
+                      className="p-2 text-muted-foreground hover:text-red-400"
                     >
-                      <XMarkIcon className="h-5 w-5" />
+                      <X className="h-5 w-5" />
                     </button>
                   </div>
                 );
@@ -423,23 +423,23 @@ export function RemoteCommandModal({
           )}
 
           {commandString && (
-            <div className="bg-gray-50 rounded p-3">
-              <p className="text-xs text-gray-500 mb-1">Befehlsstring:</p>
-              <code className="text-sm font-mono text-gray-700">{commandString}</code>
+            <div className="bg-secondary rounded p-3">
+              <p className="text-xs text-muted-foreground mb-1">Befehlsstring:</p>
+              <code className="text-sm font-mono text-foreground">{commandString}</code>
             </div>
           )}
         </div>
 
         {/* Options */}
-        <div className="space-y-3 border-t pt-4">
+        <div className="space-y-3 border-t border-border pt-4">
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
               checked={wakeOnLan}
               onChange={(e) => setWakeOnLan(e.target.checked)}
-              className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              className="rounded border-border text-primary focus:ring-ring"
             />
-            <span className="text-sm text-gray-700">Wake-on-LAN vor Ausführung senden</span>
+            <span className="text-sm text-foreground">Wake-on-LAN vor Ausführung senden</span>
           </label>
 
           {wakeOnLan && (
@@ -457,7 +457,7 @@ export function RemoteCommandModal({
         </div>
 
         {/* Actions */}
-        <div className="flex justify-end space-x-3 pt-4 border-t">
+        <div className="flex justify-end space-x-3 pt-4 border-t border-border">
           <Button variant="secondary" onClick={handleClose}>
             Abbrechen
           </Button>

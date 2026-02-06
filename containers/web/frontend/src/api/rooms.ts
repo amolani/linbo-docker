@@ -50,6 +50,24 @@ export const roomsApi = {
     return response.data.data;
   },
 
+  bulkDelete: async (roomIds: string[]): Promise<{ success: number; failed: number; errors: string[] }> => {
+    const errors: string[] = [];
+    const results = await Promise.allSettled(
+      roomIds.map((id) => apiClient.delete(`/rooms/${id}`))
+    );
+    results.forEach((r) => {
+      if (r.status === 'rejected') {
+        const msg = r.reason?.response?.data?.error?.message || 'Unbekannter Fehler';
+        errors.push(msg);
+      }
+    });
+    return {
+      success: results.filter((r) => r.status === 'fulfilled').length,
+      failed: results.filter((r) => r.status === 'rejected').length,
+      errors,
+    };
+  },
+
   shutdownAll: async (id: string): Promise<{ success: number; failed: number }> => {
     const response = await apiClient.post<ApiResponse<{ success: number; failed: number }>>(
       `/rooms/${id}/shutdown-all`

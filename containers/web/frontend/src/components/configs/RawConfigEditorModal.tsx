@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { DocumentTextIcon, ArrowPathIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
+import { FileText, RefreshCw, Download } from 'lucide-react';
 import { Modal, Button } from '@/components/ui';
 import { configsApi, RawConfigResponse } from '@/api/configs';
 import { notify } from '@/stores/notificationStore';
@@ -129,10 +129,10 @@ export function RawConfigEditorModal({
       onClose={handleClose}
       title={
         <div className="flex items-center gap-2">
-          <DocumentTextIcon className="h-5 w-5" />
+          <FileText className="h-5 w-5" />
           <span>Raw Editor: {config?.name}</span>
           {hasChanges && (
-            <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">
+            <span className="text-xs bg-yellow-600/20 text-yellow-400 px-2 py-0.5 rounded">
               Ungespeichert
             </span>
           )}
@@ -142,7 +142,7 @@ export function RawConfigEditorModal({
     >
       <div className="space-y-4">
         {/* Info bar */}
-        <div className="flex items-center justify-between text-sm text-gray-500 bg-gray-50 rounded px-3 py-2">
+        <div className="flex items-center justify-between text-sm text-muted-foreground bg-secondary rounded px-3 py-2">
           <div className="flex items-center gap-4">
             <span>
               <strong>Datei:</strong> {rawInfo?.filepath || `start.conf.${config?.name}`}
@@ -181,7 +181,7 @@ export function RawConfigEditorModal({
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 onKeyDown={handleKeyDown}
-                className="w-full h-[500px] pl-14 pr-4 py-3 bg-gray-900 text-gray-100 font-mono text-sm leading-6 rounded-lg border-0 focus:ring-2 focus:ring-primary-500 resize-none"
+                className="w-full h-[500px] pl-14 pr-4 py-3 bg-gray-900 text-gray-100 font-mono text-sm leading-6 rounded-lg border-0 focus:ring-2 focus:ring-ring resize-none"
                 style={{ tabSize: 2 }}
                 spellCheck={false}
                 placeholder="# LINBO start.conf"
@@ -191,7 +191,7 @@ export function RawConfigEditorModal({
         </div>
 
         {/* Help text */}
-        <div className="text-xs text-gray-500">
+        <div className="text-xs text-muted-foreground">
           <strong>Tastenkürzel:</strong> Ctrl+S = Speichern, Tab = Einrücken
         </div>
 
@@ -204,7 +204,7 @@ export function RawConfigEditorModal({
               onClick={handleReload}
               disabled={isLoading}
             >
-              <ArrowPathIcon className="h-4 w-4 mr-1" />
+              <RefreshCw className="h-4 w-4 mr-1" />
               Neu laden
             </Button>
           </div>
@@ -218,7 +218,7 @@ export function RawConfigEditorModal({
               disabled={!hasChanges || isSaving}
               loading={isSaving}
             >
-              <ArrowDownTrayIcon className="h-4 w-4 mr-1" />
+              <Download className="h-4 w-4 mr-1" />
               Speichern
             </Button>
           </div>
