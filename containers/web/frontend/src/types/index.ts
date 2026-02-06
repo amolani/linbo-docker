@@ -48,6 +48,8 @@ export interface Host {
   hardware?: HardwareInfo;
   cacheInfo?: CacheInfo;
   metadata?: Record<string, unknown>;
+  provisionStatus?: 'pending' | 'running' | 'synced' | 'failed' | null;
+  provisionOpId?: string | null;
   createdAt: string;
   updatedAt: string;
   room?: Room;
@@ -294,6 +296,44 @@ export type WsEvent =
   | WsSyncProgressEvent
   | WsOperationProgressEvent
   | WsNotificationEvent;
+
+// DHCP
+export interface NetworkSettings {
+  serverIp: string;
+  subnet: string;
+  netmask: string;
+  gateway: string;
+  dns: string;
+  domain: string;
+  dhcpRangeStart: string;
+  dhcpRangeEnd: string;
+  defaultLeaseTime: number;
+  maxLeaseTime: number;
+  lastExportedAt: string | null;
+  updatedAt?: string;
+}
+
+export interface DhcpSummary {
+  totalHosts: number;
+  pxeHosts: number;
+  staticIpHosts: number;
+  dhcpIpHosts: number;
+  configCounts: Record<string, number>;
+  lastExportedAt: string | null;
+  lastChangedAt: string | null;
+  isStale: boolean;
+}
+
+export type DhcpFormat = 'isc-dhcp' | 'dnsmasq' | 'dnsmasq-proxy';
+
+export interface DhcpExportOptions {
+  format?: 'text' | 'file';
+  configId?: string;
+  roomId?: string;
+  pxeOnly?: boolean;
+  includeHeader?: boolean;
+  includeSubnet?: boolean;
+}
 
 // Filters
 export interface HostFilters {

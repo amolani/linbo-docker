@@ -17,6 +17,7 @@ const {
 const { auditAction } = require('../middleware/audit');
 const redis = require('../lib/redis');
 const grubService = require('../services/grub.service');
+const provisioningService = require('../services/provisioning.service');
 
 // =============================================================================
 // Device Import/Export Routes (Phase 7) - MUST be before /:id route!
@@ -51,6 +52,27 @@ router.post(
       // Invalidate cache after successful import
       if (result.success && !options.dryRun) {
         await redis.delPattern('hosts:*');
+
+        // Queue provisioning jobs for imported hosts
+        if (provisioningService.isProvisioningEnabled() && result.imported) {
+          for (const imported of result.imported) {
+            try {
+              await provisioningService.createProvisionJob(
+                {
+                  hostname: imported.hostname,
+                  macAddress: imported.macAddress,
+                  ipAddress: imported.ipAddress,
+                  csvCol0: imported.room || '',
+                  configName: imported.config || '',
+                  hostId: imported.id,
+                },
+                imported.action === 'updated' ? 'update' : 'create'
+              );
+            } catch (err) {
+              console.error(`[Hosts] Provisioning queue failed for ${imported.hostname}:`, err.message);
+            }
+          }
+        }
       }
 
       const statusCode = result.success ? 200 : 400;
@@ -350,6 +372,28 @@ router.post(
         }
       }
 
+      // Queue provisioning job on DC
+      if (provisioningService.isProvisioningEnabled()) {
+        try {
+          const provResult = await provisioningService.createProvisionJob(
+            {
+              hostname: host.hostname,
+              macAddress: host.macAddress,
+              ipAddress: host.ipAddress,
+              csvCol0: host.room?.name,
+              configName: host.config?.name,
+              hostId: host.id,
+            },
+            'create'
+          );
+          if (provResult.queued) {
+            await provisioningService.syncHostProvisionStatus(host.id, provResult.operation.id, 'pending');
+          }
+        } catch (err) {
+          console.error('[Hosts] Provisioning queue failed:', err.message);
+        }
+      }
+
       res.status(201).json({ data: host });
     } catch (error) {
       if (error.code === 'P2002') {
@@ -387,6 +431,15 @@ router.patch(
         data.macAddress = data.macAddress.replace(/-/g, ':').toLowerCase();
       }
 
+      // Fetch old host state for provisioning (hostname rename detection)
+      let oldHost = null;
+      if (provisioningService.isProvisioningEnabled()) {
+        oldHost = await prisma.host.findUnique({
+          where: { id: req.params.id },
+          select: { hostname: true, macAddress: true, ipAddress: true },
+        });
+      }
+
       const host = await prisma.host.update({
         where: { id: req.params.id },
         data,
@@ -405,6 +458,33 @@ router.patch(
           await grubService.generateHostGrubConfig(host.hostname, host.config.name);
         } catch (error) {
           console.error('[Hosts] Failed to regenerate GRUB config:', error.message);
+        }
+      }
+
+      // Queue provisioning update job on DC
+      if (provisioningService.isProvisioningEnabled()) {
+        try {
+          const extraOptions = {};
+          if (oldHost && oldHost.hostname !== host.hostname) {
+            extraOptions.oldHostname = oldHost.hostname;
+          }
+          const provResult = await provisioningService.createProvisionJob(
+            {
+              hostname: host.hostname,
+              macAddress: host.macAddress,
+              ipAddress: host.ipAddress,
+              csvCol0: host.room?.name,
+              configName: host.config?.name,
+              hostId: host.id,
+            },
+            'update',
+            extraOptions
+          );
+          if (provResult.queued) {
+            await provisioningService.syncHostProvisionStatus(host.id, provResult.operation.id, 'pending');
+          }
+        } catch (err) {
+          console.error('[Hosts] Provisioning queue failed:', err.message);
         }
       }
 
@@ -443,10 +523,17 @@ router.delete(
   auditAction('host.delete'),
   async (req, res, next) => {
     try {
-      // Get host info before deletion for GRUB cleanup
+      // Get host info before deletion for GRUB cleanup + provisioning snapshot
       const host = await prisma.host.findUnique({
         where: { id: req.params.id },
-        select: { hostname: true },
+        select: {
+          id: true,
+          hostname: true,
+          macAddress: true,
+          ipAddress: true,
+          room: { select: { name: true } },
+          config: { select: { name: true } },
+        },
       });
 
       await prisma.host.delete({
@@ -462,6 +549,25 @@ router.delete(
           await grubService.deleteHostGrubConfig(host.hostname);
         } catch (error) {
           console.error('[Hosts] Failed to delete GRUB config:', error.message);
+        }
+      }
+
+      // Queue provisioning delete job on DC (frozen snapshot since host is gone)
+      if (host && provisioningService.isProvisioningEnabled()) {
+        try {
+          await provisioningService.createProvisionJob(
+            {
+              hostname: host.hostname,
+              macAddress: host.macAddress,
+              ipAddress: host.ipAddress,
+              csvCol0: host.room?.name,
+              configName: host.config?.name,
+              hostId: host.id,
+            },
+            'delete'
+          );
+        } catch (err) {
+          console.error('[Hosts] Provisioning queue failed:', err.message);
         }
       }
 
