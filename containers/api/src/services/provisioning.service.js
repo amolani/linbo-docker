@@ -55,6 +55,11 @@ async function createProvisionJob(hostData, action, extraOptions = {}) {
     configName, hostId,
   } = hostData;
 
+  // NetBIOS 15-char limit — warn but don't block (DC worker will reject)
+  if (hostname && hostname.length > 15) {
+    console.warn(`[Provision] WARNING: hostname '${hostname}' exceeds 15 chars (NetBIOS limit) — DC worker will reject this job`);
+  }
+
   // Deduplication: check for existing pending/running job
   const dedup = _buildDedupWhere(action, hostId, hostname, macAddress);
   const existingJob = await prisma.operation.findFirst({ where: dedup });

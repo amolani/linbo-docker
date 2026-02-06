@@ -42,8 +42,8 @@ const loginSchema = z.object({
 // =============================================================================
 
 const createHostSchema = z.object({
-  hostname: z.string().min(1).max(15).regex(/^[a-zA-Z0-9][a-zA-Z0-9-]*$/,
-    'Hostname must be max 15 chars (NetBIOS), alphanumeric + hyphens, start with letter/digit'),
+  hostname: z.string().min(1).max(15, 'Hostname darf maximal 15 Zeichen lang sein (Windows NetBIOS-Limit)').regex(/^[a-zA-Z0-9][a-zA-Z0-9-]*$/,
+    'Hostname darf nur Buchstaben, Ziffern und Bindestriche enthalten und muss mit Buchstabe/Ziffer beginnen'),
   macAddress: macAddressSchema,
   ipAddress: ipAddressSchema.optional(),
   roomId: uuidSchema.optional().nullable(),
