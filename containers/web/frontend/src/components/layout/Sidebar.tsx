@@ -6,6 +6,7 @@ import {
   Cog6ToothIcon,
   CircleStackIcon,
   ClipboardDocumentListIcon,
+  GlobeAltIcon,
 } from '@heroicons/react/24/outline';
 
 const navigation = [
@@ -14,6 +15,7 @@ const navigation = [
   { name: 'Räume', href: '/rooms', icon: BuildingOfficeIcon },
   { name: 'Konfigurationen', href: '/configs', icon: Cog6ToothIcon },
   { name: 'Images', href: '/images', icon: CircleStackIcon },
+  { name: 'DHCP', href: '/dhcp', icon: GlobeAltIcon },
   { name: 'Operationen', href: '/operations', icon: ClipboardDocumentListIcon },
 ];
 

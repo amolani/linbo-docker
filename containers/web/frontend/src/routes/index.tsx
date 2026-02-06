@@ -10,6 +10,7 @@ import { RoomsPage } from '@/pages/RoomsPage';
 import { ConfigsPage } from '@/pages/ConfigsPage';
 import { ImagesPage } from '@/pages/ImagesPage';
 import { OperationsPage } from '@/pages/OperationsPage';
+import { DhcpPage } from '@/pages/DhcpPage';
 
 export function AppRoutes() {
   return (
@@ -78,6 +79,17 @@ export function AppRoutes() {
           <ProtectedRoute>
             <AppLayout>
               <OperationsPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/dhcp"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <DhcpPage />
             </AppLayout>
           </ProtectedRoute>
         }
