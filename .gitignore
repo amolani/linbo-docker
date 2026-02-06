@@ -23,6 +23,10 @@ redis_data/
 
 # Deployment packages (build locally)
 *.tar.gz
+*.deb
+
+# DC Worker build artifacts
+dc-worker/pkg-root/
 
 # Node.js
 node_modules/
