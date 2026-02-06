@@ -10,14 +10,19 @@ LABEL description="RSYNC Server for LINBO Image Sync"
 # Prevent interactive prompts during installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install rsync
+# Install rsync + curl (needed for API hook scripts)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     rsync \
+    curl \
     && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p /srv/linbo /var/log
+    && mkdir -p /srv/linbo /var/log /usr/share/linuxmuster/linbo
 
 # Create rsync log directory
-RUN mkdir -p /var/log && touch /var/log/rsyncd.log
+RUN mkdir -p /var/log && touch /var/log/rsyncd.log /var/log/rsync-hooks.log
+
+# Copy API hook scripts
+COPY scripts/ /usr/share/linuxmuster/linbo/
+RUN chmod +x /usr/share/linuxmuster/linbo/*.sh
 
 # RSYNC uses TCP port 873
 EXPOSE 873
