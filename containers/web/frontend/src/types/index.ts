@@ -299,6 +299,7 @@ export type WsEvent =
 
 // DHCP
 export interface NetworkSettings {
+  dhcpServerIp: string;
   serverIp: string;
   subnet: string;
   netmask: string;

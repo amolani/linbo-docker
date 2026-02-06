@@ -177,6 +177,7 @@ const sendCommandSchema = z.object({
 // =============================================================================
 
 const networkSettingsSchema = z.object({
+  dhcpServerIp: ipAddressSchema.optional(),
   serverIp: ipAddressSchema.optional(),
   subnet: ipAddressSchema.optional(),
   netmask: ipAddressSchema.optional(),

@@ -214,6 +214,7 @@ describe('Network Settings', () => {
   test('getDefaults should return all expected keys', () => {
     const defaults = dhcpService.getDefaults();
 
+    expect(defaults).toHaveProperty('dhcpServerIp');
     expect(defaults).toHaveProperty('serverIp');
     expect(defaults).toHaveProperty('subnet');
     expect(defaults).toHaveProperty('netmask');
@@ -266,6 +267,8 @@ describe('ISC DHCP Generation', () => {
 
     expect(config).toContain('# LINBO Docker - ISC DHCP Configuration');
     expect(config).toContain('option arch code 93 = unsigned integer 16;');
+    expect(config).toContain('server-identifier 10.0.0.1;');
+    expect(config).toContain('server-name "10.0.0.1";');
     expect(config).toContain('next-server 10.0.0.1;');
     expect(config).toContain('filename "boot/grub/x86_64-efi/core.efi"');
     expect(config).toContain('filename "boot/grub/i386-pc/core.0"');
