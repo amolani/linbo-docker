@@ -66,10 +66,16 @@ export function NetworkSettingsForm() {
       <form onSubmit={handleSave}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Input
+            label="DHCP-Server IP"
+            value={settings.dhcpServerIp}
+            onChange={(e) => updateField('dhcpServerIp', e.target.value)}
+            helperText="IP des DHCP-Servers (server-identifier), z.B. 10.0.0.11"
+          />
+          <Input
             label="TFTP-Server IP"
             value={settings.serverIp}
             onChange={(e) => updateField('serverIp', e.target.value)}
-            helperText="IP des LINBO-Servers (next-server)"
+            helperText="IP des TFTP/LINBO-Servers (next-server), z.B. 10.0.0.13"
           />
           <Input
             label="Subnet"

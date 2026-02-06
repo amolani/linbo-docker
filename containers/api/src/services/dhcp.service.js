@@ -20,6 +20,7 @@ const REDIS_KEY = 'system:network-settings';
  */
 function getDefaults() {
   return {
+    dhcpServerIp: process.env.LINBO_DHCP_SERVER_IP || process.env.LINBO_SERVER_IP || '10.0.0.1',
     serverIp: process.env.LINBO_SERVER_IP || '10.0.0.1',
     subnet: process.env.LINBO_SUBNET || '10.0.0.0',
     netmask: process.env.LINBO_NETMASK || '255.255.0.0',
@@ -149,6 +150,10 @@ async function generateIscDhcpConfig(options = {}) {
     lines.push('');
     lines.push('# Architecture detection for PXE boot');
     lines.push('option arch code 93 = unsigned integer 16;');
+    lines.push('');
+    lines.push('# DHCP server settings');
+    lines.push(`server-identifier ${settings.dhcpServerIp};`);
+    lines.push(`server-name "${settings.dhcpServerIp}";`);
     lines.push('');
     lines.push('# LINBO TFTP boot settings');
     lines.push(`next-server ${settings.serverIp};`);
