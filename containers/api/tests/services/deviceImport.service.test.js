@@ -212,22 +212,22 @@ room1;pc02;group1;aa:bb:cc:dd:ee:02;10.0.0.2`;
   });
 
   describe('validateCsvRow', () => {
-    test('should validate correct row', () => {
+    test('should validate correct row with sophomorix column layout', () => {
       const row = {
         lineNumber: 1,
+        // Columns: room;host;config;mac;ip;office;winkey;unused;role;unused2;pxe
         fields: [
-          'room1',
-          'pc01',
-          'group1',
-          'aa:bb:cc:dd:ee:ff',
-          '10.0.0.1',
-          '',
-          '',
-          '',
-          '',
-          'student',
-          '',
-          '1',
+          'room1',            // 0: room
+          'pc01',             // 1: hostname
+          'group1',           // 2: config
+          'aa:bb:cc:dd:ee:ff', // 3: MAC
+          '10.0.0.1',         // 4: IP
+          '',                 // 5: ms_office_key
+          '',                 // 6: ms_windows_key
+          '',                 // 7: unused
+          'student',          // 8: role (ROLE=8)
+          '',                 // 9: unused_2
+          '1',                // 10: pxeFlag (PXE_FLAG=10)
         ],
       };
 
@@ -239,6 +239,7 @@ room1;pc02;group1;aa:bb:cc:dd:ee:02;10.0.0.2`;
       expect(result.data.configName).toBe('group1');
       expect(result.data.macAddress).toBe('aa:bb:cc:dd:ee:ff');
       expect(result.data.ipAddress).toBe('10.0.0.1');
+      expect(result.data.pxeFlag).toBe(1);
     });
 
     test('should reject row with missing fields', () => {
@@ -443,13 +444,49 @@ room1;pc01;group1;aa:bb:cc:dd:ee:02;10.0.0.2`;
   });
 
   describe('CSV_COLUMNS', () => {
-    test('should have correct column indices', () => {
+    test('should match sophomorix-device Perl parser layout', () => {
+      // These indices MUST match the Perl split() order in sophomorix-device:
+      //   ($room,$host,$dgr,$mac,$ip,$ms_office_key,$ms_windows_key,
+      //    $unused,$sophomorix_role,$unused_2,$pxe,...) = split(/;/,$line)
       expect(deviceImportService.CSV_COLUMNS.ROOM).toBe(0);
       expect(deviceImportService.CSV_COLUMNS.HOSTNAME).toBe(1);
       expect(deviceImportService.CSV_COLUMNS.CONFIG).toBe(2);
       expect(deviceImportService.CSV_COLUMNS.MAC).toBe(3);
       expect(deviceImportService.CSV_COLUMNS.IP).toBe(4);
-      expect(deviceImportService.CSV_COLUMNS.PXE_FLAG).toBe(11);
+      expect(deviceImportService.CSV_COLUMNS.DHCP_OPTIONS).toBe(7);
+      expect(deviceImportService.CSV_COLUMNS.ROLE).toBe(8);
+      expect(deviceImportService.CSV_COLUMNS.PXE_FLAG).toBe(10);
+    });
+  });
+
+  describe('exportToCsv column layout', () => {
+    test('should place role at col 8 and pxeFlag at col 10 (sophomorix compat)', async () => {
+      prisma.host.findMany.mockResolvedValue([
+        {
+          hostname: 'pc01',
+          macAddress: 'aa:bb:cc:dd:ee:01',
+          ipAddress: '10.0.0.1',
+          room: { name: 'room1' },
+          config: { name: 'bios_sata' },
+          metadata: { computerType: 'classroom-studentcomputer', pxeFlag: 1 },
+        },
+      ]);
+
+      const csv = await deviceImportService.exportToCsv();
+      const dataLines = csv.split('\n').filter(l => l && !l.startsWith('#'));
+      expect(dataLines).toHaveLength(1);
+
+      const cols = dataLines[0].split(';');
+      // Verify exact column positions matching sophomorix-device parser
+      expect(cols[0]).toBe('room1');                          // 0: room
+      expect(cols[1]).toBe('pc01');                           // 1: hostname
+      expect(cols[2]).toBe('bios_sata');                      // 2: device group
+      expect(cols[3]).toBe('AA:BB:CC:DD:EE:01');              // 3: MAC
+      expect(cols[4]).toBe('10.0.0.1');                       // 4: IP
+      expect(cols[8]).toBe('classroom-studentcomputer');       // 8: role
+      expect(cols[10]).toBe('1');                              // 10: pxeFlag
+      // Total 15 columns (indices 0-14)
+      expect(cols).toHaveLength(15);
     });
   });
 });

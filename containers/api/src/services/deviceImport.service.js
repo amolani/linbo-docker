@@ -32,6 +32,11 @@ const ws = require('../lib/websocket');
  * pxe    | 11    | PXE-Flag (0=kein PXE, 1=PXE, 2=PXE)
  */
 
+// Column layout matching sophomorix-device Perl parser:
+//   0: room, 1: hostname, 2: device_group, 3: MAC, 4: IP,
+//   5: ms_office_key, 6: ms_windows_key, 7: unused,
+//   8: sophomorix_role, 9: unused_2, 10: pxe_flag,
+//   11: option, 12: field_13, 13: field_14, 14: sophomorix_comment
 const CSV_COLUMNS = {
   ROOM: 0,
   HOSTNAME: 1,
@@ -39,8 +44,8 @@ const CSV_COLUMNS = {
   MAC: 3,
   IP: 4,
   DHCP_OPTIONS: 7,
-  ROLE: 9,
-  PXE_FLAG: 11,
+  ROLE: 8,
+  PXE_FLAG: 10,
 };
 
 /**
@@ -607,7 +612,7 @@ async function exportToCsv() {
   const lines = [
     '# LINBO Docker - Exported devices',
     `# Generated: ${new Date().toISOString()}`,
-    '# Format: room;hostname;config;mac;ip;;;;;role;;pxe;;;;;',
+    '# Format: room;hostname;config;mac;ip;;;;role;;pxe;;;;;',
     '#',
   ];
 
@@ -621,24 +626,23 @@ async function exportToCsv() {
     const pxeFlag = host.metadata?.pxeFlag ?? 1;
     const dhcpOptions = host.metadata?.dhcpOptions || '';
 
-    // Format: room;host;config;mac;ip;;;dhcpopts;;role;;pxe;;;;;
+    // Format: room;host;config;mac;ip;;;dhcpopts;role;;pxe;;;;;
     const fields = [
-      room,
-      hostname,
-      configName,
-      mac,
-      ip,
-      '', // field5
-      '', // field6
-      dhcpOptions, // field7
-      '', // field8
-      role, // field9
-      '', // field10
-      String(pxeFlag), // field11
-      '', // field12
-      '', // field13
-      '', // field14
-      '', // field15
+      room,                  // 0: room
+      hostname,              // 1: hostname
+      configName,            // 2: device_group (config)
+      mac,                   // 3: MAC
+      ip,                    // 4: IP
+      '',                    // 5: ms_office_key
+      '',                    // 6: ms_windows_key
+      dhcpOptions,           // 7: unused (we use for dhcp options)
+      role,                  // 8: sophomorix_role
+      '',                    // 9: unused_2
+      String(pxeFlag),       // 10: pxe_flag
+      '',                    // 11: option
+      '',                    // 12: field_13
+      '',                    // 13: field_14
+      '',                    // 14: sophomorix_comment
     ];
 
     lines.push(fields.join(';'));
