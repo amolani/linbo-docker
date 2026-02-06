@@ -1,7 +1,7 @@
 # LINBO Docker - Projekt Status
 
-**Stand:** 2026-02-06
-**Version:** 0.10.0
+**Stand:** 2026-02-06 (Session 2)
+**Version:** 1.0.0
 **Functional Parity:** ~97%
 
 ## Implementierte Phasen
@@ -271,6 +271,48 @@ null ──> pending ──> running ──> synced
 | `PROVISION_DEBOUNCE_SEC` | `5` | Wartezeit vor Batch-Drain |
 | `SAMBA_TOOL_AUTH` | *(leer)* | Auth fuer samba-tool Cleanup |
 | `DHCP_VERIFY_FILE` | *(leer)* | DHCP-Datei fuer Verify |
+
+## Frontend QoL + Bugfixes (2026-02-06, Session 2)
+
+### Expandable Rooms (Accordion)
+- Raeume-Seite komplett umgebaut: Flache Tabelle ersetzt durch aufklappbare Accordion-Cards
+- Klick auf Raum laedt Hosts per `GET /rooms/:id` (lazy loading)
+- Inline-Tabelle zeigt Hostname, IP, MAC, Status-Badge, Konfiguration
+- Status-Zusammenfassung (z.B. "3x Offline") ueber der Host-Tabelle
+- Mehrere Raeume gleichzeitig aufklappbar
+
+### Bulk Delete
+- **Hosts:** Neuer "Loeschen"-Button in der Bulk-Action-Leiste mit Bestaetigungsdialog
+- **Raeume:** Checkbox-Auswahl + "Alle auswaehlen" + Bulk Delete mit Teil-Erfolg-Handling
+- Verwendet `Promise.allSettled` Fan-out ueber bestehende `DELETE` Endpoints
+- Backend-Fehlermeldungen (z.B. "Room has hosts") werden im UI angezeigt
+
+### Versionsanzeige
+- Sidebar Footer zeigt `v1.0.0-<git-hash>` an (Hover zeigt Build-Datum)
+- Git-Hash wird als Docker Build-Arg (`GIT_HASH`) in `docker-compose.yml` injiziert
+- Vite `define` Plugin setzt `__APP_VERSION__` und `__BUILD_DATE__` zur Build-Zeit
+- Mobile-Sidebar zeigt Version ebenfalls
+
+### Frontend Redesign
+- Alle Seiten ueberarbeitet mit verbessertem Dark Theme und Tailwind Styling
+- Neue `cn()` Utility (clsx + tailwind-merge) in `src/lib/utils.ts`
+
+### Bugfixes
+1. **rooms/:id Prisma Error (500):** `include: { group: ... }` war seit Phase 9 (Groups Removal) ungueltig → entfernt (Commit `55b6766`)
+2. **Host-Status immer "offline":** rsync `pre-download` Hook aktualisierte nur `lastSeen`, setzte aber nicht `status: 'online'` → Fix mit WebSocket-Broadcast bei Status-Wechsel (Commit `862dcd2`)
+
+### Geaenderte Dateien
+| Bereich | Dateien | Aenderung |
+|---------|---------|-----------|
+| API Client | `src/api/hosts.ts`, `src/api/rooms.ts` | `bulkDelete()` Methoden |
+| Hook | `src/hooks/useHosts.ts` | `bulkDelete` Action |
+| Pages | `src/pages/HostsPage.tsx` | Bulk Delete Button + Modal |
+| Pages | `src/pages/RoomsPage.tsx` | Kompletter Accordion-Rewrite |
+| Layout | `src/components/layout/Sidebar.tsx` | Versionsanzeige |
+| Build | `vite.config.ts`, `vite-env.d.ts` | Version-Injection |
+| Docker | `Dockerfile` (web), `docker-compose.yml` | `GIT_HASH` Build-Arg |
+| Backend | `routes/rooms.js` | Stale `group` Include entfernt |
+| Backend | `routes/internal.js` | Status auf "online" bei rsync pre-download |
 
 ## End-to-End Test (2026-02-06)
 

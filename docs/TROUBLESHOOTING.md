@@ -1,6 +1,6 @@
 # LINBO Docker - Troubleshooting & Fehlerdokumentation
 
-**Stand:** 2026-02-05
+**Stand:** 2026-02-06
 
 ---
 
@@ -385,6 +385,84 @@ python3 /root/linbo-docker/dc-worker/macct-worker.py \
 redis-cli -h 10.0.0.13 -p 6379 PING  # PONG
 curl -s http://10.0.0.13:3000/api/v1/health  # {"status":"healthy"}
 ```
+
+---
+
+## 14. Raum aufklappen zeigt keine Hosts (500 Error)
+
+### Problem
+Beim Aufklappen eines Raumes in der neuen Accordion-Ansicht erscheint "Fehler beim Laden der Hosts".
+Im API-Log:
+```
+Unknown field `group` for include statement on model `Host`.
+```
+
+### Ursache
+`containers/api/src/routes/rooms.js` (Zeile 58) enthielt noch ein `include: { group: ... }` aus der Zeit vor Phase 9 (Groups Removal). Das `group`-Modell existiert nicht mehr im Prisma Schema.
+
+### Loesung
+```javascript
+// Vorher (rooms.js:57-60)
+include: {
+  group: { select: { id: true, name: true } },
+  config: { select: { id: true, name: true } },
+},
+
+// Nachher
+include: {
+  config: { select: { id: true, name: true } },
+},
+```
+
+**Commit:** `55b6766`
+
+---
+
+## 15. LINBO-Clients immer "Offline" obwohl in LINBO gebootet
+
+### Problem
+Ein Host, der in LINBO gebootet ist und aktiv per rsync Dateien synchronisiert, zeigt im Frontend dauerhaft Status "Offline".
+
+### Ursache
+Der rsync `pre-download` Event-Handler in `containers/api/src/routes/internal.js` aktualisierte nur das `lastSeen`-Feld, setzte aber **nicht** den Status auf `online`:
+
+```javascript
+// Vorher
+case 'pre-download':
+  if (host) {
+    await prisma.host.update({
+      where: { id: host.id },
+      data: { lastSeen: new Date() },  // Nur lastSeen!
+    });
+  }
+```
+
+### Loesung
+Status auf `online` setzen und WebSocket-Event broadcasten:
+
+```javascript
+case 'pre-download':
+  if (host) {
+    const wasOffline = host.status !== 'online';
+    await prisma.host.update({
+      where: { id: host.id },
+      data: { lastSeen: new Date(), status: 'online' },
+    });
+    if (wasOffline) {
+      ws.broadcast('host.status.changed', {
+        hostId: host.id,
+        hostname: host.hostname,
+        status: 'online',
+        previousStatus: host.status,
+        timestamp: new Date(),
+      });
+    }
+  }
+```
+
+**Hinweis:** Der Status wechselt erst beim naechsten rsync-Download (z.B. PXE-Boot, Cache-Sync). Es gibt aktuell keinen Heartbeat-Mechanismus.
+
+**Commit:** `862dcd2`
 
 ---
 
