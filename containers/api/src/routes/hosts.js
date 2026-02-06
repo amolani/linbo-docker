@@ -17,6 +17,7 @@ const {
 const { auditAction } = require('../middleware/audit');
 const redis = require('../lib/redis');
 const grubService = require('../services/grub.service');
+const configService = require('../services/config.service');
 const provisioningService = require('../services/provisioning.service');
 
 // =============================================================================
@@ -363,12 +364,17 @@ router.post(
       // Invalidate cache
       await redis.delPattern('hosts:*');
 
-      // Generate GRUB config for new host
+      // Generate GRUB config and start.conf symlink for new host
       if (host.config) {
         try {
           await grubService.generateHostGrubConfig(host.hostname, host.config.name);
         } catch (error) {
           console.error('[Hosts] Failed to generate GRUB config:', error.message);
+        }
+        try {
+          await configService.createHostSymlinks(host.config.id);
+        } catch (error) {
+          console.error('[Hosts] Failed to create start.conf symlinks:', error.message);
         }
       }
 
@@ -452,12 +458,17 @@ router.patch(
       // Invalidate cache
       await redis.delPattern('hosts:*');
 
-      // Regenerate GRUB config for updated host
+      // Regenerate GRUB config and start.conf symlinks for updated host
       if (host.config) {
         try {
           await grubService.generateHostGrubConfig(host.hostname, host.config.name);
         } catch (error) {
           console.error('[Hosts] Failed to regenerate GRUB config:', error.message);
+        }
+        try {
+          await configService.createHostSymlinks(host.config.id);
+        } catch (error) {
+          console.error('[Hosts] Failed to update start.conf symlinks:', error.message);
         }
       }
 

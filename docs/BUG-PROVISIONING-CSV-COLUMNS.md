@@ -1,7 +1,7 @@
 # BUG: Host Provisioning fails — devices.csv Column Mapping
 
 **Datum:** 2026-02-06
-**Status:** Offen
+**Status:** Behoben (Commit da7ce31, 2026-02-06)
 **Severity:** Critical
 **Betrifft:** Phase 11 (Host Provisioning), Phase 7b (Device Import/Export)
 **Entdeckt bei:** Live-Test auf Produktionsserver 10.0.0.11

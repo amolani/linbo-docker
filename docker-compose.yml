@@ -193,6 +193,8 @@ services:
       - DC_PROVISIONING_ENABLED=${DC_PROVISIONING_ENABLED:-false}
       - DC_PROVISIONING_DRYRUN=${DC_PROVISIONING_DRYRUN:-true}
       - CSV_COL0_SOURCE=${CSV_COL0_SOURCE:-room}
+      # Internal API key (container-to-container auth)
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY:-linbo-internal-secret}
       # CORS
       - CORS_ORIGIN=${CORS_ORIGIN:-*}
     depends_on:
@@ -244,12 +246,16 @@ services:
     build: ./containers/dhcp
     container_name: linbo-dhcp
     network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
     volumes:
       - linbo_srv_data:/srv/linbo:ro
     environment:
       - API_URL=http://localhost:${API_PORT:-3000}
       - LINBO_SERVER_IP=${LINBO_SERVER_IP:-10.0.0.1}
       - DHCP_INTERFACE=${DHCP_INTERFACE:-eth0}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY:-linbo-internal-secret}
       - API_TOKEN=${DHCP_API_TOKEN:-}
     depends_on:
       api:

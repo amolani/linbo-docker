@@ -292,9 +292,10 @@ describe('ISC DHCP Generation', () => {
     expect(config).toContain('option host-name "pc-r101-01";');
   });
 
-  test('should include nis-domain and extensions-path for PXE hosts', async () => {
+  test('should include next-server, nis-domain and extensions-path for PXE hosts', async () => {
     const config = await dhcpService.generateIscDhcpConfig();
 
+    expect(config).toContain('next-server 10.0.0.1;');
     expect(config).toContain('option nis-domain "pc-raum-101";');
     expect(config).toContain('option extensions-path "pc-raum-101";');
   });
@@ -332,7 +333,8 @@ describe('ISC DHCP Generation', () => {
 
     expect(config).not.toContain('# LINBO Docker - ISC DHCP Configuration');
     expect(config).not.toContain('option arch code');
-    expect(config).not.toContain('next-server');
+    // Per-host next-server is still present for PXE hosts (needed for include in external DHCP)
+    expect(config).toContain('next-server 10.0.0.1;');
   });
 
   test('should omit subnet when includeSubnet=false', async () => {
@@ -479,11 +481,11 @@ describe('dnsmasq Proxy Mode Generation', () => {
     expect(config).toContain('dhcp-option=tag:pc-raum-202,40,pc-raum-202');
   });
 
-  test('should enable TFTP in proxy mode', async () => {
+  test('should NOT enable TFTP in proxy mode (handled by separate tftp container)', async () => {
     const config = await dhcpService.generateDnsmasqConfig({ mode: 'proxy' });
 
-    expect(config).toContain('tftp-root=/srv/linbo');
-    expect(config).toContain('enable-tftp');
+    expect(config).not.toContain('enable-tftp');
+    expect(config).not.toContain('tftp-root');
   });
 });
 

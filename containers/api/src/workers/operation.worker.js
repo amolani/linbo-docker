@@ -93,9 +93,12 @@ async function pollOperations() {
  * Process the next pending operation
  */
 async function processNextOperation() {
-  // Find the oldest pending operation
+  // Find the oldest pending operation (exclude provision_host, handled by DC worker via Redis)
   const operation = await prisma.operation.findFirst({
-    where: { status: 'pending' },
+    where: {
+      status: 'pending',
+      type: { not: 'provision_host' },
+    },
     orderBy: { createdAt: 'asc' },
   });
 
