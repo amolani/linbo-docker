@@ -259,6 +259,169 @@ router.post('/validate-commands', authenticateToken, async (req, res, next) => {
 });
 
 // =============================================================================
+// Host Provisioning Routes - Phase 11
+// =============================================================================
+
+const provisioningService = require('../services/provisioning.service');
+
+/**
+ * GET /operations/provision
+ * List host provisioning jobs
+ */
+router.get('/provision', authenticateToken, async (req, res, next) => {
+  try {
+    const { status, hostname, page, limit } = req.query;
+
+    const result = await provisioningService.listProvisionJobs({
+      status,
+      hostname,
+      page: parseInt(page, 10) || 1,
+      limit: parseInt(limit, 10) || 50,
+    });
+
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /operations/provision
+ * Manually trigger provisioning for a host
+ */
+router.post(
+  '/provision',
+  authenticateToken,
+  requireRole(['admin']),
+  auditAction('operation.provision'),
+  async (req, res, next) => {
+    try {
+      const { hostname, hostId } = req.body;
+
+      if (!provisioningService.isProvisioningEnabled()) {
+        return res.status(400).json({
+          error: {
+            code: 'PROVISIONING_DISABLED',
+            message: 'DC provisioning is not enabled (DC_PROVISIONING_ENABLED)',
+          },
+        });
+      }
+
+      // Resolve host
+      let host;
+      if (hostId) {
+        host = await prisma.host.findUnique({
+          where: { id: hostId },
+          include: {
+            room: { select: { name: true } },
+            config: { select: { name: true } },
+          },
+        });
+      } else if (hostname) {
+        host = await prisma.host.findUnique({
+          where: { hostname },
+          include: {
+            room: { select: { name: true } },
+            config: { select: { name: true } },
+          },
+        });
+      }
+
+      if (!host) {
+        return res.status(404).json({
+          error: { code: 'HOST_NOT_FOUND', message: 'Host not found' },
+        });
+      }
+
+      const result = await provisioningService.createProvisionJob(
+        {
+          hostname: host.hostname,
+          macAddress: host.macAddress,
+          ipAddress: host.ipAddress,
+          csvCol0: host.room?.name,
+          configName: host.config?.name,
+          hostId: host.id,
+        },
+        'create',
+        { triggeredBy: 'api', requestedBy: req.user?.username }
+      );
+
+      if (result.queued) {
+        await provisioningService.syncHostProvisionStatus(host.id, result.operation.id, 'pending');
+      }
+
+      res.status(result.queued ? 201 : 200).json({
+        data: {
+          operationId: result.operation.id,
+          hostname: host.hostname,
+          status: result.queued ? 'queued' : 'already_queued',
+          message: result.message,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /operations/provision/:id
+ * Get single provisioning operation
+ */
+router.get('/provision/:id', authenticateToken, async (req, res, next) => {
+  try {
+    const operation = await provisioningService.getProvisionOperation(req.params.id);
+
+    if (!operation) {
+      return res.status(404).json({
+        error: { code: 'NOT_FOUND', message: 'Provisioning operation not found' },
+      });
+    }
+
+    res.json({ data: operation });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /operations/provision/:id/retry
+ * Retry a failed provisioning job
+ */
+router.post(
+  '/provision/:id/retry',
+  authenticateToken,
+  requireRole(['admin']),
+  auditAction('operation.provision_retry'),
+  async (req, res, next) => {
+    try {
+      const result = await provisioningService.retryProvisionJob(req.params.id);
+
+      if (!result.success) {
+        return res.status(400).json({
+          error: { code: 'RETRY_FAILED', message: result.message },
+        });
+      }
+
+      res.json({
+        data: {
+          operationId: req.params.id,
+          attempt: result.attempt,
+          message: 'Job re-queued for retry',
+        },
+      });
+    } catch (error) {
+      if (error.message === 'Operation not found') {
+        return res.status(404).json({
+          error: { code: 'NOT_FOUND', message: 'Operation not found' },
+        });
+      }
+      next(error);
+    }
+  }
+);
+
+// =============================================================================
 // Machine Account (macct) Routes - Phase 8
 // =============================================================================
 

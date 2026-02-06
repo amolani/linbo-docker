@@ -16,6 +16,7 @@ const operationRoutes = require('./operations');
 const statsRoutes = require('./stats');
 const systemRoutes = require('./system');
 const internalRoutes = require('./internal');
+const dhcpRoutes = require('./dhcp');
 
 // Mount routes
 router.use('/auth', authRoutes);
@@ -27,6 +28,7 @@ router.use('/operations', operationRoutes);
 router.use('/stats', statsRoutes);
 router.use('/system', systemRoutes);
 router.use('/internal', internalRoutes);
+router.use('/dhcp', dhcpRoutes);
 
 // API info endpoint
 router.get('/', (req, res) => {
@@ -94,6 +96,10 @@ router.get('/', (req, res) => {
         'POST /operations/send-command': 'Send command to hosts',
         'PATCH /operations/:id': 'Update operation',
         'POST /operations/:id/cancel': 'Cancel operation',
+        'GET /operations/provision': 'List provisioning jobs',
+        'GET /operations/provision/:id': 'Get provisioning operation',
+        'POST /operations/provision': 'Manually trigger provisioning',
+        'POST /operations/provision/:id/retry': 'Retry failed provision job',
       },
       stats: {
         'GET /stats/overview': 'Dashboard statistics',
@@ -101,6 +107,15 @@ router.get('/', (req, res) => {
         'GET /stats/operations': 'Operation statistics',
         'GET /stats/images': 'Image storage statistics',
         'GET /stats/audit': 'Audit log statistics',
+      },
+      dhcp: {
+        'GET /dhcp/network-settings': 'Get network settings',
+        'PUT /dhcp/network-settings': 'Update network settings (admin)',
+        'GET /dhcp/summary': 'DHCP export summary and stale status',
+        'GET /dhcp/export/isc-dhcp': 'Export ISC DHCP config',
+        'GET /dhcp/export/dnsmasq': 'Export dnsmasq full config',
+        'GET /dhcp/export/dnsmasq-proxy': 'Export dnsmasq proxy config',
+        'POST /dhcp/reload-proxy': 'Reload dnsmasq proxy container',
       },
       system: {
         'POST /system/update-linbofs': 'Update linbofs64 with keys',

@@ -5,7 +5,7 @@ import { roomsApi } from '@/api/rooms';
 import { configsApi } from '@/api/configs';
 import { hostsApi } from '@/api/hosts';
 import { Button, Table, Pagination, StatusBadge, Modal, Input, Select, ConfirmModal } from '@/components/ui';
-import { ImportHostsModal } from '@/components/hosts';
+import { ImportHostsModal, ProvisionBadge } from '@/components/hosts';
 import { notify } from '@/stores/notificationStore';
 import type { Host, Room, Config, Column } from '@/types';
 
@@ -149,7 +149,10 @@ export function HostsPage() {
       sortable: true,
       render: (host) => (
         <div>
-          <div className="font-medium text-gray-900">{host.hostname}</div>
+          <div className="font-medium text-gray-900 flex items-center gap-2">
+            {host.hostname}
+            <ProvisionBadge status={host.provisionStatus} opId={host.provisionOpId} />
+          </div>
           <div className="text-gray-500 text-xs">{host.macAddress}</div>
         </div>
       ),

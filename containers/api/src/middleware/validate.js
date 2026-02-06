@@ -42,7 +42,8 @@ const loginSchema = z.object({
 // =============================================================================
 
 const createHostSchema = z.object({
-  hostname: z.string().min(1).max(255),
+  hostname: z.string().min(1).max(15).regex(/^[a-zA-Z0-9][a-zA-Z0-9-]*$/,
+    'Hostname must be max 15 chars (NetBIOS), alphanumeric + hyphens, start with letter/digit'),
   macAddress: macAddressSchema,
   ipAddress: ipAddressSchema.optional(),
   roomId: uuidSchema.optional().nullable(),
@@ -172,6 +173,41 @@ const sendCommandSchema = z.object({
 });
 
 // =============================================================================
+// DHCP Schemas
+// =============================================================================
+
+const networkSettingsSchema = z.object({
+  serverIp: ipAddressSchema.optional(),
+  subnet: ipAddressSchema.optional(),
+  netmask: ipAddressSchema.optional(),
+  gateway: ipAddressSchema.optional(),
+  dns: z.string().max(255).optional(),
+  domain: z.string().max(255).optional(),
+  dhcpRangeStart: z.string().max(50).optional(),
+  dhcpRangeEnd: z.string().max(50).optional(),
+  defaultLeaseTime: z.coerce.number().int().min(60).max(604800).optional(),
+  maxLeaseTime: z.coerce.number().int().min(60).max(604800).optional(),
+});
+
+const dhcpExportQuerySchema = z.object({
+  format: z.enum(['text', 'file']).default('text'),
+  configId: uuidSchema.optional(),
+  roomId: uuidSchema.optional(),
+  pxeOnly: z.preprocess(
+    (val) => val === 'true' || val === true,
+    z.boolean().default(false)
+  ),
+  includeHeader: z.preprocess(
+    (val) => val !== 'false' && val !== false,
+    z.boolean().default(true)
+  ),
+  includeSubnet: z.preprocess(
+    (val) => val !== 'false' && val !== false,
+    z.boolean().default(true)
+  ),
+});
+
+// =============================================================================
 // User Schemas
 // =============================================================================
 
@@ -296,6 +332,8 @@ module.exports = {
   sendCommandSchema,
   createUserSchema,
   updateUserSchema,
+  networkSettingsSchema,
+  dhcpExportQuerySchema,
   // Middleware factories
   validateBody,
   validateQuery,

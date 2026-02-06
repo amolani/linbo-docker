@@ -68,9 +68,11 @@ model Host {
   bootMode   String?   @map("boot_mode") @db.VarChar(50)
   hardware   Json?
   cacheInfo  Json?     @map("cache_info")
-  metadata   Json?
-  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  metadata        Json?
+  provisionStatus String?   @map("provision_status") @db.VarChar(50)
+  provisionOpId   String?   @map("provision_op_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   room     Room?     @relation(fields: [roomId], references: [id], onDelete: SetNull)
   config   Config?   @relation(fields: [configId], references: [id], onDelete: SetNull)

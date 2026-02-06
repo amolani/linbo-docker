@@ -179,8 +179,18 @@ services:
       - LINBO_LOG_DIR=/var/log/linuxmuster/linbo
       # Server IP (for clients)
       - LINBO_SERVER_IP=${LINBO_SERVER_IP:-10.0.0.1}
+      # DHCP / Network
+      - LINBO_SUBNET=${LINBO_SUBNET:-10.0.0.0}
+      - LINBO_NETMASK=${LINBO_NETMASK:-255.255.0.0}
+      - LINBO_GATEWAY=${LINBO_GATEWAY:-10.0.0.254}
+      - LINBO_DNS=${LINBO_DNS:-10.0.0.1}
+      - LINBO_DOMAIN=${LINBO_DOMAIN:-linuxmuster.lan}
       # Features
       - ENABLE_AUDIT_LOG=${ENABLE_AUDIT_LOG:-true}
+      # DC Provisioning (Phase 11)
+      - DC_PROVISIONING_ENABLED=${DC_PROVISIONING_ENABLED:-false}
+      - DC_PROVISIONING_DRYRUN=${DC_PROVISIONING_DRYRUN:-true}
+      - CSV_COL0_SOURCE=${CSV_COL0_SOURCE:-room}
       # CORS
       - CORS_ORIGIN=${CORS_ORIGIN:-*}
     depends_on:
@@ -224,6 +234,26 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+
+  # =============================================================================
+  # DHCP Proxy (Optional - start with: docker compose --profile dhcp up -d)
+  # =============================================================================
+  dhcp:
+    build: ./containers/dhcp
+    container_name: linbo-dhcp
+    network_mode: host
+    volumes:
+      - linbo_srv_data:/srv/linbo:ro
+    environment:
+      - API_URL=http://localhost:${API_PORT:-3000}
+      - LINBO_SERVER_IP=${LINBO_SERVER_IP:-10.0.0.1}
+      - DHCP_INTERFACE=${DHCP_INTERFACE:-eth0}
+      - API_TOKEN=${DHCP_API_TOKEN:-}
+    depends_on:
+      api:
+        condition: service_healthy
+    profiles: ["dhcp"]
+    restart: unless-stopped
 
 # =============================================================================
 # Volumes

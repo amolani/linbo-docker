@@ -8,6 +8,7 @@ const router = express.Router();
 const { prisma } = require('../lib/prisma');
 const ws = require('../lib/websocket');
 const macctService = require('../services/macct.service');
+const provisioningService = require('../services/provisioning.service');
 
 // Internal API key for service-to-service authentication
 const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || 'linbo-internal-secret';
@@ -534,12 +535,20 @@ router.patch('/operations/:id/status', authenticateInternal, async (req, res, ne
       });
     }
 
-    const operation = await macctService.updateOperationStatus(id, {
-      status,
-      result,
-      error,
-      attempt,
-    });
+    // Dispatch by operation type
+    const op = await prisma.operation.findUnique({ where: { id }, select: { type: true } });
+    if (!op) {
+      return res.status(404).json({
+        error: { code: 'NOT_FOUND', message: 'Operation not found' },
+      });
+    }
+
+    let operation;
+    if (op.type === 'provision_host') {
+      operation = await provisioningService.updateProvisionStatus(id, { status, result, error, attempt });
+    } else {
+      operation = await macctService.updateOperationStatus(id, { status, result, error, attempt });
+    }
 
     res.json({
       data: {
@@ -569,7 +578,20 @@ router.post('/operations/:id/retry', authenticateInternal, async (req, res, next
   try {
     const { id } = req.params;
 
-    const result = await macctService.retryJob(id);
+    // Dispatch by operation type
+    const op = await prisma.operation.findUnique({ where: { id }, select: { type: true } });
+    if (!op) {
+      return res.status(404).json({
+        error: { code: 'NOT_FOUND', message: 'Operation not found' },
+      });
+    }
+
+    let result;
+    if (op.type === 'provision_host') {
+      result = await provisioningService.retryProvisionJob(id);
+    } else {
+      result = await macctService.retryJob(id);
+    }
 
     if (!result.success) {
       return res.status(400).json({
@@ -596,6 +618,31 @@ router.post('/operations/:id/retry', authenticateInternal, async (req, res, next
         },
       });
     }
+    next(error);
+  }
+});
+
+/**
+ * GET /internal/operations/:id
+ * Get full operation details (used by DC worker to fetch Operation.options)
+ */
+router.get('/operations/:id', authenticateInternal, async (req, res, next) => {
+  try {
+    const operation = await prisma.operation.findUnique({
+      where: { id: req.params.id },
+    });
+
+    if (!operation) {
+      return res.status(404).json({
+        error: {
+          code: 'NOT_FOUND',
+          message: 'Operation not found',
+        },
+      });
+    }
+
+    res.json({ data: operation });
+  } catch (error) {
     next(error);
   }
 });
