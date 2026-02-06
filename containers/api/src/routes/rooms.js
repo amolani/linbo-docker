@@ -55,7 +55,6 @@ router.get('/:id', authenticateToken, async (req, res, next) => {
         hosts: {
           orderBy: { hostname: 'asc' },
           include: {
-            group: { select: { id: true, name: true } },
             config: { select: { id: true, name: true } },
           },
         },
