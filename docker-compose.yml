@@ -126,6 +126,8 @@ services:
   cache:
     image: redis:7-alpine
     container_name: linbo-cache
+    ports:
+      - "${REDIS_EXTERNAL_PORT:-6379}:6379"
     volumes:
       - linbo_redis_data:/data
     networks:
