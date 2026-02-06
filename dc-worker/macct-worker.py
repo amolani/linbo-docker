@@ -207,7 +207,7 @@ class RedisClient:
             password=self.config.redis_password,
             db=self.config.redis_db,
             decode_responses=True,
-            socket_timeout=10,
+            socket_timeout=30,
             socket_connect_timeout=10,
             retry_on_timeout=True
         )
@@ -255,7 +255,7 @@ class RedisClient:
             consumername=self.config.consumer_name,
             streams={self.config.stream_name: '>'},
             count=count,
-            block=0  # non-blocking
+            block=100  # 100ms — block=0 means "forever" in redis-py!
         )
 
         jobs = []
