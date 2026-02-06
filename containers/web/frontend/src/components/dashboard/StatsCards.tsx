@@ -1,11 +1,11 @@
 import { Link } from 'react-router-dom';
 import type { DashboardStats } from '@/types';
 import {
-  ComputerDesktopIcon,
-  BuildingOfficeIcon,
-  Cog6ToothIcon,
-  CircleStackIcon,
-} from '@heroicons/react/24/outline';
+  Monitor,
+  Building2,
+  Settings,
+  HardDrive,
+} from 'lucide-react';
 
 interface StatsCardsProps {
   stats: DashboardStats | null;
@@ -26,21 +26,21 @@ export function StatsCards({ stats, isLoading }: StatsCardsProps) {
       name: 'Hosts Online',
       value: stats?.hosts.online || 0,
       total: stats?.hosts.total || 0,
-      icon: ComputerDesktopIcon,
+      icon: Monitor,
       color: 'bg-green-500',
       link: '/hosts',
     },
     {
       name: 'Räume',
       value: stats?.rooms || 0,
-      icon: BuildingOfficeIcon,
+      icon: Building2,
       color: 'bg-blue-500',
       link: '/rooms',
     },
     {
       name: 'Konfigurationen',
       value: stats?.configs || 0,
-      icon: Cog6ToothIcon,
+      icon: Settings,
       color: 'bg-purple-500',
       link: '/configs',
     },
@@ -48,7 +48,7 @@ export function StatsCards({ stats, isLoading }: StatsCardsProps) {
       name: 'Images',
       value: stats?.images.total || 0,
       subtitle: formatBytes(stats?.images.totalSize || 0),
-      icon: CircleStackIcon,
+      icon: HardDrive,
       color: 'bg-orange-500',
       link: '/images',
     },
@@ -60,14 +60,14 @@ export function StatsCards({ stats, isLoading }: StatsCardsProps) {
         {[...Array(4)].map((_, i) => (
           <div
             key={i}
-            className="bg-white overflow-hidden shadow rounded-lg animate-pulse"
+            className="bg-card overflow-hidden shadow-sm rounded-lg animate-pulse"
           >
             <div className="p-5">
               <div className="flex items-center">
-                <div className="flex-shrink-0 bg-gray-200 rounded-md p-3 w-12 h-12" />
+                <div className="flex-shrink-0 bg-border rounded-md p-3 w-12 h-12" />
                 <div className="ml-5 w-0 flex-1 space-y-2">
-                  <div className="h-4 bg-gray-200 rounded w-20" />
-                  <div className="h-6 bg-gray-200 rounded w-12" />
+                  <div className="h-4 bg-border rounded w-20" />
+                  <div className="h-6 bg-border rounded w-12" />
                 </div>
               </div>
             </div>
@@ -83,7 +83,7 @@ export function StatsCards({ stats, isLoading }: StatsCardsProps) {
         <Link
           key={stat.name}
           to={stat.link}
-          className="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow"
+          className="bg-card overflow-hidden shadow-sm rounded-lg hover:shadow-md transition-shadow"
         >
           <div className="p-5">
             <div className="flex items-center">
@@ -92,20 +92,20 @@ export function StatsCards({ stats, isLoading }: StatsCardsProps) {
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">
+                  <dt className="text-sm font-medium text-muted-foreground truncate">
                     {stat.name}
                   </dt>
                   <dd className="flex items-baseline">
-                    <div className="text-2xl font-semibold text-gray-900">
+                    <div className="text-2xl font-semibold text-foreground">
                       {stat.value}
                     </div>
                     {stat.total !== undefined && (
-                      <span className="ml-2 text-sm text-gray-500">
+                      <span className="ml-2 text-sm text-muted-foreground">
                         / {stat.total}
                       </span>
                     )}
                     {stat.subtitle && (
-                      <span className="ml-2 text-sm text-gray-500">
+                      <span className="ml-2 text-sm text-muted-foreground">
                         ({stat.subtitle})
                       </span>
                     )}

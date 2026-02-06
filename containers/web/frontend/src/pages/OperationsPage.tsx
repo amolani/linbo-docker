@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { PlusIcon } from '@heroicons/react/24/outline';
+import { Plus } from 'lucide-react';
 import { operationsApi } from '@/api/operations';
 import { Table, Pagination, OperationStatusBadge, Modal, Button, Select } from '@/components/ui';
 import { RemoteCommandModal, ScheduledCommandsSection } from '@/components/operations';
@@ -128,15 +128,15 @@ export function OperationsPage() {
       header: 'Fortschritt',
       render: (op) => (
         <div className="w-24">
-          <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+          <div className="h-2 bg-secondary rounded-full overflow-hidden">
             <div
               className={`h-full transition-all ${
-                op.status === 'failed' ? 'bg-red-500' : 'bg-primary-600'
+                op.status === 'failed' ? 'bg-red-500' : 'bg-primary'
               }`}
               style={{ width: `${op.progress}%` }}
             />
           </div>
-          <span className="text-xs text-gray-500">{op.progress}%</span>
+          <span className="text-xs text-muted-foreground">{op.progress}%</span>
         </div>
       ),
     },
@@ -147,7 +147,7 @@ export function OperationsPage() {
         <div>
           <div>{formatDate(op.createdAt)}</div>
           {op.startedAt && (
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-muted-foreground">
               Dauer: {formatDuration(op.startedAt, op.completedAt || undefined)}
             </div>
           )}
@@ -161,14 +161,14 @@ export function OperationsPage() {
         <div className="flex space-x-2">
           <button
             onClick={() => handleViewDetails(op.id)}
-            className="text-primary-600 hover:text-primary-900 text-sm"
+            className="text-primary hover:text-primary/80 text-sm"
           >
             Details
           </button>
           {(op.status === 'pending' || op.status === 'running') && (
             <button
               onClick={() => handleCancel(op.id)}
-              className="text-red-600 hover:text-red-900 text-sm"
+              className="text-red-400 hover:text-red-300 text-sm"
             >
               Abbrechen
             </button>
@@ -182,24 +182,24 @@ export function OperationsPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Operationen</h1>
-          <p className="text-gray-600">Remote-Befehle und Operationsübersicht</p>
+          <h1 className="text-2xl font-bold text-foreground">Operationen</h1>
+          <p className="text-muted-foreground">Remote-Befehle und Operationsübersicht</p>
         </div>
         <Button onClick={() => setIsRemoteModalOpen(true)}>
-          <PlusIcon className="h-5 w-5 mr-2" />
+          <Plus className="h-5 w-5 mr-2" />
           Remote-Befehl
         </Button>
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-border">
         <nav className="-mb-px flex space-x-8">
           <button
             onClick={() => setActiveTab('operations')}
             className={`py-2 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'operations'
-                ? 'border-primary-500 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
             }`}
           >
             Operationen
@@ -208,8 +208,8 @@ export function OperationsPage() {
             onClick={() => setActiveTab('scheduled')}
             className={`py-2 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'scheduled'
-                ? 'border-primary-500 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
             }`}
           >
             Geplante Befehle
@@ -220,7 +220,7 @@ export function OperationsPage() {
       {activeTab === 'operations' ? (
         <>
           {/* Filters */}
-          <div className="bg-white shadow rounded-lg p-4">
+          <div className="bg-card shadow-sm rounded-lg p-4">
             <div className="flex items-center space-x-4">
               <Select
                 value={statusFilter}
@@ -244,7 +244,7 @@ export function OperationsPage() {
           </div>
 
           {/* Table */}
-          <div className="bg-white shadow rounded-lg overflow-hidden">
+          <div className="bg-card shadow-sm rounded-lg overflow-hidden">
             <Table
               columns={columns}
               data={operations}
@@ -277,71 +277,71 @@ export function OperationsPage() {
           <div className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <dt className="text-sm font-medium text-gray-500">Status</dt>
+                <dt className="text-sm font-medium text-muted-foreground">Status</dt>
                 <dd className="mt-1">
                   <OperationStatusBadge status={selectedOperation.status} />
                 </dd>
               </div>
               <div>
-                <dt className="text-sm font-medium text-gray-500">Fortschritt</dt>
-                <dd className="mt-1 text-sm text-gray-900">
+                <dt className="text-sm font-medium text-muted-foreground">Fortschritt</dt>
+                <dd className="mt-1 text-sm text-foreground">
                   {selectedOperation.progress}%
                 </dd>
               </div>
               <div>
-                <dt className="text-sm font-medium text-gray-500">Befehle</dt>
-                <dd className="mt-1 text-sm text-gray-900">
+                <dt className="text-sm font-medium text-muted-foreground">Befehle</dt>
+                <dd className="mt-1 text-sm text-foreground">
                   {selectedOperation.commands.join(', ')}
                 </dd>
               </div>
               <div>
-                <dt className="text-sm font-medium text-gray-500">Gestartet</dt>
-                <dd className="mt-1 text-sm text-gray-900">
+                <dt className="text-sm font-medium text-muted-foreground">Gestartet</dt>
+                <dd className="mt-1 text-sm text-foreground">
                   {formatDate(selectedOperation.createdAt)}
                 </dd>
               </div>
             </div>
 
             {selectedOperation.stats && (
-              <div className="border-t pt-4">
-                <h4 className="font-medium text-gray-900 mb-3">Statistiken</h4>
+              <div className="border-t border-border pt-4">
+                <h4 className="font-medium text-foreground mb-3">Statistiken</h4>
                 <div className="grid grid-cols-4 gap-4 text-center">
-                  <div className="bg-gray-50 rounded p-3">
-                    <div className="text-2xl font-bold text-gray-900">
+                  <div className="bg-secondary rounded p-3">
+                    <div className="text-2xl font-bold text-foreground">
                       {selectedOperation.stats.total}
                     </div>
-                    <div className="text-xs text-gray-500">Gesamt</div>
+                    <div className="text-xs text-muted-foreground">Gesamt</div>
                   </div>
-                  <div className="bg-blue-50 rounded p-3">
-                    <div className="text-2xl font-bold text-blue-600">
+                  <div className="bg-primary/10 rounded p-3">
+                    <div className="text-2xl font-bold text-blue-400">
                       {selectedOperation.stats.inProgress}
                     </div>
-                    <div className="text-xs text-gray-500">Laufend</div>
+                    <div className="text-xs text-muted-foreground">Laufend</div>
                   </div>
-                  <div className="bg-green-50 rounded p-3">
-                    <div className="text-2xl font-bold text-green-600">
+                  <div className="bg-green-600/20 rounded p-3">
+                    <div className="text-2xl font-bold text-green-400">
                       {selectedOperation.stats.completed}
                     </div>
-                    <div className="text-xs text-gray-500">Abgeschlossen</div>
+                    <div className="text-xs text-muted-foreground">Abgeschlossen</div>
                   </div>
-                  <div className="bg-red-50 rounded p-3">
-                    <div className="text-2xl font-bold text-red-600">
+                  <div className="bg-destructive/10 rounded p-3">
+                    <div className="text-2xl font-bold text-red-400">
                       {selectedOperation.stats.failed}
                     </div>
-                    <div className="text-xs text-gray-500">Fehlgeschlagen</div>
+                    <div className="text-xs text-muted-foreground">Fehlgeschlagen</div>
                   </div>
                 </div>
               </div>
             )}
 
             {selectedOperation.sessions && selectedOperation.sessions.length > 0 && (
-              <div className="border-t pt-4">
-                <h4 className="font-medium text-gray-900 mb-3">Sessions</h4>
+              <div className="border-t border-border pt-4">
+                <h4 className="font-medium text-foreground mb-3">Sessions</h4>
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {selectedOperation.sessions.map((session: Session) => (
                     <div
                       key={session.id}
-                      className="flex items-center justify-between p-3 bg-gray-50 rounded"
+                      className="flex items-center justify-between p-3 bg-secondary rounded"
                     >
                       <div>
                         <span className="font-medium">
@@ -350,9 +350,9 @@ export function OperationsPage() {
                       </div>
                       <div className="flex items-center space-x-3">
                         <div className="w-20">
-                          <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                          <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
                             <div
-                              className="h-full bg-primary-600"
+                              className="h-full bg-primary"
                               style={{ width: `${session.progress}%` }}
                             />
                           </div>
@@ -365,7 +365,7 @@ export function OperationsPage() {
               </div>
             )}
 
-            <div className="flex justify-end pt-4 border-t">
+            <div className="flex justify-end pt-4 border-t border-border">
               <Button variant="secondary" onClick={() => setIsDetailOpen(false)}>
                 Schließen
               </Button>

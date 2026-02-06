@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { PlusIcon, TrashIcon, PencilIcon } from '@heroicons/react/24/outline';
+import { Plus, Trash2, Pencil } from 'lucide-react';
 import { Button, Input, Select, Modal } from '@/components/ui';
 import { imagesApi } from '@/api/images';
 import type { ConfigOs, ConfigPartition, Image } from '@/types';
@@ -154,54 +154,54 @@ export function OsEntriesEditor({ osEntries, partitions, onChange }: OsEntriesEd
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-muted-foreground">
           Definieren Sie die Betriebssysteme mit ihren Boot-Optionen
         </p>
         <Button size="sm" onClick={() => handleOpenModal()}>
-          <PlusIcon className="h-4 w-4 mr-1" />
+          <Plus className="h-4 w-4 mr-1" />
           Betriebssystem hinzufuegen
         </Button>
       </div>
 
       {osEntries.length === 0 ? (
-        <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-          <p className="text-gray-500">Keine Betriebssysteme definiert</p>
-          <p className="text-sm text-gray-400 mt-1">
+        <div className="text-center py-8 bg-secondary rounded-lg border-2 border-dashed border-border">
+          <p className="text-muted-foreground">Keine Betriebssysteme definiert</p>
+          <p className="text-sm text-muted-foreground mt-1">
             Klicken Sie auf "Betriebssystem hinzufuegen" um zu beginnen
           </p>
         </div>
       ) : (
         <div className="space-y-3">
           {osEntries.map((entry, index) => (
-            <div key={index} className="bg-white border rounded-lg p-4 hover:shadow-sm transition-shadow">
+            <div key={index} className="bg-card border border-border rounded-lg p-4 hover:shadow-sm transition-shadow">
               <div className="flex items-start justify-between">
                 <div className="flex items-center space-x-3">
                   <div className="flex flex-col items-center">
-                    <span className="text-sm text-gray-400">#{entry.position}</span>
+                    <span className="text-sm text-muted-foreground">#{entry.position}</span>
                     <div className="flex flex-col">
                       <button
                         onClick={() => moveEntry(index, 'up')}
                         disabled={index === 0}
-                        className="text-gray-400 hover:text-gray-600 disabled:opacity-30"
+                        className="text-muted-foreground hover:text-foreground disabled:opacity-30"
                       >
                         <span className="text-xs">&#9650;</span>
                       </button>
                       <button
                         onClick={() => moveEntry(index, 'down')}
                         disabled={index === osEntries.length - 1}
-                        className="text-gray-400 hover:text-gray-600 disabled:opacity-30"
+                        className="text-muted-foreground hover:text-foreground disabled:opacity-30"
                       >
                         <span className="text-xs">&#9660;</span>
                       </button>
                     </div>
                   </div>
                   <div>
-                    <h4 className="font-medium text-gray-900">{entry.name || 'Unbenannt'}</h4>
-                    <p className="text-sm text-gray-500">
+                    <h4 className="font-medium text-foreground">{entry.name || 'Unbenannt'}</h4>
+                    <p className="text-sm text-muted-foreground">
                       {osTypeOptions.find(o => o.value === entry.osType)?.label || entry.osType}
                       {entry.baseImage && ` - ${entry.baseImage}`}
                     </p>
-                    <p className="text-xs text-gray-400 mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                       Root: {entry.rootDevice}
                       {entry.autostart && ' | Autostart'}
                     </p>
@@ -210,13 +210,13 @@ export function OsEntriesEditor({ osEntries, partitions, onChange }: OsEntriesEd
                 <div className="flex items-center space-x-4">
                   <div className="flex space-x-2 text-xs">
                     {entry.startEnabled && (
-                      <span className="px-2 py-1 bg-green-100 text-green-700 rounded">Start</span>
+                      <span className="px-2 py-1 bg-green-600/20 text-green-400 rounded">Start</span>
                     )}
                     {entry.syncEnabled && (
-                      <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">Sync</span>
+                      <span className="px-2 py-1 bg-primary/20 text-blue-400 rounded">Sync</span>
                     )}
                     {entry.newEnabled && (
-                      <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded">Neu</span>
+                      <span className="px-2 py-1 bg-yellow-600/20 text-yellow-400 rounded">Neu</span>
                     )}
                   </div>
                   <div className="flex space-x-2">
@@ -227,9 +227,9 @@ export function OsEntriesEditor({ osEntries, partitions, onChange }: OsEntriesEd
                         e.stopPropagation();
                         handleOpenModal(index);
                       }}
-                      className="text-primary-600 hover:text-primary-900"
+                      className="text-primary hover:text-primary/80"
                     >
-                      <PencilIcon className="h-4 w-4" />
+                      <Pencil className="h-4 w-4" />
                     </button>
                     <button
                       type="button"
@@ -238,9 +238,9 @@ export function OsEntriesEditor({ osEntries, partitions, onChange }: OsEntriesEd
                         e.stopPropagation();
                         handleDelete(index);
                       }}
-                      className="text-red-600 hover:text-red-900"
+                      className="text-red-400 hover:text-red-300"
                     >
-                      <TrashIcon className="h-4 w-4" />
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
@@ -283,7 +283,7 @@ export function OsEntriesEditor({ osEntries, partitions, onChange }: OsEntriesEd
 
           {/* Images */}
           <div className="border-t pt-4">
-            <h4 className="text-sm font-medium text-gray-700 mb-3">Images</h4>
+            <h4 className="text-sm font-medium text-foreground mb-3">Images</h4>
             <div className="grid grid-cols-2 gap-4">
               <Select
                 label="Basis-Image"
@@ -302,7 +302,7 @@ export function OsEntriesEditor({ osEntries, partitions, onChange }: OsEntriesEd
 
           {/* Boot Config */}
           <div className="border-t pt-4">
-            <h4 className="text-sm font-medium text-gray-700 mb-3">Boot-Konfiguration</h4>
+            <h4 className="text-sm font-medium text-foreground mb-3">Boot-Konfiguration</h4>
             <div className="grid grid-cols-2 gap-4">
               <Select
                 label="Root-Partition"
@@ -337,59 +337,59 @@ export function OsEntriesEditor({ osEntries, partitions, onChange }: OsEntriesEd
 
           {/* Boot Options */}
           <div className="border-t pt-4">
-            <h4 className="text-sm font-medium text-gray-700 mb-3">Aktionen aktivieren</h4>
+            <h4 className="text-sm font-medium text-foreground mb-3">Aktionen aktivieren</h4>
             <div className="grid grid-cols-3 gap-4">
               <label className="flex items-center">
                 <input
                   type="checkbox"
-                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 mr-2"
+                  className="rounded border-border text-primary focus:ring-ring mr-2"
                   checked={formData.startEnabled}
                   onChange={(e) => setFormData({ ...formData, startEnabled: e.target.checked })}
                 />
-                <span className="text-sm text-gray-700">Starten</span>
+                <span className="text-sm text-foreground">Starten</span>
               </label>
               <label className="flex items-center">
                 <input
                   type="checkbox"
-                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 mr-2"
+                  className="rounded border-border text-primary focus:ring-ring mr-2"
                   checked={formData.syncEnabled}
                   onChange={(e) => setFormData({ ...formData, syncEnabled: e.target.checked })}
                 />
-                <span className="text-sm text-gray-700">Synchronisieren</span>
+                <span className="text-sm text-foreground">Synchronisieren</span>
               </label>
               <label className="flex items-center">
                 <input
                   type="checkbox"
-                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 mr-2"
+                  className="rounded border-border text-primary focus:ring-ring mr-2"
                   checked={formData.newEnabled}
                   onChange={(e) => setFormData({ ...formData, newEnabled: e.target.checked })}
                 />
-                <span className="text-sm text-gray-700">Neu installieren</span>
+                <span className="text-sm text-foreground">Neu installieren</span>
               </label>
             </div>
           </div>
 
           {/* Autostart & Visibility */}
           <div className="border-t pt-4">
-            <h4 className="text-sm font-medium text-gray-700 mb-3">Autostart & Sichtbarkeit</h4>
+            <h4 className="text-sm font-medium text-foreground mb-3">Autostart & Sichtbarkeit</h4>
             <div className="grid grid-cols-2 gap-4 mb-4">
               <label className="flex items-center">
                 <input
                   type="checkbox"
-                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 mr-2"
+                  className="rounded border-border text-primary focus:ring-ring mr-2"
                   checked={formData.autostart}
                   onChange={(e) => setFormData({ ...formData, autostart: e.target.checked })}
                 />
-                <span className="text-sm text-gray-700">Autostart aktivieren</span>
+                <span className="text-sm text-foreground">Autostart aktivieren</span>
               </label>
               <label className="flex items-center">
                 <input
                   type="checkbox"
-                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 mr-2"
+                  className="rounded border-border text-primary focus:ring-ring mr-2"
                   checked={formData.hidden || false}
                   onChange={(e) => setFormData({ ...formData, hidden: e.target.checked })}
                 />
-                <span className="text-sm text-gray-700">In LINBO GUI verstecken</span>
+                <span className="text-sm text-foreground">In LINBO GUI verstecken</span>
               </label>
             </div>
             <div className="grid grid-cols-3 gap-4">
@@ -418,15 +418,15 @@ export function OsEntriesEditor({ osEntries, partitions, onChange }: OsEntriesEd
           {/* Append (Linux only) */}
           {formData.osType === 'linux' && (
             <div className="border-t pt-4">
-              <h4 className="text-sm font-medium text-gray-700 mb-3">Kernel-Parameter (append)</h4>
+              <h4 className="text-sm font-medium text-foreground mb-3">Kernel-Parameter (append)</h4>
               <textarea
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 sm:text-sm font-mono"
+                className="w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-ring focus:border-ring sm:text-sm font-mono bg-card text-foreground"
                 rows={3}
                 value={appendText}
                 onChange={(e) => setAppendText(e.target.value)}
                 placeholder="quiet splash&#10;root=/dev/sda2"
               />
-              <p className="text-xs text-gray-500 mt-1">Ein Parameter pro Zeile</p>
+              <p className="text-xs text-muted-foreground mt-1">Ein Parameter pro Zeile</p>
             </div>
           )}
 

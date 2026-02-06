@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { PlusIcon, CheckCircleIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
+import { Plus, CheckCircle2, RefreshCw } from 'lucide-react';
 import { imagesApi } from '@/api/images';
 import { Button, Table, Modal, Input, Textarea, Select, Badge, ConfirmModal } from '@/components/ui';
 import { notify } from '@/stores/notificationStore';
@@ -181,8 +181,8 @@ export function ImagesPage() {
       header: 'Dateiname',
       render: (image) => (
         <div>
-          <div className="font-medium text-gray-900">{image.filename}</div>
-          <div className="text-gray-500 text-xs">{image.path}</div>
+          <div className="font-medium text-foreground">{image.filename}</div>
+          <div className="text-muted-foreground text-xs">{image.path}</div>
         </div>
       ),
     },
@@ -213,25 +213,25 @@ export function ImagesPage() {
         <div className="flex space-x-2">
           <button
             onClick={() => handleVerify(image.id)}
-            className="text-primary-600 hover:text-primary-900"
+            className="text-primary hover:text-primary/80"
             title="Verifizieren"
             disabled={verifyingId === image.id}
           >
             {verifyingId === image.id ? (
-              <ArrowPathIcon className="h-4 w-4 animate-spin" />
+              <RefreshCw className="h-4 w-4 animate-spin" />
             ) : (
-              <CheckCircleIcon className="h-4 w-4" />
+              <CheckCircle2 className="h-4 w-4" />
             )}
           </button>
           <button
             onClick={() => handleOpenModal(image)}
-            className="text-gray-600 hover:text-gray-900 text-sm"
+            className="text-muted-foreground hover:text-foreground text-sm"
           >
             Bearbeiten
           </button>
           <button
             onClick={() => setDeleteConfirmImage(image)}
-            className="text-red-600 hover:text-red-900 text-sm"
+            className="text-red-400 hover:text-red-300 text-sm"
           >
             Löschen
           </button>
@@ -244,16 +244,16 @@ export function ImagesPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Images</h1>
-          <p className="text-gray-600">Verwaltung der System-Images</p>
+          <h1 className="text-2xl font-bold text-foreground">Images</h1>
+          <p className="text-muted-foreground">Verwaltung der System-Images</p>
         </div>
         <Button onClick={() => handleOpenModal()}>
-          <PlusIcon className="h-5 w-5 mr-2" />
+          <Plus className="h-5 w-5 mr-2" />
           Neues Image
         </Button>
       </div>
 
-      <div className="bg-white shadow rounded-lg overflow-hidden">
+      <div className="bg-card shadow-sm rounded-lg overflow-hidden">
         <Table
           columns={columns}
           data={images}

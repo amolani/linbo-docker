@@ -48,11 +48,11 @@ export function NetworkSettingsForm() {
 
   if (isLoading) {
     return (
-      <div className="bg-white shadow rounded-lg p-6">
+      <div className="bg-card shadow-sm rounded-lg p-6">
         <div className="animate-pulse space-y-4">
-          <div className="h-4 bg-gray-200 rounded w-1/4"></div>
-          <div className="h-10 bg-gray-200 rounded"></div>
-          <div className="h-10 bg-gray-200 rounded"></div>
+          <div className="h-4 bg-secondary rounded w-1/4"></div>
+          <div className="h-10 bg-secondary rounded"></div>
+          <div className="h-10 bg-secondary rounded"></div>
         </div>
       </div>
     );
@@ -61,8 +61,8 @@ export function NetworkSettingsForm() {
   if (!settings) return null;
 
   return (
-    <div className="bg-white shadow rounded-lg p-6">
-      <h2 className="text-lg font-medium text-gray-900 mb-4">Netzwerk-Einstellungen</h2>
+    <div className="bg-card shadow-sm rounded-lg p-6">
+      <h2 className="text-lg font-medium text-foreground mb-4">Netzwerk-Einstellungen</h2>
       <form onSubmit={handleSave}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Input

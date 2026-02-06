@@ -1,56 +1,171 @@
+import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
-  HomeIcon,
-  ComputerDesktopIcon,
-  BuildingOfficeIcon,
-  Cog6ToothIcon,
-  CircleStackIcon,
-  ClipboardDocumentListIcon,
-  GlobeAltIcon,
-} from '@heroicons/react/24/outline';
+  LayoutDashboard,
+  Monitor,
+  Building2,
+  Settings,
+  HardDrive,
+  Globe,
+  ClipboardList,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Wifi,
+  WifiOff,
+  LogOut,
+  X,
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/useAuth';
+import { useWsStore } from '@/stores/wsStore';
 
-const navigation = [
-  { name: 'Dashboard', href: '/', icon: HomeIcon },
-  { name: 'Hosts', href: '/hosts', icon: ComputerDesktopIcon },
-  { name: 'Räume', href: '/rooms', icon: BuildingOfficeIcon },
-  { name: 'Konfigurationen', href: '/configs', icon: Cog6ToothIcon },
-  { name: 'Images', href: '/images', icon: CircleStackIcon },
-  { name: 'DHCP', href: '/dhcp', icon: GlobeAltIcon },
-  { name: 'Operationen', href: '/operations', icon: ClipboardDocumentListIcon },
+const mainNavigation = [
+  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Hosts', href: '/hosts', icon: Monitor },
+  { name: 'Räume', href: '/rooms', icon: Building2 },
+];
+
+const configNavigation = [
+  { name: 'Konfigurationen', href: '/configs', icon: Settings },
+  { name: 'Images', href: '/images', icon: HardDrive },
+  { name: 'DHCP', href: '/dhcp', icon: Globe },
+];
+
+const systemNavigation = [
+  { name: 'Operationen', href: '/operations', icon: ClipboardList },
 ];
 
 export function Sidebar() {
+  const [collapsed, setCollapsed] = useState(false);
+  const { user, logout } = useAuth();
+  const { isConnected } = useWsStore();
+
   return (
     <div className="hidden lg:flex lg:flex-shrink-0">
-      <div className="flex flex-col w-64">
-        <div className="flex flex-col flex-grow bg-linbo-darker pt-5 pb-4 overflow-y-auto">
-          <div className="flex items-center flex-shrink-0 px-4">
-            <span className="text-2xl mr-2">🖥️</span>
-            <span className="text-xl font-bold text-white">LINBO Docker</span>
+      <div className={cn('flex flex-col transition-all duration-300', collapsed ? 'w-16' : 'w-64')}>
+        <div className="flex flex-col flex-grow bg-card border-r border-border overflow-y-auto">
+          {/* Logo */}
+          <div className="flex items-center flex-shrink-0 h-16 px-4">
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
+              <Monitor className="h-5 w-5 text-primary-foreground" />
+            </div>
+            {!collapsed && (
+              <span className="ml-3 text-lg font-bold text-foreground">LINBO Docker</span>
+            )}
           </div>
-          <nav className="mt-8 flex-1 px-2 space-y-1">
-            {navigation.map((item) => (
-              <NavLink
-                key={item.name}
-                to={item.href}
-                className={({ isActive }) =>
-                  `group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                    isActive
-                      ? 'bg-linbo-dark text-white'
-                      : 'text-gray-300 hover:bg-linbo-dark hover:text-white'
-                  }`
-                }
-              >
-                <item.icon
-                  className="mr-3 flex-shrink-0 h-6 w-6"
-                  aria-hidden="true"
-                />
-                {item.name}
-              </NavLink>
-            ))}
+
+          {/* Navigation */}
+          <nav className="flex-1 px-2 py-4 space-y-6">
+            <NavSection items={mainNavigation} collapsed={collapsed} />
+
+            <div>
+              {!collapsed && (
+                <p className="px-3 mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Konfiguration
+                </p>
+              )}
+              {collapsed && <div className="border-t border-border mx-2 mb-2" />}
+              <NavSection items={configNavigation} collapsed={collapsed} />
+            </div>
+
+            <div>
+              {!collapsed && (
+                <p className="px-3 mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  System
+                </p>
+              )}
+              {collapsed && <div className="border-t border-border mx-2 mb-2" />}
+              <NavSection items={systemNavigation} collapsed={collapsed} />
+            </div>
           </nav>
+
+          {/* Footer */}
+          <div className="flex-shrink-0 border-t border-border p-2 space-y-1">
+            {/* WebSocket Status */}
+            <div className={cn(
+              'flex items-center px-3 py-2 text-xs rounded-md',
+              collapsed ? 'justify-center' : ''
+            )}>
+              {isConnected ? (
+                <Wifi className="h-4 w-4 text-green-400 flex-shrink-0" />
+              ) : (
+                <WifiOff className="h-4 w-4 text-red-400 flex-shrink-0" />
+              )}
+              {!collapsed && (
+                <span className={cn('ml-2', isConnected ? 'text-green-400' : 'text-red-400')}>
+                  {isConnected ? 'Verbunden' : 'Getrennt'}
+                </span>
+              )}
+            </div>
+
+            {/* User & Logout */}
+            <button
+              onClick={() => logout()}
+              className={cn(
+                'flex items-center w-full px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground rounded-md transition-colors',
+                collapsed ? 'justify-center' : ''
+              )}
+              title={collapsed ? `${user?.username} - Abmelden` : undefined}
+            >
+              <LogOut className="h-4 w-4 flex-shrink-0" />
+              {!collapsed && (
+                <span className="ml-3 truncate">{user?.username} &middot; Abmelden</span>
+              )}
+            </button>
+
+            {/* Version */}
+            {!collapsed && (
+              <div className="px-3 py-1 text-xs text-muted-foreground/60" title={`Build: ${__BUILD_DATE__}`}>
+                v{__APP_VERSION__}
+              </div>
+            )}
+
+            {/* Collapse Toggle */}
+            <button
+              onClick={() => setCollapsed(!collapsed)}
+              className={cn(
+                'flex items-center w-full px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground rounded-md transition-colors',
+                collapsed ? 'justify-center' : ''
+              )}
+            >
+              {collapsed ? (
+                <PanelLeftOpen className="h-4 w-4 flex-shrink-0" />
+              ) : (
+                <>
+                  <PanelLeftClose className="h-4 w-4 flex-shrink-0" />
+                  <span className="ml-3">Einklappen</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function NavSection({ items, collapsed }: { items: typeof mainNavigation; collapsed: boolean }) {
+  return (
+    <div className="space-y-1">
+      {items.map((item) => (
+        <NavLink
+          key={item.name}
+          to={item.href}
+          className={({ isActive }) =>
+            cn(
+              'group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
+              isActive
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+              collapsed ? 'justify-center' : ''
+            )
+          }
+          title={collapsed ? item.name : undefined}
+        >
+          <item.icon className={cn('flex-shrink-0 h-5 w-5', !collapsed && 'mr-3')} aria-hidden="true" />
+          {!collapsed && item.name}
+        </NavLink>
+      ))}
     </div>
   );
 }
@@ -64,14 +179,16 @@ export function MobileSidebar({
 }) {
   if (!isOpen) return null;
 
+  const allNavigation = [...mainNavigation, ...configNavigation, ...systemNavigation];
+
   return (
     <div className="lg:hidden">
       <div className="fixed inset-0 z-40 flex">
         <div
-          className="fixed inset-0 bg-gray-600 bg-opacity-75"
+          className="fixed inset-0 bg-black/60"
           onClick={onClose}
         />
-        <div className="relative flex-1 flex flex-col max-w-xs w-full bg-linbo-darker">
+        <div className="relative flex-1 flex flex-col max-w-xs w-full bg-card border-r border-border">
           <div className="absolute top-0 right-0 -mr-12 pt-2">
             <button
               type="button"
@@ -79,51 +196,45 @@ export function MobileSidebar({
               onClick={onClose}
             >
               <span className="sr-only">Schließen</span>
-              <svg
-                className="h-6 w-6 text-white"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
+              <X className="h-6 w-6 text-white" />
             </button>
           </div>
           <div className="flex-1 h-0 pt-5 pb-4 overflow-y-auto">
             <div className="flex items-center flex-shrink-0 px-4">
-              <span className="text-2xl mr-2">🖥️</span>
-              <span className="text-xl font-bold text-white">LINBO Docker</span>
+              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+                <Monitor className="h-5 w-5 text-primary-foreground" />
+              </div>
+              <span className="ml-3 text-lg font-bold text-foreground">LINBO Docker</span>
             </div>
             <nav className="mt-8 px-2 space-y-1">
-              {navigation.map((item) => (
+              {allNavigation.map((item) => (
                 <NavLink
                   key={item.name}
                   to={item.href}
                   onClick={onClose}
                   className={({ isActive }) =>
-                    `group flex items-center px-3 py-2 text-base font-medium rounded-md ${
+                    cn(
+                      'group flex items-center px-3 py-2 text-base font-medium rounded-md transition-colors',
                       isActive
-                        ? 'bg-linbo-dark text-white'
-                        : 'text-gray-300 hover:bg-linbo-dark hover:text-white'
-                    }`
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    )
                   }
                 >
-                  <item.icon
-                    className="mr-4 flex-shrink-0 h-6 w-6"
-                    aria-hidden="true"
-                  />
+                  <item.icon className="mr-4 flex-shrink-0 h-5 w-5" aria-hidden="true" />
                   {item.name}
                 </NavLink>
               ))}
             </nav>
+          </div>
+          <div className="flex-shrink-0 border-t border-border p-4">
+            <div className="text-xs text-muted-foreground/60" title={`Build: ${__BUILD_DATE__}`}>
+              v{__APP_VERSION__}
+            </div>
           </div>
         </div>
       </div>
     </div>
   );
 }
+

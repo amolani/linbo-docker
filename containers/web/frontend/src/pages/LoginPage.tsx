@@ -1,5 +1,6 @@
 import { useState, FormEvent } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { Monitor } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button, Input } from '@/components/ui';
 
@@ -25,20 +26,22 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-linbo-dark to-linbo-darker py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
-          <span className="text-6xl">🖥️</span>
-          <h2 className="mt-6 text-3xl font-extrabold text-white">LINBO Docker</h2>
-          <p className="mt-2 text-sm text-gray-400">
+          <div className="mx-auto w-16 h-16 rounded-2xl bg-primary flex items-center justify-center">
+            <Monitor className="h-9 w-9 text-primary-foreground" />
+          </div>
+          <h2 className="mt-6 text-3xl font-extrabold text-foreground">LINBO Docker</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
             Standalone Network Boot & Imaging Solution
           </p>
         </div>
 
-        <div className="bg-white rounded-lg shadow-xl p-8">
+        <div className="bg-card border border-border rounded-lg shadow-xl p-8">
           <form className="space-y-6" onSubmit={handleSubmit}>
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md text-sm">
+              <div className="bg-destructive/10 border border-destructive/30 text-red-400 px-4 py-3 rounded-md text-sm">
                 {error}
               </div>
             )}
@@ -71,7 +74,7 @@ export function LoginPage() {
           </form>
         </div>
 
-        <p className="text-center text-sm text-gray-500">
+        <p className="text-center text-sm text-muted-foreground">
           Standard-Zugangsdaten: admin / admin
         </p>
       </div>

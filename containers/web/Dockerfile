@@ -6,6 +6,8 @@
 # Stage 1: Build the React application
 FROM node:20-alpine AS builder
 
+ARG GIT_HASH=unknown
+
 WORKDIR /app
 
 # Copy package files
@@ -17,7 +19,8 @@ RUN npm ci
 # Copy source code
 COPY frontend/ ./
 
-# Build the application
+# Build the application with git hash injected
+ENV VITE_GIT_HASH=${GIT_HASH}
 RUN npm run build
 
 # Stage 2: Serve with Nginx

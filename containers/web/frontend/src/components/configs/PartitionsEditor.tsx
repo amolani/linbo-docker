@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { PlusIcon, TrashIcon, PencilIcon } from '@heroicons/react/24/outline';
+import { Plus, Trash2, Pencil } from 'lucide-react';
 import { Button, Input, Select, Modal } from '@/components/ui';
 import type { ConfigPartition } from '@/types';
 
@@ -83,86 +83,86 @@ export function PartitionsEditor({ partitions, onChange }: PartitionsEditorProps
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-muted-foreground">
           Definieren Sie die Partitionsstruktur der Festplatte
         </p>
         <Button size="sm" onClick={() => handleOpenModal()}>
-          <PlusIcon className="h-4 w-4 mr-1" />
+          <Plus className="h-4 w-4 mr-1" />
           Partition hinzufuegen
         </Button>
       </div>
 
       {partitions.length === 0 ? (
-        <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-          <p className="text-gray-500">Keine Partitionen definiert</p>
-          <p className="text-sm text-gray-400 mt-1">
+        <div className="text-center py-8 bg-secondary rounded-lg border-2 border-dashed border-border">
+          <p className="text-muted-foreground">Keine Partitionen definiert</p>
+          <p className="text-sm text-muted-foreground mt-1">
             Klicken Sie auf "Partition hinzufuegen" um zu beginnen
           </p>
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-border">
+            <thead className="bg-secondary">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">#</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Device</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Label</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Groesse</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Dateisystem</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Bootable</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aktionen</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">#</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Device</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Label</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Groesse</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Dateisystem</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Bootable</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Aktionen</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-card divide-y divide-border">
               {partitions.map((partition, index) => (
-                <tr key={index} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-sm text-gray-500">
+                <tr key={index} className="hover:bg-muted/50">
+                  <td className="px-4 py-3 text-sm text-muted-foreground">
                     <div className="flex items-center space-x-1">
                       <span>{partition.position}</span>
                       <div className="flex flex-col">
                         <button
                           onClick={() => movePartition(index, 'up')}
                           disabled={index === 0}
-                          className="text-gray-400 hover:text-gray-600 disabled:opacity-30"
+                          className="text-muted-foreground hover:text-foreground disabled:opacity-30"
                         >
                           <span className="text-xs">&#9650;</span>
                         </button>
                         <button
                           onClick={() => movePartition(index, 'down')}
                           disabled={index === partitions.length - 1}
-                          className="text-gray-400 hover:text-gray-600 disabled:opacity-30"
+                          className="text-muted-foreground hover:text-foreground disabled:opacity-30"
                         >
                           <span className="text-xs">&#9660;</span>
                         </button>
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-sm font-mono text-gray-900">{partition.device}</td>
-                  <td className="px-4 py-3 text-sm text-gray-500">{partition.label || '-'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-500">{partition.size || 'Rest'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-500">
+                  <td className="px-4 py-3 text-sm font-mono text-foreground">{partition.device}</td>
+                  <td className="px-4 py-3 text-sm text-muted-foreground">{partition.label || '-'}</td>
+                  <td className="px-4 py-3 text-sm text-muted-foreground">{partition.size || 'Rest'}</td>
+                  <td className="px-4 py-3 text-sm text-muted-foreground">
                     {fsTypeOptions.find(o => o.value === partition.fsType)?.label || partition.fsType || '-'}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-500">
+                  <td className="px-4 py-3 text-sm text-muted-foreground">
                     {partition.bootable ? (
-                      <span className="text-green-600">Ja</span>
+                      <span className="text-green-400">Ja</span>
                     ) : (
-                      <span className="text-gray-400">Nein</span>
+                      <span className="text-muted-foreground">Nein</span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <div className="flex space-x-2">
                       <button
                         onClick={() => handleOpenModal(index)}
-                        className="text-primary-600 hover:text-primary-900"
+                        className="text-primary hover:text-primary/80"
                       >
-                        <PencilIcon className="h-4 w-4" />
+                        <Pencil className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => handleDelete(index)}
-                        className="text-red-600 hover:text-red-900"
+                        className="text-red-400 hover:text-red-300"
                       >
-                        <TrashIcon className="h-4 w-4" />
+                        <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
                   </td>
@@ -214,11 +214,11 @@ export function PartitionsEditor({ partitions, onChange }: PartitionsEditorProps
           <label className="flex items-center">
             <input
               type="checkbox"
-              className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 mr-2"
+              className="rounded border-border text-primary focus:ring-ring mr-2"
               checked={formData.bootable}
               onChange={(e) => setFormData({ ...formData, bootable: e.target.checked })}
             />
-            <span className="text-sm text-gray-700">Bootable (aktive Partition)</span>
+            <span className="text-sm text-foreground">Bootable (aktive Partition)</span>
           </label>
 
           <div className="flex justify-end space-x-3 pt-4">

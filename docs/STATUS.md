@@ -272,6 +272,15 @@ null ──> pending ──> running ──> synced
 | `SAMBA_TOOL_AUTH` | *(leer)* | Auth fuer samba-tool Cleanup |
 | `DHCP_VERIFY_FILE` | *(leer)* | DHCP-Datei fuer Verify |
 
+## End-to-End Test (2026-02-06)
+
+Kompletter PXE-Boot-Workflow validiert auf Test-VM 10.0.0.13:
+- Config erstellen → GRUB generieren → Host anlegen → Symlinks → Provisioning → PXE Boot → start.conf via rsync → LINBO GUI
+
+**Kritischer Bug behoben:** rsync Container hatte keine Hook-Scripts (`containers/rsync/Dockerfile`), was alle rsync-Verbindungen blockierte. Fix: Commit `bbf747c`.
+
+**Details:** Siehe `docs/E2E-TEST-2026-02-06.md`
+
 ## Bekannte Einschraenkungen
 
 1. **Kein Multicast** - udpcast nicht implementiert

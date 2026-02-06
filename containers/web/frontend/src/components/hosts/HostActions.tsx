@@ -20,8 +20,8 @@ export function HostActions({
   }
 
   return (
-    <div className="bg-primary-50 border border-primary-200 rounded-lg p-4 flex items-center justify-between">
-      <span className="text-primary-700">
+    <div className="bg-primary/10 border border-primary/30 rounded-lg p-4 flex items-center justify-between">
+      <span className="text-primary">
         {selectedCount} Host(s) ausgewählt
       </span>
       <div className="flex space-x-2">

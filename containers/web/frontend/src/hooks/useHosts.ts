@@ -156,6 +156,28 @@ export function useHostActions() {
     }
   }, []);
 
+  const bulkDelete = useCallback(async (hostIds: string[]) => {
+    setIsActionLoading(true);
+    try {
+      const result = await hostsApi.bulkDelete(hostIds);
+      if (result.failed > 0) {
+        notify.warning(
+          'Bulk Delete',
+          `${result.success} gelöscht, ${result.failed} fehlgeschlagen`
+        );
+      } else {
+        notify.success('Bulk Delete', `${result.success} Host(s) gelöscht`);
+      }
+      fetchHosts();
+      return result;
+    } catch (error) {
+      notify.error('Bulk Delete fehlgeschlagen', error instanceof Error ? error.message : undefined);
+      throw error;
+    } finally {
+      setIsActionLoading(false);
+    }
+  }, [fetchHosts]);
+
   const deleteHost = useCallback(async (hostId: string) => {
     setIsActionLoading(true);
     try {
@@ -208,6 +230,7 @@ export function useHostActions() {
     bulkWakeOnLan,
     bulkSync,
     bulkStart,
+    bulkDelete,
     deleteHost,
     createHost,
     updateHost,

@@ -258,9 +258,139 @@ docker start linbo-web
 
 ---
 
-## Aktueller Stand (2026-02-05)
+## 11. Rsync Pre-Xfer Exec Failure - Alle Verbindungen abgelehnt (KRITISCH)
 
-### Hauptserver (10.0.0.11)
+### Problem
+LINBO-Client bootet via PXE, bekommt aber keine `start.conf`:
+```
+rsync: [Receiver] failed to connect to 10.0.0.13 (10.0.0.13): Connection refused (111)
+```
+
+Im rsync Container-Log:
+```
+rsync-pre-download-api.sh: not found
+pre-xfer exec returned failure (32512)
+```
+
+### Auswirkung
+**KRITISCH** - Wenn die Pre-Xfer-Scripts fehlen, lehnt rsync ALLE Verbindungen ab. Kein Client kann start.conf oder Images herunterladen.
+
+### Ursache
+Das rsync Container Dockerfile (`containers/rsync/Dockerfile`) hatte weder `curl` installiert noch die Hook-Scripts aus `scripts/server/` in den Container kopiert.
+
+Die `rsyncd.conf` referenzierte jedoch:
+```ini
+[linbo]
+pre-xfer exec = /usr/share/linuxmuster/linbo/rsync-pre-download-api.sh
+post-xfer exec = /usr/share/linuxmuster/linbo/rsync-post-download-api.sh
+
+[linbo-upload]
+pre-xfer exec = /usr/share/linuxmuster/linbo/rsync-pre-upload-api.sh
+post-xfer exec = /usr/share/linuxmuster/linbo/rsync-post-upload-api.sh
+```
+
+Da die Scripts nicht existierten, gab die Shell Exit-Code 127 (command not found) zurueck, was rsync als Fehler 32512 interpretierte und die Verbindung ablehnte.
+
+### Loesung
+`containers/rsync/Dockerfile` erweitert:
+```dockerfile
+# Install rsync + curl (needed for API hook scripts)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    rsync \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /srv/linbo /var/log /usr/share/linuxmuster/linbo
+
+# Copy API hook scripts
+COPY scripts/ /usr/share/linuxmuster/linbo/
+RUN chmod +x /usr/share/linuxmuster/linbo/*.sh
+```
+
+Hook-Scripts als eigene Kopien nach `containers/rsync/scripts/` gelegt:
+- `rsync-pre-download-api.sh` - Meldet Download an API, triggert macct-repair bei Images
+- `rsync-post-download-api.sh` - Meldet Download-Ende an API
+- `rsync-pre-upload-api.sh` - Meldet Upload an API
+- `rsync-post-upload-api.sh` - Meldet Upload-Ende an API
+
+```bash
+# Nach Fix: Container neu bauen
+docker compose up -d --build rsync
+
+# Verifizieren
+rsync --list-only rsync://10.0.0.13/linbo/start.conf.amodrei
+# Sollte Datei anzeigen statt "Connection refused"
+```
+
+**Commit:** `bbf747c` - "Fix rsync container: include API hook scripts and curl"
+
+---
+
+## 12. docker compose restart laedt keine neuen ENV-Variablen
+
+### Problem
+Nach Aenderung von `.env` (z.B. `DC_PROVISIONING_ENABLED=true`) zeigt der Container weiterhin die alten Werte.
+
+### Ursache
+`docker compose restart` startet den bestehenden Container neu, liest aber die `.env`-Datei NICHT erneut ein. Die Umgebungsvariablen wurden beim `docker compose up` festgelegt und bleiben bis zur Container-Neuinstallierung unveraendert.
+
+### Loesung
+Immer `docker compose up -d [service]` statt `docker compose restart [service]` verwenden:
+```bash
+# FALSCH - ENV-Aenderungen werden NICHT uebernommen
+docker compose restart api
+
+# RICHTIG - Container wird mit neuen ENV-Werten neu erstellt
+docker compose up -d api
+```
+
+### Verifikation
+```bash
+docker exec linbo-api env | grep DC_PROVISIONING
+# DC_PROVISIONING_ENABLED=true
+# DC_PROVISIONING_DRYRUN=false
+```
+
+---
+
+## 13. DC Worker Cross-Server Setup
+
+### Problem
+DC Worker muss auf dem AD DC (10.0.0.11) laufen, nicht im Docker-Stack auf der Test-VM (10.0.0.13), da nur der DC Zugriff auf `linuxmuster-import-devices`, `samba-tool` und `sam.ldb` hat.
+
+### Loesung
+1. Config erstellen auf dem DC (`/etc/linbo-docker/macct-worker.conf`):
+```ini
+REDIS_HOST=10.0.0.13
+REDIS_PORT=6379
+API_URL=http://10.0.0.13:3000/api/v1
+API_KEY=linbo-internal-secret
+CONSUMER_NAME=dc-01
+```
+
+2. Redis-Port im Docker-Stack exposen (`docker-compose.yml`):
+```yaml
+cache:
+  ports:
+    - "6379:6379"
+```
+
+3. Worker starten:
+```bash
+python3 /root/linbo-docker/dc-worker/macct-worker.py \
+  --config /etc/linbo-docker/macct-worker.conf
+```
+
+4. Konnektivitaet pruefen:
+```bash
+redis-cli -h 10.0.0.13 -p 6379 PING  # PONG
+curl -s http://10.0.0.13:3000/api/v1/health  # {"status":"healthy"}
+```
+
+---
+
+## Aktueller Stand (2026-02-06)
+
+### Hauptserver (10.0.0.11 - Produktion)
 | Service | Status | Port | Notizen |
 |---------|--------|------|---------|
 | linbo-web | Running | 8080 | Frontend |
@@ -271,21 +401,36 @@ docker start linbo-web
 | linbo-db | Healthy | - | PostgreSQL |
 | linbo-cache | Healthy | - | Redis |
 
+### Test-VM (10.0.0.13)
+| Service | Status | Port | Notizen |
+|---------|--------|------|---------|
+| linbo-web | Running | 8080 | Frontend |
+| linbo-api | Running | 3000 | REST API + Provisioning |
+| linbo-ssh | Healthy | 2222 | LINBO SSH |
+| linbo-rsync | Healthy | 873 | Image Sync (mit Hook-Fix) |
+| linbo-tftp | Healthy | 69/udp | PXE Boot |
+| linbo-db | Healthy | 5432 | PostgreSQL |
+| linbo-cache | Healthy | 6379 | Redis (exposed fuer DC Worker) |
+
+DC Worker laeuft auf 10.0.0.11 und verbindet sich zu Redis/API auf 10.0.0.13.
+
 ### Zugangsdaten
-- **URL:** `http://10.0.0.11:8080/`
-- **Username:** `admin`
-- **Passwort:** `admin123`
+- **Produktion:** `http://10.0.0.11:8080/` - admin / admin123
+- **Test-VM:** `http://10.0.0.13:8080/` - admin / admin123
 
 ### Implementierte Features
 - [x] Raw Config Editor mit Datenbank-Synchronisation
 - [x] start.conf Parser (LINBO, Partition, OS Sektionen)
 - [x] Backup bei Dateiänderungen
 - [x] GitHub Release mit Boot-Dateien
+- [x] Host Provisioning via DC Worker (AD + DNS + devices.csv)
+- [x] PXE Boot Chain: Config → GRUB → start.conf via rsync (E2E getestet)
 
-### Bekannte Einschränkungen
+### Bekannte Einschraenkungen
 - TFTP-Container kann mit Produktions-TFTP kollidieren
-- GitHub "latest" Tag funktioniert nicht für Downloads
-- Bei DB-Neustart müssen User/Configs neu erstellt werden
+- GitHub "latest" Tag funktioniert nicht fuer Downloads
+- Bei DB-Neustart muessen User/Configs neu erstellt werden
+- `docker compose restart` laedt KEINE neuen ENV-Variablen (immer `up -d` verwenden)
 
 ---
 

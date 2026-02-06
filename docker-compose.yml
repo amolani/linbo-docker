@@ -223,6 +223,8 @@ services:
     build:
       context: ./containers/web
       dockerfile: Dockerfile
+      args:
+        GIT_HASH: ${GIT_HASH:-dev}
     container_name: linbo-web
     ports:
       - "${WEB_PORT:-8080}:80"

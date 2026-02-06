@@ -1,13 +1,10 @@
 import { InputHTMLAttributes, forwardRef } from 'react';
+import { cn } from '@/lib/utils';
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
   helperText?: string;
-}
-
-function clsxFn(...classes: (string | boolean | undefined)[]) {
-  return classes.filter(Boolean).join(' ');
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
@@ -17,24 +14,24 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     return (
       <div className="w-full">
         {label && (
-          <label htmlFor={inputId} className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor={inputId} className="block text-sm font-medium text-foreground mb-1">
             {label}
           </label>
         )}
         <input
           ref={ref}
           id={inputId}
-          className={clsxFn(
-            'block w-full px-3 py-2 border rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-1 sm:text-sm',
+          className={cn(
+            'block w-full px-3 py-2 border rounded-md shadow-sm bg-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 sm:text-sm',
             error
-              ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
-              : 'border-gray-300 focus:ring-primary-500 focus:border-primary-500',
+              ? 'border-destructive focus:ring-destructive focus:border-destructive'
+              : 'border-border focus:ring-ring focus:border-ring',
             className
           )}
           {...props}
         />
-        {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
-        {helperText && !error && <p className="mt-1 text-sm text-gray-500">{helperText}</p>}
+        {error && <p className="mt-1 text-sm text-destructive">{error}</p>}
+        {helperText && !error && <p className="mt-1 text-sm text-muted-foreground">{helperText}</p>}
       </div>
     );
   }
@@ -55,18 +52,18 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
     return (
       <div className="w-full">
         {label && (
-          <label htmlFor={selectId} className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor={selectId} className="block text-sm font-medium text-foreground mb-1">
             {label}
           </label>
         )}
         <select
           ref={ref}
           id={selectId}
-          className={clsxFn(
-            'block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-1 sm:text-sm',
+          className={cn(
+            'block w-full px-3 py-2 border rounded-md shadow-sm bg-input text-foreground focus:outline-none focus:ring-1 sm:text-sm',
             error
-              ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
-              : 'border-gray-300 focus:ring-primary-500 focus:border-primary-500',
+              ? 'border-destructive focus:ring-destructive focus:border-destructive'
+              : 'border-border focus:ring-ring focus:border-ring',
             className
           )}
           {...props}
@@ -77,7 +74,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             </option>
           ))}
         </select>
-        {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+        {error && <p className="mt-1 text-sm text-destructive">{error}</p>}
       </div>
     );
   }
@@ -98,7 +95,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
     return (
       <div className="w-full">
         {label && (
-          <label htmlFor={textareaId} className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor={textareaId} className="block text-sm font-medium text-foreground mb-1">
             {label}
           </label>
         )}
@@ -106,16 +103,16 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           ref={ref}
           id={textareaId}
           rows={rows}
-          className={clsxFn(
-            'block w-full px-3 py-2 border rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-1 sm:text-sm',
+          className={cn(
+            'block w-full px-3 py-2 border rounded-md shadow-sm bg-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 sm:text-sm',
             error
-              ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
-              : 'border-gray-300 focus:ring-primary-500 focus:border-primary-500',
+              ? 'border-destructive focus:ring-destructive focus:border-destructive'
+              : 'border-border focus:ring-ring focus:border-ring',
             className
           )}
           {...props}
         />
-        {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+        {error && <p className="mt-1 text-sm text-destructive">{error}</p>}
       </div>
     );
   }
