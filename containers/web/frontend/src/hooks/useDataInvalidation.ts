@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { useWsStore } from '@/stores/wsStore';
 import { getEventData } from '@/hooks/useWebSocket';
 import { notify } from '@/stores/notificationStore';
@@ -10,19 +10,12 @@ interface UseDataInvalidationOptions {
 }
 
 /**
- * Global last-fetch tracker per entity.
- * Prevents double-fetch when the user's own action already refetched
- * and the WS echo arrives shortly after.
- */
-const lastFetchTime: Record<string, number> = {};
-
-/** Call this to record that a fetch just happened for an entity key. */
-export function markFetched(key: string) {
-  lastFetchTime[key] = Date.now();
-}
-
-/**
  * Subscribe to WS entity change events and trigger a debounced refetch.
+ *
+ * Returns a `suppress(durationMs?)` function that the caller can invoke
+ * before its own CRUD action to prevent the WS echo from triggering
+ * a redundant refetch. Each hook instance has its own suppress state —
+ * suppressing one instance does NOT affect other hooks for the same entity.
  *
  * Events per entity:
  * - Always: `${entity}.created`, `${entity}.updated`, `${entity}.deleted`
@@ -32,14 +25,12 @@ export function markFetched(key: string) {
  * - Reconnect: `_reconnected` (AC4)
  *
  * AC2: Only 1 refetch per debounceMs window per hook instance.
- * Dedup: Skips WS-triggered refetch if data was fetched within the last debounceMs
- *        (e.g. from the user's own CRUD action).
  */
 export function useDataInvalidation(
   entity: string | string[],
   refetchFn: () => void,
   options: UseDataInvalidationOptions = {}
-) {
+): { suppress: (durationMs?: number) => void } {
   const { debounceMs = 500, showToast = false } = options;
   const { subscribe } = useWsStore();
 
@@ -50,21 +41,26 @@ export function useDataInvalidation(
   const showToastRef = useRef(showToast);
   showToastRef.current = showToast;
 
+  // Per-instance suppress: when suppress() is called, WS-triggered refetch
+  // is skipped until suppressedUntil has passed.
+  const suppressedUntilRef = useRef(0);
+
+  const suppress = useCallback((durationMs?: number) => {
+    suppressedUntilRef.current = Date.now() + (durationMs ?? debounceMs * 2);
+  }, [debounceMs]);
+
   useEffect(() => {
     const entities = Array.isArray(entity) ? entity : [entity];
-    const entityKey = entities.join(',');
     const timerRef: { current: ReturnType<typeof setTimeout> | null } = { current: null };
 
     function scheduleRefetch() {
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
         timerRef.current = null;
-        // Dedup: skip if data was fetched very recently (user's own action)
-        const lastFetch = lastFetchTime[entityKey] || 0;
-        if (Date.now() - lastFetch < debounceMs) {
+        // Per-instance dedup: skip if this hook was recently suppressed
+        if (Date.now() < suppressedUntilRef.current) {
           return;
         }
-        lastFetchTime[entityKey] = Date.now();
         refetchRef.current();
       }, debounceMs);
     }
@@ -133,4 +129,6 @@ export function useDataInvalidation(
     debounceMs,
     subscribe,
   ]);
+
+  return { suppress };
 }

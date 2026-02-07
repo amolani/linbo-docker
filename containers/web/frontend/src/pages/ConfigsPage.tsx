@@ -55,7 +55,7 @@ export function ConfigsPage() {
   };
 
   // Reactive: refetch configs on WS entity changes
-  useDataInvalidation('config', fetchConfigs);
+  const { suppress: suppressConfigInvalidation } = useDataInvalidation('config', fetchConfigs);
 
   useEffect(() => {
     fetchConfigs();
@@ -109,6 +109,7 @@ export function ConfigsPage() {
     };
 
     try {
+      suppressConfigInvalidation();
       if (editingConfig) {
         await configsApi.update(editingConfig.id, payload);
         notify.success('Konfiguration aktualisiert');
@@ -130,6 +131,7 @@ export function ConfigsPage() {
     setIsSubmitting(true);
 
     try {
+      suppressConfigInvalidation();
       await configsApi.delete(deleteConfirmConfig.id);
       notify.success('Konfiguration geloescht');
       setDeleteConfirmConfig(null);
@@ -153,6 +155,7 @@ export function ConfigsPage() {
 
   const handleClone = async (configId: string, name: string) => {
     try {
+      suppressConfigInvalidation();
       await configsApi.clone(configId, `${name} (Kopie)`);
       notify.success('Konfiguration geklont');
       fetchConfigs();
@@ -163,6 +166,7 @@ export function ConfigsPage() {
 
   const handleDeploy = async (configId: string, name: string) => {
     try {
+      suppressConfigInvalidation();
       const result = await configsApi.deploy(configId);
       notify.success(`"${name}" deployed: ${result.filepath} (${result.symlinkCount} Symlinks)`);
       fetchConfigs();

@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import type { Host, HostFilters, PaginatedResponse } from '@/types';
 import { hostsApi } from '@/api/hosts';
-import { markFetched } from '@/hooks/useDataInvalidation';
 
 interface HostState {
   hosts: Host[];
@@ -55,8 +54,6 @@ export const useHostStore = create<HostState>((set, get) => ({
         sort,
         order,
       });
-      // Mark as fetched so WS-triggered refetch is deduped
-      markFetched('host');
       set({
         hosts: response.data,
         total: response.total,

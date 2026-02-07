@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Plus, ChevronRight, Trash2, Power, Pencil } from 'lucide-react';
 import { roomsApi } from '@/api/rooms';
 import { useDataInvalidation } from '@/hooks/useDataInvalidation';
@@ -40,9 +40,31 @@ export function RoomsPage() {
     }
   };
 
+  // Ref to track expanded rooms for WS-triggered host refresh
+  const expandedRoomsRef = useRef(expandedRooms);
+  expandedRoomsRef.current = expandedRooms;
+
+  // Refresh expanded rooms' host lists + room counts
+  const refreshAfterHostChange = useCallback(async () => {
+    // Always refetch room list (updates host counts)
+    fetchRooms();
+    // Also refresh hosts for any currently expanded rooms
+    const expanded = Array.from(expandedRoomsRef.current);
+    if (expanded.length === 0) return;
+    for (const roomId of expanded) {
+      try {
+        const room = await roomsApi.get(roomId);
+        setRoomHosts(prev => ({ ...prev, [roomId]: room.hosts || [] }));
+        setRoomStatusSummary(prev => ({ ...prev, [roomId]: (room as Room & { statusSummary?: Record<string, number> }).statusSummary || {} }));
+      } catch {
+        // Silently ignore — room may have been deleted
+      }
+    }
+  }, []);
+
   // Reactive: refetch rooms on WS entity changes
-  useDataInvalidation('room', fetchRooms);
-  useDataInvalidation('host', fetchRooms, { showToast: false }); // Host changes → room counts
+  const { suppress: suppressRoomInvalidation } = useDataInvalidation('room', fetchRooms);
+  useDataInvalidation('host', refreshAfterHostChange, { showToast: false }); // Host changes → room counts + expanded hosts
 
   useEffect(() => {
     fetchRooms();
@@ -101,6 +123,7 @@ export function RoomsPage() {
     setIsSubmitting(true);
 
     try {
+      suppressRoomInvalidation();
       if (editingRoom) {
         await roomsApi.update(editingRoom.id, formData);
         notify.success('Raum aktualisiert');
@@ -123,6 +146,7 @@ export function RoomsPage() {
     const id = deleteConfirmRoom.id;
 
     try {
+      suppressRoomInvalidation();
       await roomsApi.delete(id);
       notify.success('Raum gelöscht');
       setDeleteConfirmRoom(null);
@@ -142,6 +166,7 @@ export function RoomsPage() {
   const handleBulkDeleteRooms = async () => {
     setIsSubmitting(true);
     try {
+      suppressRoomInvalidation();
       const ids = Array.from(selectedRooms);
       const result = await roomsApi.bulkDelete(ids);
       if (result.failed > 0) {
