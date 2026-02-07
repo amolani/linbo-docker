@@ -8,6 +8,7 @@
 const net = require('net');
 const { prisma } = require('../lib/prisma');
 const redis = require('../lib/redis');
+const ws = require('../lib/websocket');
 const hostService = require('../services/host.service');
 
 // Configuration from ENV
@@ -210,6 +211,15 @@ async function runScanCycle() {
           await redis.del(`host:${host.id}`);
           await redis.del(`host:hostname:${host.hostname}`);
           await redis.del(`host:mac:${host.macAddress.toLowerCase()}`);
+
+          // Broadcast OS change to frontend
+          ws.broadcast('host.status.changed', {
+            hostId: host.id,
+            hostname: host.hostname,
+            status: host.status,
+            detectedOs: null,
+            lastSeen: new Date(),
+          });
 
           await redisClient.del(failsKey);
           osStaleClear++;

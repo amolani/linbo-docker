@@ -295,7 +295,7 @@ describe('Host Service', () => {
   });
 
   describe('markStaleHostsOffline', () => {
-    test('should mark stale hosts as offline using seconds', async () => {
+    test('should mark stale hosts as offline and clear detectedOs', async () => {
       const staleHosts = [
         { id: 'stale-1', hostname: 'pc-1', lastSeen: new Date(), lastOnlineAt: null },
         { id: 'stale-2', hostname: 'pc-2', lastSeen: new Date(), lastOnlineAt: null },
@@ -310,7 +310,7 @@ describe('Host Service', () => {
       expect(result.count).toBe(2);
       expect(prisma.host.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ status: 'offline' }),
+          data: expect.objectContaining({ status: 'offline', detectedOs: null }),
         })
       );
     });

@@ -121,13 +121,15 @@ async function updateHostStatus(id, status, additionalData = {}) {
  * Bulk update host status for multiple hosts
  * @param {string[]} hostIds - Array of host UUIDs
  * @param {string} status - New status
+ * @param {object} additionalData - Additional fields to update
  */
-async function bulkUpdateStatus(hostIds, status) {
+async function bulkUpdateStatus(hostIds, status, additionalData = {}) {
   const result = await prisma.host.updateMany({
     where: { id: { in: hostIds } },
     data: {
       status,
       lastSeen: new Date(),
+      ...additionalData,
     },
   });
 
@@ -202,7 +204,7 @@ async function markStaleHostsOffline(seconds = 600) {
   }
 
   const hostIds = staleHosts.map(h => h.id);
-  return bulkUpdateStatus(hostIds, 'offline');
+  return bulkUpdateStatus(hostIds, 'offline', { detectedOs: null });
 }
 
 const OFFLINE_TIMEOUT_SEC = parseInt(process.env.HOST_OFFLINE_TIMEOUT_SEC) || 300;
