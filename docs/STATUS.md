@@ -1,6 +1,6 @@
 # LINBO Docker - Projekt Status
 
-**Stand:** 2026-02-06 (Session 2)
+**Stand:** 2026-02-07 (Session 3)
 **Version:** 1.0.0
 **Functional Parity:** ~97%
 
@@ -80,12 +80,24 @@
 - **Internal Routes:** Generalisierter Dispatch nach Operation-Type
 - **Tests:** 29
 
+### GRUB Boot Improvements + HTTP Boot (Session 3, 2026-02-07)
+
+- **Robuste PXE Templates:** Nested if statt && in elif, hostname Guards, cfg_loaded Flags
+- **HTTP Boot:** Kernel/initrd (linbo64 15MB + linbofs64 161MB) ueber HTTP statt TFTP
+  - nginx im Web-Container serviert Boot-Dateien via `sendfile`
+  - GRUB: `insmod http` + `${http_root}` Prefix-Variable fuer Kernel/Initrd-Loading
+  - TFTP bleibt fuer initialen grub.cfg + Config-Dateien (~10KB)
+  - **5-10x schnellere PXE-Boot-Transfers**
+- **TFTP Blocksize:** `--blocksize 1468` (MTU-optimiert) fuer ~3x weniger Pakete
+- **Server-IP Fallback:** DB → ENV → GRUB Variable ($net_default_server)
+- **Tests:** 75 GRUB Tests (vorher 64)
+
 ## Test-Uebersicht
 
 | Test Suite | Tests | Status |
 |------------|-------|--------|
 | dhcp.service.test.js | 49 | Passing |
-| grub.service.test.js | 64 | Passing |
+| grub.service.test.js | 75 | Passing |
 | deviceImport.service.test.js | 42 | Passing |
 | remote.service.test.js | 33 | Passing |
 | provisioning.service.test.js | 29 | Passing |
@@ -95,7 +107,7 @@
 | config.service.test.js | 18 | Passing |
 | api.test.js (Integration) | 34 | 5 pre-existing failures |
 | import.test.js | 50 | Passing |
-| **Gesamt** | **384** | **379 passing (98.7%)** |
+| **Gesamt** | **395** | **390 passing (98.7%)** |
 
 ## Container Architektur
 
@@ -322,6 +334,26 @@ Kompletter PXE-Boot-Workflow validiert auf Test-VM 10.0.0.13:
 **Kritischer Bug behoben:** rsync Container hatte keine Hook-Scripts (`containers/rsync/Dockerfile`), was alle rsync-Verbindungen blockierte. Fix: Commit `bbf747c`.
 
 **Details:** Siehe `docs/E2E-TEST-2026-02-06.md`
+
+## PXE Boot Sequenz (HTTP Boot)
+
+```
+1. Client PXE/DHCP → TFTP Server-IP + Boot-File-Pfad
+2. GRUB laedt grub.cfg via TFTP (klein, schnell)
+3. grub.cfg sourced Gruppen-Config via TFTP (auch klein)
+4. Gruppen-Config: insmod http → laedt Kernel+Initrd via HTTP (SCHNELL!)
+5. LINBO bootet → rsync fuer start.conf + Images
+```
+
+**TFTP** wird nur fuer den initialen GRUB-Config-Load (~10KB) benoetigt.
+**HTTP** (nginx im Web-Container) serviert die grossen Dateien:
+- `linbo64` (15 MB) - LINBO Kernel
+- `linbofs64` (161 MB) - LINBO Initramfs (XZ-komprimiert)
+
+**Vorteile gegenueber reinem TFTP:**
+- TCP mit Windowing statt UDP Stop-and-Wait
+- Keine 1468-Byte Paketgroessen-Limitierung
+- 5-10x schnellere Boot-Transfers
 
 ## Bekannte Einschraenkungen
 
