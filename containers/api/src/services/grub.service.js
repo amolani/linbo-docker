@@ -280,6 +280,8 @@ async function generateConfigGrubConfig(configName, options = {}) {
     cachelabel: cacheLabel,
     cacheroot: cacheRoot,
     kopts: kopts,
+    server: server,
+    httpport: process.env.WEB_PORT || '8080',
   });
 
   // Load OS template
@@ -305,6 +307,8 @@ async function generateConfigGrubConfig(configName, options = {}) {
       osnr: String(osnr),
       partnr: String(partnr),
       kopts: kopts,
+      server: server,
+      httpport: process.env.WEB_PORT || '8080',
     });
 
     content += osContent;
@@ -365,6 +369,7 @@ async function generateMainGrubConfig() {
   const content = applyTemplate(template, {
     timestamp: new Date().toISOString(),
     server: process.env.LINBO_SERVER_IP || '10.0.0.1',
+    httpport: process.env.WEB_PORT || '8080',
   });
 
   await fs.mkdir(GRUB_DIR, { recursive: true });
