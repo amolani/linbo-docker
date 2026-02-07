@@ -59,6 +59,9 @@ menuentry '@@osname@@ (Linbo-Start)' --class @@ostype@@_start {
  elif [ -n "$pxe_default_server" ]; then
   set root="(tftp)"
   set bootflag=netboot
+ elif [ -n "$net_default_server" ]; then
+  set root="(tftp)"
+  set bootflag=netboot
  fi
 
  if [ -n "$bootflag" ]; then
@@ -82,6 +85,9 @@ menuentry '@@osname@@ (Sync+Start)' --class @@ostype@@_syncstart {
  elif [ -n "$pxe_default_server" ]; then
   set root="(tftp)"
   set bootflag=netboot
+ elif [ -n "$net_default_server" ]; then
+  set root="(tftp)"
+  set bootflag=netboot
  fi
 
  if [ -n "$bootflag" ]; then
@@ -103,6 +109,9 @@ menuentry '@@osname@@ (Neu+Start)' --class @@ostype@@_newstart {
  if [ -e "$linbo_kernel" -a -e "$linbo_initrd" ]; then
   set bootflag=localboot
  elif [ -n "$pxe_default_server" ]; then
+  set root="(tftp)"
+  set bootflag=netboot
+ elif [ -n "$net_default_server" ]; then
   set root="(tftp)"
   set bootflag=netboot
  fi

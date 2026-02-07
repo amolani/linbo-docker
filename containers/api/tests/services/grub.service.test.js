@@ -10,6 +10,7 @@ const os = require('os');
 // Set environment before importing service
 const TEST_DIR = path.join(os.tmpdir(), `linbo-grub-test-${Date.now()}`);
 process.env.LINBO_DIR = TEST_DIR;
+process.env.LINBO_SERVER_IP = '10.0.0.1';
 
 // Mock Prisma
 jest.mock('../../src/lib/prisma', () => ({
@@ -290,6 +291,41 @@ describe('GRUB Service', () => {
       expect(result.content).toContain('(hd0,3)');
     });
 
+    test('should use --no-floppy on search commands', async () => {
+      prisma.config.findFirst.mockResolvedValue(mockConfig);
+
+      const result = await grubService.generateConfigGrubConfig('win11_efi_sata');
+
+      expect(result.content).toContain('search --no-floppy --label');
+      expect(result.content).toContain('search --no-floppy --file /start.conf');
+      expect(result.content).toContain('search --no-floppy --file "$linbo_initrd"');
+    });
+
+    test('should guard linbo_initrd search with -n check', async () => {
+      prisma.config.findFirst.mockResolvedValue(mockConfig);
+
+      const result = await grubService.generateConfigGrubConfig('win11_efi_sata');
+
+      expect(result.content).toContain('[ -z "$cacheroot" -a -n "$linbo_initrd" ]');
+    });
+
+    test('should include net_default_server fallback for netboot', async () => {
+      prisma.config.findFirst.mockResolvedValue(mockConfig);
+
+      const result = await grubService.generateConfigGrubConfig('win11_efi_sata');
+
+      expect(result.content).toContain('$pxe_default_server');
+      expect(result.content).toContain('$net_default_server');
+    });
+
+    test('should set cfg_loaded=1 at end of global template', async () => {
+      prisma.config.findFirst.mockResolvedValue(mockConfig);
+
+      const result = await grubService.generateConfigGrubConfig('win11_efi_sata');
+
+      expect(result.content).toContain('set cfg_loaded=1');
+    });
+
     test('should generate OS menu entries', async () => {
       prisma.config.findFirst.mockResolvedValue(mockConfig);
 
@@ -338,6 +374,18 @@ describe('GRUB Service', () => {
       expect(result.content).toContain("menuentry 'LINBO'");
     });
 
+    test('should use LINBO_SERVER_IP env as fallback when no Server in config', async () => {
+      prisma.config.findFirst.mockResolvedValue({
+        ...mockConfig,
+        linboSettings: { KernelOptions: 'quiet' },
+      });
+
+      const result = await grubService.generateConfigGrubConfig('win11_efi_sata');
+
+      // Server should come from env (10.0.0.1)
+      expect(result.content).toContain('server=10.0.0.1');
+    });
+
     test('should include GRUB modules', async () => {
       prisma.config.findFirst.mockResolvedValue(mockConfig);
 
@@ -367,6 +415,17 @@ describe('GRUB Service', () => {
       expect(result.content).toContain('--class win11_start');
       expect(result.content).toContain('--class win11_syncstart');
       expect(result.content).toContain('--class win11_newstart');
+    });
+
+    test('should include net_default_server fallback in OS entries', async () => {
+      prisma.config.findFirst.mockResolvedValue(mockConfig);
+
+      const result = await grubService.generateConfigGrubConfig('win11_efi_sata');
+
+      // Count occurrences of net_default_server in OS section
+      // Should appear in Linbo-Start, Sync+Start, Neu+Start (3 times) + global (1 time) = 4
+      const matches = result.content.match(/\$net_default_server/g);
+      expect(matches.length).toBe(4);
     });
   });
 
@@ -433,26 +492,50 @@ describe('GRUB Service', () => {
       expect(result.content).toContain('set default=0');
     });
 
-    test('should include host-specific config lookup', async () => {
+    test('should include host-specific config lookup with hostname guard', async () => {
       const result = await grubService.generateMainGrubConfig();
 
-      expect(result.content).toContain('if [ -f $prefix/hostcfg/$net_default_hostname.cfg ]');
-      expect(result.content).toContain('source $prefix/hostcfg/');
+      // Should guard hostname check with -n before file check
+      expect(result.content).toContain('if [ -n "$net_default_hostname" ]');
+      expect(result.content).toContain('source $prefix/hostcfg/$net_default_hostname.cfg');
     });
 
-    test('should include group config fallback', async () => {
+    test('should include hostname variable fallback', async () => {
       const result = await grubService.generateMainGrubConfig();
 
-      expect(result.content).toContain('elif [ -n "$group" ] && [ -f $prefix/$group.cfg ]');
+      expect(result.content).toContain('[ -z "$cfg_loaded" -a -n "$hostname" ]');
+      expect(result.content).toContain('source $prefix/hostcfg/$hostname.cfg');
+    });
+
+    test('should include group config fallback with cfg_loaded guard', async () => {
+      const result = await grubService.generateMainGrubConfig();
+
+      expect(result.content).toContain('[ -z "$cfg_loaded" -a -n "$group" ]');
       expect(result.content).toContain('source $prefix/$group.cfg');
     });
 
-    test('should include direct boot fallback', async () => {
+    test('should set cfg_loaded=1 after each source', async () => {
       const result = await grubService.generateMainGrubConfig();
 
-      expect(result.content).toContain('else');
-      expect(result.content).toContain('linux /linbo64');
+      const matches = result.content.match(/set cfg_loaded=1/g);
+      // 3 source blocks (net_default_hostname, hostname, group) = 3 cfg_loaded=1
+      expect(matches.length).toBe(3);
+    });
+
+    test('should include direct boot fallback with server from env', async () => {
+      const result = await grubService.generateMainGrubConfig();
+
+      expect(result.content).toContain('if [ -z "$cfg_loaded" ]');
+      expect(result.content).toContain('linux /linbo64 quiet splash server=10.0.0.1');
       expect(result.content).toContain('initrd /linbofs64');
+    });
+
+    test('should use nested if instead of && in elif', async () => {
+      const result = await grubService.generateMainGrubConfig();
+
+      // Should NOT contain the old-style && in elif
+      expect(result.content).not.toContain('elif');
+      expect(result.content).not.toContain('] && [');
     });
 
     test('should write file to grub directory', async () => {

@@ -37,13 +37,13 @@ clear
 # find linbo cache partition
 set cachelabel="@@cachelabel@@"
 if [ -n "$cachelabel" ]; then
-  search --label "$cachelabel" --set cacheroot
+  search --no-floppy --label "$cachelabel" --set cacheroot
 fi
 if [ -z "$cacheroot" ]; then
-  search --file /start.conf --set cacheroot
+  search --no-floppy --file /start.conf --set cacheroot
 fi
-if [ -z "$cacheroot" ]; then
-  search --file "$linbo_initrd" --set cacheroot
+if [ -z "$cacheroot" -a -n "$linbo_initrd" ]; then
+  search --no-floppy --file "$linbo_initrd" --set cacheroot
 fi
 if [ -n "$cacheroot" ]; then
   set root="$cacheroot"
@@ -60,6 +60,9 @@ menuentry 'LINBO' --class linbo {
  if [ -e "$linbo_kernel" -a -e "$linbo_initrd" ]; then
   set bootflag=localboot
  elif [ -n "$pxe_default_server" ]; then
+  set root="(tftp)"
+  set bootflag=netboot
+ elif [ -n "$net_default_server" ]; then
   set root="(tftp)"
   set bootflag=netboot
  fi
@@ -83,3 +86,5 @@ menuentry 'LINBO' --class linbo {
  fi
 
 }
+
+set cfg_loaded=1
