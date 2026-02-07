@@ -162,6 +162,8 @@ model Image {
   uploadedAt   DateTime? @map("uploaded_at") @db.Timestamptz
   lastUsedAt   DateTime? @map("last_used_at") @db.Timestamptz
   lastUsedBy   String?   @map("last_used_by") @db.VarChar(255)
+  imageInfo    Json?     @map("image_info")
+  infoUpdatedAt DateTime? @map("info_updated_at") @db.Timestamptz
 
   @@map("images")
 }

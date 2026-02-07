@@ -25,6 +25,9 @@ if [ "$RSYNC_EXIT_STATUS" = "0" ]; then
     # Extract filename from request
     FILENAME=$(basename "$RSYNC_REQUEST")
 
+    # Normalize relative path (strip leading slash)
+    REL="${RSYNC_REQUEST#/}"
+
     # Notify API about upload completion
     # For image files (.qcow2, .qdiff), API will auto-register them
     curl -s -X POST "${API_URL}/internal/rsync-event" \
@@ -35,10 +38,11 @@ if [ "$RSYNC_EXIT_STATUS" = "0" ]; then
             \"module\": \"${RSYNC_MODULE_NAME}\",
             \"clientIp\": \"${RSYNC_HOST_ADDR}\",
             \"request\": \"${RSYNC_REQUEST}\",
-            \"filename\": \"${FILENAME}\"
+            \"filename\": \"${FILENAME}\",
+            \"relativePath\": \"${REL}\"
         }" 2>/dev/null || log "Failed to notify API"
 
-    log "Upload successful: $FILENAME"
+    log "Upload successful: $FILENAME (rel=$REL)"
 else
     log "Upload failed: exit=$RSYNC_EXIT_STATUS"
 fi

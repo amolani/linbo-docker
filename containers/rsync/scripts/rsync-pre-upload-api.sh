@@ -20,8 +20,28 @@ log() {
 
 log "Started: module=$RSYNC_MODULE_NAME client=$RSYNC_HOST_ADDR request=$RSYNC_REQUEST"
 
-# Extract filename from request
+# Compute full file path (same logic as production rsync-pre-upload.sh)
+FILE="${RSYNC_MODULE_PATH}/${RSYNC_REQUEST##$RSYNC_MODULE_NAME/}"
+DIRNAME="$(dirname "$FILE")"
 FILENAME=$(basename "$RSYNC_REQUEST")
+EXT="${FILENAME##*.}"
+
+# Traversal check: only mkdir under module path
+if [[ "$DIRNAME" != "$RSYNC_MODULE_PATH"* ]]; then
+    log "SECURITY: dirname $DIRNAME outside module path, skipping mkdir"
+    exit 0
+fi
+
+# Create directory before rsync writes (production parity)
+case "$EXT" in
+    qcow2|qdiff|cloop)
+        mkdir -p "$DIRNAME"
+        log "Created image dir: $DIRNAME"
+        ;;
+    info|desc|torrent|macct|md5|reg|prestart|postsync)
+        mkdir -p "$DIRNAME"
+        ;;
+esac
 
 # Notify API
 curl -s -X POST "${API_URL}/internal/rsync-event" \

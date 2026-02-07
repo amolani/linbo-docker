@@ -302,6 +302,22 @@ async function startServer() {
     console.log('  Host Status Worker disabled');
   }
 
+  // Startup sanity check: verify critical directories exist
+  const sanityFs = require('fs');
+  const { LINBO_DIR, IMAGES_DIR } = require('./lib/image-path');
+  const criticalPaths = [
+    { path: LINBO_DIR, desc: 'LINBO root' },
+    { path: `${LINBO_DIR}/boot/grub`, desc: 'GRUB config dir' },
+    { path: IMAGES_DIR, desc: 'Images dir' },
+  ];
+  for (const { path: p, desc } of criticalPaths) {
+    if (!sanityFs.existsSync(p)) {
+      console.warn(`  ⚠ WARNING: ${desc} missing: ${p}`);
+    } else {
+      console.log(`  ${desc}: ${p} ✓`);
+    }
+  }
+
   // Start HTTP server
   server.listen(PORT, HOST, () => {
     console.log(`

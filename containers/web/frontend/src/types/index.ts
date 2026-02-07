@@ -154,13 +154,32 @@ export interface ConfigOs {
   postsyncScript?: string;
 }
 
+// Image Sidecar
+export interface ImageSidecar {
+  exists: boolean;
+  size?: number;
+  modifiedAt?: string;
+}
+
+export interface ImageSidecarSummary {
+  hasInfo: boolean;
+  hasDesc: boolean;
+  hasTorrent: boolean;
+  hasMd5: boolean;
+  hasReg: boolean;
+  hasPrestart: boolean;
+  hasPostsync: boolean;
+}
+
 // Image
 export interface Image {
   id: string;
   filename: string;
   type: 'base' | 'differential' | 'rsync';
   path: string;
+  absolutePath?: string;
   size?: number;
+  fileSize?: number;
   checksum?: string;
   backingImage?: string;
   description?: string;
@@ -171,6 +190,10 @@ export interface Image {
   uploadedAt?: string;
   lastUsedAt?: string;
   lastUsedBy?: string;
+  sidecars?: Record<string, ImageSidecar>;
+  sidecarSummary?: ImageSidecarSummary;
+  imageInfo?: Record<string, string>;
+  infoUpdatedAt?: string;
 }
 
 // Operation

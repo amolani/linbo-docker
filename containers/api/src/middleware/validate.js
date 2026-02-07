@@ -145,7 +145,7 @@ const updateConfigSchema = createConfigSchema.partial();
 const createImageSchema = z.object({
   filename: z.string().min(1).max(255),
   type: z.enum(['base', 'differential', 'torrent']),
-  path: z.string().max(1024),
+  path: z.string().max(1024).optional(),
   size: z.number().optional(),
   checksum: z.string().max(64).optional(),
   backingImage: z.string().max(255).optional(),

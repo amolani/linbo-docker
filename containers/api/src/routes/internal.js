@@ -37,7 +37,7 @@ function authenticateInternal(req, res, next) {
  */
 router.post('/rsync-event', authenticateInternal, async (req, res, next) => {
   try {
-    const { event, module, clientIp, request, filename } = req.body;
+    const { event, module, clientIp, request, filename, relativePath } = req.body;
 
     console.log(`[Internal] RSYNC event: ${event} from ${clientIp} (${module})`);
 
@@ -130,9 +130,17 @@ router.post('/rsync-event', authenticateInternal, async (req, res, next) => {
           timestamp: new Date(),
         });
 
-        // If it's an image upload, register or update the image
-        if (filename && (filename.endsWith('.qcow2') || filename.endsWith('.qdiff'))) {
-          await handleImageUpload(filename, clientIp, host);
+        // Handle image or sidecar upload
+        if (filename) {
+          const { IMAGE_EXTS, parseSidecarFilename } = require('../lib/image-path');
+          if (IMAGE_EXTS.some(ext => filename.endsWith(ext))) {
+            await handleImageUpload(filename, clientIp, host, relativePath);
+          } else {
+            const sidecar = parseSidecarFilename(filename);
+            if (sidecar) {
+              await handleSidecarUpload(sidecar.imageFilename, sidecar.sidecarExt, clientIp);
+            }
+          }
         }
 
         // Update host status back to 'online'
@@ -166,10 +174,39 @@ router.post('/rsync-event', authenticateInternal, async (req, res, next) => {
 /**
  * Handle image upload completion
  */
-async function handleImageUpload(filename, clientIp, host) {
-  const LINBO_DIR = process.env.LINBO_DIR || '/srv/linbo';
+async function handleImageUpload(filename, clientIp, host, relativePath) {
+  const {
+    parseMainFilename,
+    resolveImageDir,
+    resolveImagePath,
+    resolveSidecarPath,
+    toRelativePath,
+  } = require('../lib/image-path');
   const fs = require('fs').promises;
-  const path = require('path');
+
+  // Validate filename
+  let parsed;
+  try {
+    parsed = parseMainFilename(filename);
+  } catch (err) {
+    console.error(`[Internal] Invalid image filename "${filename}": ${err.message}`);
+    return;
+  }
+
+  // Validate relativePath from rsync hook (informational)
+  const expectedRelPath = toRelativePath(filename);
+  const normalizedRelPath = (relativePath || '').replace(/^\/+/, '');
+  if (normalizedRelPath && normalizedRelPath !== expectedRelPath) {
+    console.warn(`[Internal] rsync relativePath mismatch: got="${normalizedRelPath}", expected="${expectedRelPath}" — using server-computed`);
+  }
+
+  // Ensure image subdirectory exists
+  const imageDir = resolveImageDir(filename);
+  try {
+    await fs.mkdir(imageDir, { recursive: true });
+  } catch (err) {
+    console.error(`[Internal] Failed to create image dir ${imageDir}:`, err.message);
+  }
 
   // Determine image type
   const type = filename.endsWith('.qdiff') ? 'differential' : 'base';
@@ -179,31 +216,68 @@ async function handleImageUpload(filename, clientIp, host) {
     where: { filename },
   });
 
-  const filepath = path.join(LINBO_DIR, filename);
+  const { LINBO_DIR } = require('../lib/image-path');
+  const path = require('path');
+  const filepath = resolveImagePath(filename);
+  const relPath = toRelativePath(filename);
 
-  // Get file info
+  // Get file info — check canonical path first, then flat path as fallback
   let size = null;
   let checksum = null;
+  let actualFilePath = filepath;
   try {
     const stat = await fs.stat(filepath);
     size = stat.size;
-
-    // Try to read MD5 file
+  } catch {
+    // Fallback: check flat path (legacy client uploaded to /srv/linbo/<filename>)
+    const flatPath = path.join(LINBO_DIR, filename);
     try {
-      checksum = await fs.readFile(`${filepath}.md5`, 'utf8');
-      checksum = checksum.trim();
-    } catch (e) {
-      // MD5 file doesn't exist
+      const stat = await fs.stat(flatPath);
+      size = stat.size;
+      actualFilePath = flatPath;
+      // Move flat file to canonical subdirectory
+      console.warn(`[Internal] Legacy flat upload detected: ${flatPath} → ${filepath}`);
+      try {
+        await fs.rename(flatPath, filepath);
+        actualFilePath = filepath;
+        console.log(`[Internal] Moved ${filename} to ${filepath}`);
+        // Also move sidecars if they exist
+        for (const sfx of ['.md5', '.info', '.desc', '.torrent', '.macct']) {
+          try {
+            await fs.rename(flatPath + sfx, filepath + sfx);
+          } catch { /* sidecar doesn't exist */ }
+        }
+      } catch (moveErr) {
+        console.error(`[Internal] Failed to move ${flatPath} → ${filepath}:`, moveErr.message);
+      }
+    } catch {
+      console.error(`[Internal] Image file not found at ${filepath} or ${flatPath}`);
     }
-  } catch (e) {
-    console.error(`[Internal] Failed to stat ${filepath}:`, e.message);
   }
 
+  // Try to read MD5 sidecar
+  try {
+    const md5Path = resolveSidecarPath(filename, '.md5');
+    checksum = await fs.readFile(md5Path, 'utf8');
+    checksum = checksum.trim();
+  } catch {
+    // Also check flat MD5 as fallback
+    try {
+      const flatMd5 = path.join(LINBO_DIR, filename + '.md5');
+      checksum = await fs.readFile(flatMd5, 'utf8');
+      checksum = checksum.trim();
+    } catch {
+      // MD5 file doesn't exist
+    }
+  }
+
+  let imageId;
   if (image) {
-    // Update existing image
+    // Update existing image (also fix path if it was legacy)
     await prisma.image.update({
       where: { id: image.id },
       data: {
+        path: relPath,
         size: size ? BigInt(size) : null,
         checksum,
         uploadedAt: new Date(),
@@ -211,6 +285,7 @@ async function handleImageUpload(filename, clientIp, host) {
         lastUsedBy: host?.hostname,
       },
     });
+    imageId = image.id;
 
     ws.broadcast('image.updated', {
       imageId: image.id,
@@ -219,14 +294,14 @@ async function handleImageUpload(filename, clientIp, host) {
       uploadedBy: host?.hostname,
     });
 
-    console.log(`[Internal] Updated image: ${filename}`);
+    console.log(`[Internal] Updated image: ${filename} (path=${relPath})`);
   } else {
     // Register new image
     const newImage = await prisma.image.create({
       data: {
         filename,
         type,
-        path: filepath,
+        path: relPath,
         size: size ? BigInt(size) : null,
         checksum,
         status: 'available',
@@ -234,6 +309,7 @@ async function handleImageUpload(filename, clientIp, host) {
         createdBy: host?.hostname || clientIp,
       },
     });
+    imageId = newImage.id;
 
     ws.broadcast('image.created', {
       imageId: newImage.id,
@@ -242,7 +318,236 @@ async function handleImageUpload(filename, clientIp, host) {
       uploadedBy: host?.hostname,
     });
 
-    console.log(`[Internal] Registered new image: ${filename}`);
+    console.log(`[Internal] Registered new image: ${filename} (path=${relPath})`);
+  }
+
+  // Catch up sidecars that may have arrived before the image
+  await catchUpSidecars(filename, imageId);
+}
+
+// =============================================================================
+// Sidecar handling
+// =============================================================================
+
+/**
+ * Rate-limited warning for sidecars arriving before their image
+ */
+const sidecarWarnCache = new Map();
+const SIDECAR_WARN_MAX = 200;
+const SIDECAR_WARN_TTL = 10 * 60 * 1000;
+
+function shouldWarnSidecarBeforeImage(imageFilename) {
+  const now = Date.now();
+  // Cleanup old entries when map is full
+  if (sidecarWarnCache.size > SIDECAR_WARN_MAX) {
+    for (const [k, v] of sidecarWarnCache) {
+      if (now - v > SIDECAR_WARN_TTL) sidecarWarnCache.delete(k);
+    }
+  }
+  const last = sidecarWarnCache.get(imageFilename);
+  if (last && now - last < 60_000) return false; // max 1x/min per filename
+  sidecarWarnCache.set(imageFilename, now);
+  return true;
+}
+
+/**
+ * Parse .info timestamp format "202601271107" → ISO string (UTC)
+ */
+function parseInfoTimestamp(raw) {
+  if (!raw || typeof raw !== 'string' || raw.length < 12) return null;
+  const clean = raw.replace(/['"]/g, '');
+  if (clean.length < 12) return null;
+  const year = parseInt(clean.slice(0, 4), 10);
+  const month = parseInt(clean.slice(4, 6), 10) - 1; // 0-indexed
+  const day = parseInt(clean.slice(6, 8), 10);
+  const hour = parseInt(clean.slice(8, 10), 10);
+  const min = parseInt(clean.slice(10, 12), 10);
+  if (isNaN(year) || isNaN(month) || isNaN(day) || isNaN(hour) || isNaN(min)) return null;
+  const d = new Date(Date.UTC(year, month, day, hour, min));
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
+/**
+ * Read and parse a .info file for an image.
+ * Returns { imageInfo, infoUpdatedAt, size?, uploadedAt? } or null.
+ */
+async function readInfoFile(imageFilename) {
+  const { resolveSidecarPath, INFO_KEYS } = require('../lib/image-path');
+  const fs = require('fs').promises;
+
+  const infoPath = resolveSidecarPath(imageFilename, '.info');
+  let content;
+  try {
+    content = await fs.readFile(infoPath, 'utf8');
+  } catch {
+    return null;
+  }
+
+  const parsed = {};
+  for (const line of content.split('\n')) {
+    const match = line.match(/^(\w+)="(.*)"/);
+    if (match) {
+      const [, key, value] = match;
+      if (INFO_KEYS.includes(key)) {
+        parsed[key] = value;
+      }
+    }
+  }
+
+  // Cross-check image field
+  if (parsed.image && parsed.image !== imageFilename) {
+    if (shouldWarnSidecarBeforeImage(`info-mismatch:${imageFilename}`)) {
+      console.warn(`[Internal] .info image mismatch: file says "${parsed.image}", expected "${imageFilename}"`);
+    }
+  }
+
+  const result = { imageInfo: { ...parsed }, infoUpdatedAt: new Date() };
+
+  // Parse timestamp
+  if (parsed.timestamp) {
+    const isoTs = parseInfoTimestamp(parsed.timestamp);
+    if (isoTs) {
+      result.imageInfo.timestampRaw = parsed.timestamp;
+      result.imageInfo.timestamp = isoTs;
+      result.uploadedAt = new Date(isoTs);
+    }
+  }
+
+  // Parse imagesize → size
+  if (parsed.imagesize) {
+    const sizeNum = parseInt(parsed.imagesize, 10);
+    if (!isNaN(sizeNum) && sizeNum > 0) {
+      result.size = sizeNum;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Handle sidecar file upload (called when rsync uploads .info, .desc, etc.)
+ */
+async function handleSidecarUpload(imageFilename, sidecarExt, clientIp) {
+  const fs = require('fs').promises;
+  const { resolveSidecarPath } = require('../lib/image-path');
+
+  // Look up the parent image in DB
+  const image = await prisma.image.findFirst({ where: { filename: imageFilename } });
+  if (!image) {
+    if (shouldWarnSidecarBeforeImage(imageFilename)) {
+      console.warn(`[Internal] Sidecar ${sidecarExt} for unknown image "${imageFilename}" — will be caught up on image registration`);
+    }
+    return;
+  }
+
+  const updateData = {};
+
+  switch (sidecarExt) {
+    case '.info': {
+      const info = await readInfoFile(imageFilename);
+      if (info) {
+        updateData.imageInfo = info.imageInfo;
+        updateData.infoUpdatedAt = info.infoUpdatedAt;
+        if (info.size) updateData.size = BigInt(info.size);
+        if (info.uploadedAt) updateData.uploadedAt = info.uploadedAt;
+      }
+      break;
+    }
+    case '.desc': {
+      try {
+        const descPath = resolveSidecarPath(imageFilename, '.desc');
+        const content = await fs.readFile(descPath, 'utf8');
+        const trimmed = content.trim();
+        updateData.description = trimmed || null;
+      } catch { /* file not readable */ }
+      break;
+    }
+    case '.torrent': {
+      try {
+        const torrentPath = resolveSidecarPath(imageFilename, '.torrent');
+        await fs.stat(torrentPath); // verify exists
+        const { parseMainFilename } = require('../lib/image-path');
+        const { base } = parseMainFilename(imageFilename);
+        updateData.torrentFile = `images/${base}/${imageFilename}.torrent`;
+      } catch { /* file not found */ }
+      break;
+    }
+    case '.md5': {
+      try {
+        const md5Path = resolveSidecarPath(imageFilename, '.md5');
+        const content = await fs.readFile(md5Path, 'utf8');
+        const hash = content.trim().split(/\s/)[0];
+        if (hash) updateData.checksum = hash;
+      } catch { /* file not readable */ }
+      break;
+    }
+    case '.macct': {
+      console.log(`[Internal] Machine account file uploaded for ${imageFilename}`);
+      break;
+    }
+  }
+
+  if (Object.keys(updateData).length > 0) {
+    await prisma.image.update({ where: { id: image.id }, data: updateData });
+    ws.broadcast('image.updated', { imageId: image.id, filename: imageFilename, sidecar: sidecarExt });
+    console.log(`[Internal] Sidecar ${sidecarExt} processed for ${imageFilename}: ${Object.keys(updateData).join(', ')}`);
+  }
+}
+
+/**
+ * Catch up sidecars that may have arrived before the image was registered.
+ * Called after every image registration/re-upload.
+ */
+async function catchUpSidecars(imageFilename, imageId) {
+  const fs = require('fs').promises;
+  const { resolveSidecarPath, parseMainFilename } = require('../lib/image-path');
+
+  const updateData = {};
+  const caughtUp = [];
+
+  // .info
+  const info = await readInfoFile(imageFilename);
+  if (info) {
+    updateData.imageInfo = info.imageInfo;
+    updateData.infoUpdatedAt = info.infoUpdatedAt;
+    if (info.size) updateData.size = BigInt(info.size);
+    if (info.uploadedAt) updateData.uploadedAt = info.uploadedAt;
+    caughtUp.push('.info');
+  }
+
+  // .desc
+  try {
+    const descPath = resolveSidecarPath(imageFilename, '.desc');
+    const content = await fs.readFile(descPath, 'utf8');
+    const trimmed = content.trim();
+    updateData.description = trimmed || null;
+    caughtUp.push('.desc');
+  } catch { /* not found */ }
+
+  // .torrent
+  try {
+    const torrentPath = resolveSidecarPath(imageFilename, '.torrent');
+    await fs.stat(torrentPath);
+    const { base } = parseMainFilename(imageFilename);
+    updateData.torrentFile = `images/${base}/${imageFilename}.torrent`;
+    caughtUp.push('.torrent');
+  } catch { /* not found */ }
+
+  // .md5 — checksum may already be set by handleImageUpload, only override if not set
+  try {
+    const md5Path = resolveSidecarPath(imageFilename, '.md5');
+    const content = await fs.readFile(md5Path, 'utf8');
+    const hash = content.trim().split(/\s/)[0];
+    if (hash) {
+      updateData.checksum = hash;
+      caughtUp.push('.md5');
+    }
+  } catch { /* not found */ }
+
+  if (Object.keys(updateData).length > 0) {
+    await prisma.image.update({ where: { id: imageId }, data: updateData });
+    console.log(`[Internal] Caught up sidecars for ${imageFilename}: ${caughtUp.join(', ')}`);
   }
 }
 
@@ -657,5 +962,15 @@ router.get('/operations/:id', authenticateInternal, async (req, res, next) => {
     next(error);
   }
 });
+
+// Export internals for testing
+router._testExports = {
+  parseInfoTimestamp,
+  readInfoFile,
+  handleSidecarUpload,
+  catchUpSidecars,
+  shouldWarnSidecarBeforeImage,
+  sidecarWarnCache,
+};
 
 module.exports = router;

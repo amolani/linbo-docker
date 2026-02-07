@@ -9,8 +9,8 @@ const { prisma } = require('../lib/prisma');
 const { authenticateToken } = require('../middleware/auth');
 const redis = require('../lib/redis');
 const fs = require('fs').promises;
-
-const IMAGES_DIR = process.env.IMAGES_DIR || '/srv/linbo/images';
+const path = require('path');
+const { IMAGES_DIR } = require('../lib/image-path');
 
 /**
  * GET /stats/overview
@@ -282,21 +282,31 @@ router.get('/images', authenticateToken, async (req, res, next) => {
 
     const totalSize = images.reduce((sum, img) => sum + (img.size || BigInt(0)), BigInt(0));
 
-    // Get actual disk usage
+    // Get actual disk usage (iterate subdirectories)
     let diskUsage = null;
     try {
-      const files = await fs.readdir(IMAGES_DIR);
-      const stats = await Promise.all(
-        files.map(async (file) => {
+      const entries = await fs.readdir(IMAGES_DIR, { withFileTypes: true });
+      let totalDisk = 0;
+      for (const entry of entries) {
+        const entryPath = path.join(IMAGES_DIR, entry.name);
+        if (entry.isDirectory()) {
           try {
-            const stat = await fs.stat(`${IMAGES_DIR}/${file}`);
-            return stat.size;
-          } catch {
-            return 0;
-          }
-        })
-      );
-      diskUsage = stats.reduce((a, b) => a + b, 0);
+            const subFiles = await fs.readdir(entryPath);
+            for (const sf of subFiles) {
+              try {
+                const stat = await fs.stat(path.join(entryPath, sf));
+                totalDisk += stat.size;
+              } catch { /* ignore */ }
+            }
+          } catch { /* ignore */ }
+        } else {
+          try {
+            const stat = await fs.stat(entryPath);
+            totalDisk += stat.size;
+          } catch { /* ignore */ }
+        }
+      }
+      diskUsage = totalDisk;
     } catch {
       // Ignore
     }
