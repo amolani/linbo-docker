@@ -66,6 +66,7 @@ jest.mock('../../src/services/host.service', () => ({
 
 const { prisma } = require('../../src/lib/prisma');
 const redis = require('../../src/lib/redis');
+const ws = require('../../src/lib/websocket');
 const hostService = require('../../src/services/host.service');
 const net = require('net');
 
@@ -360,7 +361,7 @@ describe('Host Status Worker', () => {
       expect(mockRedisClient.del).toHaveBeenCalledWith('host:scan:fails:1');
     });
 
-    test('AC6: detectedOs cleared after STALE_AFTER fails (only if non-null)', async () => {
+    test('AC6: detectedOs cleared after STALE_AFTER fails (only if non-null) with WS broadcast', async () => {
       const hosts = [makeHost(1, { status: 'online', detectedOs: 'windows' })];
       prisma.host.findMany.mockResolvedValue(hosts);
       mockRedisClient.incr.mockResolvedValue(5); // Reaches STALE_AFTER
@@ -376,6 +377,13 @@ describe('Host Status Worker', () => {
         data: { detectedOs: null },
       });
       expect(mockRedisClient.del).toHaveBeenCalledWith('host:scan:fails:1');
+      // Verify WS broadcast notifies frontend of cleared OS
+      expect(ws.broadcast).toHaveBeenCalledWith('host.status.changed', expect.objectContaining({
+        hostId: '1',
+        hostname: 'pc-1',
+        status: 'online',
+        detectedOs: null,
+      }));
     });
 
     test('AC6: detectedOs=null NOT written if already null', async () => {
