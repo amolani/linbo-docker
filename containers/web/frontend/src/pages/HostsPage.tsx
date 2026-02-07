@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, Download, Upload, Trash2, Monitor } from 'lucide-react';
 import { useHosts, useHostActions, useHostFilters } from '@/hooks/useHosts';
+import { useDataInvalidation } from '@/hooks/useDataInvalidation';
 import { roomsApi } from '@/api/rooms';
 import { configsApi } from '@/api/configs';
 import { hostsApi } from '@/api/hosts';
@@ -20,6 +21,7 @@ export function HostsPage() {
     sort,
     order,
     isLoading,
+    fetchHosts,
     setPage,
     setLimit,
     setSort,
@@ -29,6 +31,10 @@ export function HostsPage() {
   } = useHosts();
 
   const { filters, updateFilter, clearFilters } = useHostFilters();
+
+  // Reactive: refetch hosts on WS entity changes (AC2: debounced)
+  useDataInvalidation('host', fetchHosts);
+
   const {
     isActionLoading,
     wakeOnLan,

@@ -253,20 +253,26 @@ export interface ApiError {
 }
 
 // WebSocket events
-export interface WsHostStatusEvent {
+export interface WsEventBase {
+  type: string;
+  timestamp: string;
+  payload?: unknown; // Legacy compat — use getEventData() for safe access
+}
+
+export interface WsHostStatusEvent extends WsEventBase {
   type: 'host.status.changed';
-  payload: {
+  data: {
     hostId: string;
     hostname: string;
     status: HostStatus;
-    previousStatus: HostStatus;
-    timestamp: string;
+    detectedOs: string | null;
+    lastSeen: string;
   };
 }
 
-export interface WsSyncProgressEvent {
+export interface WsSyncProgressEvent extends WsEventBase {
   type: 'sync.progress';
-  payload: {
+  data: {
     hostId: string;
     hostname: string;
     progress: number;
@@ -275,29 +281,35 @@ export interface WsSyncProgressEvent {
   };
 }
 
-export interface WsOperationProgressEvent {
+export interface WsOperationProgressEvent extends WsEventBase {
   type: 'operation.progress';
-  payload: {
+  data: {
     operationId: string;
     progress: number;
     stats: OperationStats;
   };
 }
 
-export interface WsNotificationEvent {
+export interface WsNotificationEvent extends WsEventBase {
   type: 'notification';
-  payload: {
+  data: {
     level: 'info' | 'success' | 'warning' | 'error';
     title: string;
     message: string;
   };
 }
 
+export interface WsEntityChangeEvent extends WsEventBase {
+  type: string;
+  data: { id: string; name?: string };
+}
+
 export type WsEvent =
   | WsHostStatusEvent
   | WsSyncProgressEvent
   | WsOperationProgressEvent
-  | WsNotificationEvent;
+  | WsNotificationEvent
+  | WsEntityChangeEvent;
 
 // DHCP
 export interface NetworkSettings {

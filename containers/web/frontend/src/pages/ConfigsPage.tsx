@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, Copy, Eye, Code, CloudUpload } from 'lucide-react';
 import { configsApi } from '@/api/configs';
+import { useDataInvalidation } from '@/hooks/useDataInvalidation';
 import { Button, Table, Modal, Input, Textarea, Badge, ConfirmModal } from '@/components/ui';
 import { LinboSettingsForm, PartitionsEditor, OsEntriesEditor, RawConfigEditorModal } from '@/components/configs';
 import { notify } from '@/stores/notificationStore';
@@ -52,6 +53,9 @@ export function ConfigsPage() {
       setIsLoading(false);
     }
   };
+
+  // Reactive: refetch configs on WS entity changes
+  useDataInvalidation('config', fetchConfigs);
 
   useEffect(() => {
     fetchConfigs();

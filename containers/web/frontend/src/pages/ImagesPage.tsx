@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, CheckCircle2, RefreshCw } from 'lucide-react';
 import { imagesApi } from '@/api/images';
+import { useDataInvalidation } from '@/hooks/useDataInvalidation';
 import { Button, Table, Modal, Input, Textarea, Select, Badge, ConfirmModal } from '@/components/ui';
 import { notify } from '@/stores/notificationStore';
 import type { Image, Column } from '@/types';
@@ -48,6 +49,9 @@ export function ImagesPage() {
       setIsLoading(false);
     }
   };
+
+  // Reactive: refetch images on WS entity changes
+  useDataInvalidation('image', fetchImages);
 
   useEffect(() => {
     fetchImages();

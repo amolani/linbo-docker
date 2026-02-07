@@ -16,6 +16,7 @@ const {
 } = require('../middleware/validate');
 const { auditAction } = require('../middleware/audit');
 const redis = require('../lib/redis');
+const ws = require('../lib/websocket');
 const grubService = require('../services/grub.service');
 const configService = require('../services/config.service');
 const provisioningService = require('../services/provisioning.service');
@@ -74,6 +75,11 @@ router.post(
             }
           }
         }
+      }
+
+      // Broadcast bulk change for reactive frontend
+      if (result.success && !options.dryRun && result.imported?.length > 0) {
+        ws.broadcast('host.created', { id: 'bulk', name: `${result.imported.length} hosts imported` });
       }
 
       const statusCode = result.success ? 200 : 400;
@@ -400,6 +406,9 @@ router.post(
         }
       }
 
+      // Broadcast WS event for reactive frontend
+      ws.broadcast('host.created', { id: host.id, name: host.hostname });
+
       res.status(201).json({ data: host });
     } catch (error) {
       if (error.code === 'P2002') {
@@ -499,6 +508,9 @@ router.patch(
         }
       }
 
+      // Broadcast WS event for reactive frontend
+      ws.broadcast('host.updated', { id: host.id, name: host.hostname });
+
       res.json({ data: host });
     } catch (error) {
       if (error.code === 'P2025') {
@@ -581,6 +593,9 @@ router.delete(
           console.error('[Hosts] Provisioning queue failed:', err.message);
         }
       }
+
+      // Broadcast WS event for reactive frontend
+      ws.broadcast('host.deleted', { id: req.params.id });
 
       res.json({
         data: {

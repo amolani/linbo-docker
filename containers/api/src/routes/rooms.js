@@ -14,6 +14,7 @@ const {
 } = require('../middleware/validate');
 const { auditAction } = require('../middleware/audit');
 const redis = require('../lib/redis');
+const ws = require('../lib/websocket');
 
 /**
  * GET /rooms
@@ -110,6 +111,9 @@ router.post(
       // Invalidate cache
       await redis.delPattern('rooms:*');
 
+      // Broadcast WS event for reactive frontend
+      ws.broadcast('room.created', { id: room.id, name: room.name });
+
       res.status(201).json({ data: room });
     } catch (error) {
       if (error.code === 'P2002') {
@@ -149,6 +153,9 @@ router.patch(
 
       // Invalidate cache
       await redis.delPattern('rooms:*');
+
+      // Broadcast WS event for reactive frontend
+      ws.broadcast('room.updated', { id: room.id, name: room.name });
 
       res.json({
         data: {
@@ -220,6 +227,9 @@ router.delete(
 
       // Invalidate cache
       await redis.delPattern('rooms:*');
+
+      // Broadcast WS event for reactive frontend
+      ws.broadcast('room.deleted', { id: req.params.id });
 
       res.json({
         data: {

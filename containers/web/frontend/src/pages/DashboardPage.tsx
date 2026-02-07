@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Monitor,
@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { statsApi } from '@/api/stats';
 import { operationsApi } from '@/api/operations';
+import { useDataInvalidation } from '@/hooks/useDataInvalidation';
 import type { DashboardStats, Operation } from '@/types';
 import { OperationStatusBadge } from '@/components/ui';
 
@@ -34,24 +35,30 @@ export function DashboardPage() {
   const [recentOperations, setRecentOperations] = useState<Operation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [statsData, opsData] = await Promise.all([
-          statsApi.overview(),
-          operationsApi.list({ limit: 5 }),
-        ]);
-        setStats(statsData);
-        setRecentOperations(opsData.data);
-      } catch (error) {
-        console.error('Failed to fetch dashboard data:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchData();
+  const fetchData = useCallback(async () => {
+    try {
+      const [statsData, opsData] = await Promise.all([
+        statsApi.overview(),
+        operationsApi.list({ limit: 5 }),
+      ]);
+      setStats(statsData);
+      setRecentOperations(opsData.data);
+    } catch (error) {
+      console.error('Failed to fetch dashboard data:', error);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  // Reactive: refetch dashboard on any entity change
+  useDataInvalidation(['host', 'room', 'config', 'image', 'operation'], fetchData, {
+    showToast: false,
+    debounceMs: 1000,
+  });
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   if (isLoading) {
     return (
