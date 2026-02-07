@@ -4,7 +4,6 @@ import type { Image } from '@/types';
 export interface CreateImageData {
   filename: string;
   type: 'base' | 'differential' | 'rsync';
-  path: string;
   description?: string;
   backingImage?: string;
 }
@@ -28,8 +27,9 @@ interface ApiResponse<T> {
 }
 
 export const imagesApi = {
-  list: async (): Promise<Image[]> => {
-    const response = await apiClient.get<ApiResponse<Image[]>>('/images');
+  list: async (includeSidecars = false): Promise<Image[]> => {
+    const params = includeSidecars ? '?includeSidecars=true' : '';
+    const response = await apiClient.get<ApiResponse<Image[]>>(`/images${params}`);
     return response.data.data;
   },
 
@@ -67,5 +67,14 @@ export const imagesApi = {
   getInfo: async (id: string): Promise<ImageInfo> => {
     const response = await apiClient.get<ApiResponse<ImageInfo>>(`/images/${id}/info`);
     return response.data.data;
+  },
+
+  getSidecar: async (id: string, type: string): Promise<{ type: string; content: string; size: number; modifiedAt: string }> => {
+    const response = await apiClient.get<ApiResponse<{ type: string; content: string; size: number; modifiedAt: string }>>(`/images/${id}/sidecars/${type}`);
+    return response.data.data;
+  },
+
+  updateSidecar: async (id: string, type: string, content: string): Promise<void> => {
+    await apiClient.put(`/images/${id}/sidecars/${type}`, { content });
   },
 };

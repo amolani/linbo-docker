@@ -15,6 +15,7 @@ const {
 const { auditAction } = require('../middleware/audit');
 const redis = require('../lib/redis');
 const ws = require('../lib/websocket');
+const path = require('path');
 const configService = require('../services/config.service');
 const grubService = require('../services/grub.service');
 
@@ -360,10 +361,60 @@ router.delete(
         });
       }
 
-      // Delete config (partitions and OS entries cascade)
+      // --- Pre-delete: cleanup disk artifacts (best-effort) ---
+      const cleanupResults = { grub: false, startConf: false, symlinks: 0 };
+      const fsPromises = require('fs').promises;
+      const LINBO_DIR = process.env.LINBO_DIR || '/srv/linbo';
+
+      // 1. Delete GRUB config file
+      try {
+        cleanupResults.grub = await grubService.deleteConfigGrubConfig(config.name);
+      } catch (err) {
+        console.error(`[Configs] Delete: failed to remove GRUB config ${config.name}:`, err.message);
+      }
+
+      // 2. Delete start.conf file + .md5
+      try {
+        const startConfPath = path.join(LINBO_DIR, `start.conf.${config.name}`);
+        await fsPromises.unlink(startConfPath).catch(() => {});
+        await fsPromises.unlink(`${startConfPath}.md5`).catch(() => {});
+        cleanupResults.startConf = true;
+      } catch (err) {
+        console.error(`[Configs] Delete: failed to remove start.conf.${config.name}:`, err.message);
+      }
+
+      // 3. Delete IP-based symlinks for hosts in this config
+      try {
+        const hostsInConfig = await prisma.host.findMany({
+          where: { configId: req.params.id },
+          select: { ipAddress: true, hostname: true },
+        });
+        for (const host of hostsInConfig) {
+          if (host.ipAddress) {
+            const ipLink = path.join(LINBO_DIR, `start.conf-${host.ipAddress}`);
+            await fsPromises.unlink(ipLink).catch(() => {});
+            cleanupResults.symlinks++;
+          }
+          // Also remove host GRUB symlink
+          if (host.hostname) {
+            await grubService.deleteHostGrubConfig(host.hostname).catch(() => {});
+          }
+        }
+      } catch (err) {
+        console.error(`[Configs] Delete: failed to remove symlinks:`, err.message);
+      }
+
+      // --- DB delete (partitions and OS entries cascade) ---
       await prisma.config.delete({
         where: { id: req.params.id },
       });
+
+      // --- Post-delete: regenerate main grub.cfg ---
+      try {
+        await grubService.generateMainGrubConfig();
+      } catch (err) {
+        console.error('[Configs] Delete: failed to regenerate main grub.cfg:', err.message);
+      }
 
       // Invalidate cache
       await redis.delPattern('configs:*');
@@ -374,6 +425,7 @@ router.delete(
       res.json({
         data: {
           message: 'Configuration deleted successfully',
+          cleanup: cleanupResults,
         },
       });
     } catch (error) {
@@ -592,8 +644,15 @@ router.post(
         },
       });
 
-      // Regenerate GRUB configs for groups using this config
-      await regenerateGrubForConfig(req.params.id);
+      // Regenerate ALL GRUB configs (covers host-config changes + orphan symlinks)
+      let grubResult;
+      try {
+        grubResult = await grubService.regenerateAllGrubConfigs();
+        console.log(`[Configs] Deploy: regenerated ${grubResult.configs} GRUB configs, ${grubResult.hosts} host symlinks`);
+      } catch (error) {
+        console.error('[Configs] Deploy: GRUB regeneration failed:', error.message);
+        grubResult = { configs: 0, hosts: 0 };
+      }
 
       // Broadcast deployment event
       ws.broadcast('config.deployed', {
@@ -608,7 +667,9 @@ router.post(
           ...result,
           configName: config.name,
           symlinkCount,
-          message: `Config deployed successfully${symlinkCount > 0 ? ` with ${symlinkCount} symlinks` : ''}`,
+          grubConfigs: grubResult.configs,
+          grubHosts: grubResult.hosts,
+          message: `Config deployed successfully${symlinkCount > 0 ? ` with ${symlinkCount} symlinks` : ''}, ${grubResult.configs} GRUB configs regenerated`,
         },
       });
     } catch (error) {

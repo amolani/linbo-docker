@@ -97,7 +97,7 @@ export interface ConfirmModalProps {
   onClose: () => void;
   onConfirm: () => void;
   title: string;
-  message: string;
+  message: ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   variant?: 'danger' | 'warning' | 'info';
@@ -123,7 +123,7 @@ export function ConfirmModal({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm">
-      <p className="text-sm text-muted-foreground">{message}</p>
+      <div className="text-sm text-muted-foreground">{message}</div>
       <div className="mt-6 flex justify-end space-x-3">
         <button
           type="button"

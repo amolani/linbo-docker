@@ -176,7 +176,7 @@ services:
       - SSH_TIMEOUT=${SSH_TIMEOUT:-10000}
       # Storage paths
       - LINBO_DATA_DIR=/srv/linbo
-      - LINBO_IMAGE_DIR=/srv/linbo/images
+      - IMAGES_DIR=/srv/linbo/images
       - LINBO_CONFIG_DIR=/etc/linuxmuster/linbo
       - LINBO_LOG_DIR=/var/log/linuxmuster/linbo
       # Server IP (for clients)

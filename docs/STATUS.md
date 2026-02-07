@@ -1,8 +1,8 @@
 # LINBO Docker - Projekt Status
 
-**Stand:** 2026-02-07 (Session 3)
+**Stand:** 2026-02-08 (Session 7)
 **Version:** 1.0.0
-**Functional Parity:** ~97%
+**Functional Parity:** ~98%
 
 ## Implementierte Phasen
 
@@ -92,22 +92,52 @@
 - **Server-IP Fallback:** DB → ENV → GRUB Variable ($net_default_server)
 - **Tests:** 75 GRUB Tests (vorher 64)
 
+### Phase 12: Image Workflow Fixes (Session 6, 2026-02-07)
+
+- **rsync Hooks:** Alle 4 Scripts korrekt im Container (>500 bytes)
+- **IMAGES_DIR Fix:** `images.js` und `internal.js` nutzen einheitlich `LINBO_DIR`
+- **Deploy Cleanup:** `regenerateAllGrubConfigs()` bei Deploy statt nur einzelne Config
+- **Config Delete Cleanup:** Entfernt GRUB cfg, start.conf, IP-Symlinks, Host-GRUB-Symlinks
+- **Startup Sanity Check:** API loggt Warnung wenn `/srv/linbo` oder `boot/grub` fehlt
+
+### Phase 13: Sidecar-Handling (Session 7, 2026-02-08)
+
+- **Sidecar-Verarbeitung:** `.info`, `.desc`, `.torrent`, `.macct`, `.md5` werden bei Upload erkannt und in DB gespeichert
+- **Supplement-Unterstuetzung:** `.reg`, `.prestart`, `.postsync` per API les-/schreibbar
+- **Catch-up Pattern:** Sidecars vor Image → nach Image-Registrierung automatisch nachgeholt
+- **Info-Parsing:** Produktions-Format (`key="value"`) mit Whitelist-Keys, Timestamp als UTC
+- **Frontend:** Sidecar-Badges in Liste, Detail-Modal mit 5 Tabs (Uebersicht/Info/Beschreibung/Registry/Scripts)
+- **Directory Delete:** `?deleteFile=true` loescht komplettes Image-Verzeichnis inkl. Backups
+- **Sicherheit:** Traversal-Check in rsync-pre-upload, Read-only `.info`, Content-Size-Limits
+- **Tests:** 107 neue Tests (76 image-path + 31 internal-sidecar)
+- **Details:** Siehe `docs/SESSION-7-SIDECAR-HANDLING.md`
+
+### Reactive Frontend via WebSocket (Sessions 4-5, 2026-02-07)
+
+- **WS-Refetch:** Debounced refetch bei Daten-Aenderungen via WebSocket
+- **Per-Instance Suppress:** Verhindert doppelten Refetch nach eigenen CRUD-Aktionen
+- **Reconnect-Resync:** WS-Reconnect nach Tab-Wechsel loest Refetch aus
+- **Details:** Siehe `docs/SESSION-5-REACTIVE-FRONTEND.md`
+
 ## Test-Uebersicht
 
 | Test Suite | Tests | Status |
 |------------|-------|--------|
+| image-path.test.js | 76 | Passing |
+| host-status.test.js | 56 | Passing |
+| import.test.js | 50 | Passing |
 | dhcp.service.test.js | 49 | Passing |
 | grub.service.test.js | 75 | Passing |
 | deviceImport.service.test.js | 42 | Passing |
 | remote.service.test.js | 33 | Passing |
+| internal-sidecar.test.js | 31 | Passing |
 | provisioning.service.test.js | 29 | Passing |
 | host.service.test.js | 24 | Passing |
 | macct.service.test.js | 23 | Passing |
 | linbofs.service.test.js | 18 | Passing |
 | config.service.test.js | 18 | Passing |
-| api.test.js (Integration) | 34 | 5 pre-existing failures |
-| import.test.js | 50 | Passing |
-| **Gesamt** | **395** | **390 passing (98.7%)** |
+| api.test.js (Integration) | 34 | 10 pre-existing failures |
+| **Gesamt** | **535** | **525 passing (98.1%)** |
 
 ## Container Architektur
 
@@ -185,9 +215,11 @@ Host ─────────────┬───────────
 - CRUD: `GET/POST/PATCH/DELETE /api/v1/rooms`
 
 ### Images
-- `GET /api/v1/images` - Liste
-- `GET /api/v1/images/:name` - Details
-- `DELETE /api/v1/images/:name` - Loeschen
+- `GET /api/v1/images` - Liste (optional `?includeSidecars=true`)
+- `GET /api/v1/images/:id` - Details (inkl. Sidecars + fileSize)
+- `DELETE /api/v1/images/:id` - Loeschen (optional `?deleteFile=true` fuer komplettes Verzeichnis)
+- `GET /api/v1/images/:id/sidecars/:type` - Sidecar lesen (desc, info, reg, prestart, postsync)
+- `PUT /api/v1/images/:id/sidecars/:type` - Sidecar schreiben (desc, reg, prestart, postsync)
 
 ### Operations
 - `POST /api/v1/operations/direct` - Sofort-Befehl
@@ -405,7 +437,7 @@ docker compose up -d api
 
 | Feature | Phase |
 |---------|-------|
-| Multicast (udpcast) | 12 |
-| Torrent (ctorrent) | 12 |
-| Host-GRUB .img | 13 |
-| Image Versioning | 14 |
+| Multicast (udpcast) | 14 |
+| Torrent (ctorrent) | 14 |
+| Host-GRUB .img | 15 |
+| Image Versioning | 16 |
