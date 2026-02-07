@@ -23,4 +23,4 @@ COPY tftpd-hpa.conf /etc/default/tftpd-hpa
 EXPOSE 69/udp
 
 # Run TFTP in foreground
-CMD ["in.tftpd", "-L", "-u", "tftp", "-a", "0.0.0.0:69", "-s", "/srv/linbo", "--verbosity", "3"]
+CMD ["in.tftpd", "-L", "-u", "tftp", "-a", "0.0.0.0:69", "-s", "/srv/linbo", "--blocksize", "1468", "--verbosity", "3"]
