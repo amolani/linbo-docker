@@ -10,6 +10,18 @@ interface UseDataInvalidationOptions {
 }
 
 /**
+ * Global last-fetch tracker per entity.
+ * Prevents double-fetch when the user's own action already refetched
+ * and the WS echo arrives shortly after.
+ */
+const lastFetchTime: Record<string, number> = {};
+
+/** Call this to record that a fetch just happened for an entity key. */
+export function markFetched(key: string) {
+  lastFetchTime[key] = Date.now();
+}
+
+/**
  * Subscribe to WS entity change events and trigger a debounced refetch.
  *
  * Events per entity:
@@ -20,13 +32,15 @@ interface UseDataInvalidationOptions {
  * - Reconnect: `_reconnected` (AC4)
  *
  * AC2: Only 1 refetch per debounceMs window per hook instance.
+ * Dedup: Skips WS-triggered refetch if data was fetched within the last debounceMs
+ *        (e.g. from the user's own CRUD action).
  */
 export function useDataInvalidation(
   entity: string | string[],
   refetchFn: () => void,
   options: UseDataInvalidationOptions = {}
 ) {
-  const { debounceMs = 500, showToast = true } = options;
+  const { debounceMs = 500, showToast = false } = options;
   const { subscribe } = useWsStore();
 
   // Stable refs to avoid re-subscriptions on renders
@@ -38,12 +52,19 @@ export function useDataInvalidation(
 
   useEffect(() => {
     const entities = Array.isArray(entity) ? entity : [entity];
+    const entityKey = entities.join(',');
     const timerRef: { current: ReturnType<typeof setTimeout> | null } = { current: null };
 
     function scheduleRefetch() {
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
         timerRef.current = null;
+        // Dedup: skip if data was fetched very recently (user's own action)
+        const lastFetch = lastFetchTime[entityKey] || 0;
+        if (Date.now() - lastFetch < debounceMs) {
+          return;
+        }
+        lastFetchTime[entityKey] = Date.now();
         refetchRef.current();
       }, debounceMs);
     }
@@ -62,7 +83,7 @@ export function useDataInvalidation(
     }
 
     const handler = (event: WsEvent) => {
-      // Show toast for entity changes (not reconnect, not progress)
+      // Show toast for entity changes (not reconnect)
       if (showToastRef.current && event.type !== '_reconnected') {
         const data = getEventData(event) as { id?: string; name?: string };
         const label = data?.name ?? data?.id?.slice(0, 8) ?? '';

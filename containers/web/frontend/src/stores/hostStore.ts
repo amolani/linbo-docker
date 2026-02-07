@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Host, HostFilters, PaginatedResponse } from '@/types';
 import { hostsApi } from '@/api/hosts';
+import { markFetched } from '@/hooks/useDataInvalidation';
 
 interface HostState {
   hosts: Host[];
@@ -41,8 +42,11 @@ export const useHostStore = create<HostState>((set, get) => ({
   error: null,
 
   fetchHosts: async () => {
-    const { page, limit, filters, sort, order } = get();
-    set({ isLoading: true, error: null });
+    const { page, limit, filters, sort, order, hosts } = get();
+    // Only show loading spinner on initial load, not on background refetches
+    if (hosts.length === 0) {
+      set({ isLoading: true, error: null });
+    }
     try {
       const response: PaginatedResponse<Host> = await hostsApi.list({
         page,
@@ -51,6 +55,8 @@ export const useHostStore = create<HostState>((set, get) => ({
         sort,
         order,
       });
+      // Mark as fetched so WS-triggered refetch is deduped
+      markFetched('host');
       set({
         hosts: response.data,
         total: response.total,
