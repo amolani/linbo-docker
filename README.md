@@ -6,7 +6,7 @@
 
 LINBO Docker is a containerized version of [LINBO](https://github.com/linuxmuster/linuxmuster-linbo7) (Linux Network Boot) that runs independently without requiring a full linuxmuster.net installation. It achieves ~97% functional parity with the production linuxmuster.net 7.3 stack.
 
-![PXE Boot](docs/bilder/pxeboot.png)
+
 
 ## Features
 
