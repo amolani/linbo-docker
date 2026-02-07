@@ -259,7 +259,9 @@ async function generateConfigGrubConfig(configName, options = {}) {
   }
 
   // Get server address
-  const server = getLinboSetting(config?.linboSettings, 'Server') || '$pxe_default_server';
+  const server = getLinboSetting(config?.linboSettings, 'Server')
+    || process.env.LINBO_SERVER_IP
+    || '$net_default_server';
 
   // Build kernel options string (strip any existing server= to avoid duplicates)
   const cleanKopts = kernelOptions.replace(/\bserver=\S+/g, '').replace(/\s+/g, ' ').trim();
@@ -362,6 +364,7 @@ async function generateMainGrubConfig() {
   const template = await loadTemplate('grub.cfg.pxe');
   const content = applyTemplate(template, {
     timestamp: new Date().toISOString(),
+    server: process.env.LINBO_SERVER_IP || '10.0.0.1',
   });
 
   await fs.mkdir(GRUB_DIR, { recursive: true });

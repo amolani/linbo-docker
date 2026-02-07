@@ -5,25 +5,37 @@
 set timeout=0
 set default=0
 
-# Try to load host-specific config first (by hostname from DHCP)
-if [ -f $prefix/hostcfg/$net_default_hostname.cfg ]; then
-  source $prefix/hostcfg/$net_default_hostname.cfg
-# Alternative: try hostname variable
-elif [ -n "$hostname" ] && [ -f $prefix/hostcfg/$hostname.cfg ]; then
-  source $prefix/hostcfg/$hostname.cfg
-# Then try group config (set by DHCP option)
-elif [ -n "$group" ] && [ -f $prefix/$group.cfg ]; then
-  source $prefix/$group.cfg
-# Fallback: boot LINBO directly
-else
+# Try host-specific config (hostname from DHCP)
+if [ -n "$net_default_hostname" ]; then
+  if [ -f $prefix/hostcfg/$net_default_hostname.cfg ]; then
+    source $prefix/hostcfg/$net_default_hostname.cfg
+    set cfg_loaded=1
+  fi
+fi
+if [ -z "$cfg_loaded" -a -n "$hostname" ]; then
+  if [ -f $prefix/hostcfg/$hostname.cfg ]; then
+    source $prefix/hostcfg/$hostname.cfg
+    set cfg_loaded=1
+  fi
+fi
+
+# Try group config (group variable from DHCP)
+if [ -z "$cfg_loaded" -a -n "$group" ]; then
+  if [ -f $prefix/$group.cfg ]; then
+    source $prefix/$group.cfg
+    set cfg_loaded=1
+  fi
+fi
+
+# Fallback: if no config was sourced, boot LINBO directly
+if [ -z "$cfg_loaded" ]; then
   insmod gzio
   insmod part_gpt
   insmod part_msdos
   insmod ext2
   insmod all_video
 
-  linux /linbo64 quiet splash server=$pxe_default_server
+  linux /linbo64 quiet splash server=@@server@@
   initrd /linbofs64
+  boot
 fi
-
-boot
