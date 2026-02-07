@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Download, Upload, Trash2 } from 'lucide-react';
+import { Plus, Download, Upload, Trash2, Monitor } from 'lucide-react';
 import { useHosts, useHostActions, useHostFilters } from '@/hooks/useHosts';
 import { roomsApi } from '@/api/rooms';
 import { configsApi } from '@/api/configs';
@@ -170,6 +170,25 @@ export function HostsPage() {
       header: 'Status',
       sortable: true,
       render: (host) => <StatusBadge status={host.status} />,
+    },
+    {
+      key: 'detectedOs',
+      header: 'OS',
+      render: (host) => {
+        if (!host.detectedOs) return <span className="text-muted-foreground">-</span>;
+        const osLabels: Record<string, { label: string; color: string }> = {
+          linbo: { label: 'LINBO', color: 'text-blue-500' },
+          linux: { label: 'Linux', color: 'text-orange-500' },
+          windows: { label: 'Windows', color: 'text-sky-500' },
+        };
+        const os = osLabels[host.detectedOs] || { label: host.detectedOs, color: 'text-muted-foreground' };
+        return (
+          <span className={`inline-flex items-center gap-1 text-sm ${os.color}`}>
+            <Monitor className="h-3.5 w-3.5" />
+            {os.label}
+          </span>
+        );
+      },
     },
     {
       key: 'room',

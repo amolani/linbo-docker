@@ -110,6 +110,7 @@ async function updateHostStatus(id, status, additionalData = {}) {
     hostId: host.id,
     hostname: host.hostname,
     status: host.status,
+    detectedOs: host.detectedOs || null,
     lastSeen: host.lastSeen,
   });
 
@@ -136,7 +137,7 @@ async function bulkUpdateStatus(hostIds, status) {
   // Get updated hosts for broadcast
   const hosts = await prisma.host.findMany({
     where: { id: { in: hostIds } },
-    select: { id: true, hostname: true, status: true, lastSeen: true },
+    select: { id: true, hostname: true, status: true, detectedOs: true, lastSeen: true },
   });
 
   // Broadcast status changes
@@ -145,6 +146,7 @@ async function bulkUpdateStatus(hostIds, status) {
       hostId: host.id,
       hostname: host.hostname,
       status: host.status,
+      detectedOs: host.detectedOs || null,
       lastSeen: host.lastSeen,
     });
   });
@@ -154,30 +156,46 @@ async function bulkUpdateStatus(hostIds, status) {
 
 /**
  * Get hosts with stale status (haven't been seen recently)
- * @param {number} minutes - Minutes since last seen to consider stale
+ * Uses max(lastSeen, lastOnlineAt) — host is stale only when BOTH are old.
+ * @param {number} seconds - Seconds since last activity to consider stale
  */
-async function getStaleHosts(minutes = 10) {
-  const threshold = new Date(Date.now() - minutes * 60 * 1000);
+async function getStaleHosts(seconds = 600) {
+  const threshold = new Date(Date.now() - seconds * 1000);
 
   return prisma.host.findMany({
     where: {
       status: 'online',
-      lastSeen: { lt: threshold },
+      OR: [
+        // No lastOnlineAt → fall back to lastSeen only
+        {
+          lastOnlineAt: null,
+          lastSeen: { lt: threshold },
+        },
+        // Both fields exist → both must be stale
+        {
+          AND: [
+            { lastOnlineAt: { not: null } },
+            { lastOnlineAt: { lt: threshold } },
+            { lastSeen: { lt: threshold } },
+          ],
+        },
+      ],
     },
     select: {
       id: true,
       hostname: true,
       lastSeen: true,
+      lastOnlineAt: true,
     },
   });
 }
 
 /**
  * Mark stale hosts as offline
- * @param {number} minutes - Minutes since last seen to consider stale
+ * @param {number} seconds - Seconds since last activity to consider stale
  */
-async function markStaleHostsOffline(minutes = 10) {
-  const staleHosts = await getStaleHosts(minutes);
+async function markStaleHostsOffline(seconds = 600) {
+  const staleHosts = await getStaleHosts(seconds);
 
   if (staleHosts.length === 0) {
     return { count: 0, hosts: [] };
@@ -185,6 +203,68 @@ async function markStaleHostsOffline(minutes = 10) {
 
   const hostIds = staleHosts.map(h => h.id);
   return bulkUpdateStatus(hostIds, 'offline');
+}
+
+const OFFLINE_TIMEOUT_SEC = parseInt(process.env.HOST_OFFLINE_TIMEOUT_SEC) || 300;
+
+/**
+ * Update host based on scan result. Write-only-on-change — zero DB writes for no-hit scans.
+ * @param {string} id - Host UUID
+ * @param {object} current - Pre-fetched host state (from batch query)
+ * @param {object} scanResult - { isOnline, detectedOs }
+ */
+async function updateHostScanResult(id, current, { isOnline, detectedOs }) {
+  // No-hit scan → no DB write
+  if (!isOnline) return null;
+
+  const now = new Date();
+  const data = {};
+  let changed = false;
+
+  // Status change: was not online → now online
+  if (current.status !== 'online') {
+    data.status = 'online';
+    data.lastSeen = now;
+    changed = true;
+  }
+
+  // OS change
+  if (detectedOs !== undefined && detectedOs !== current.detectedOs) {
+    data.detectedOs = detectedOs;
+    changed = true;
+  }
+
+  // lastOnlineAt throttle: bump only if older than TIMEOUT/2 (or null)
+  const bumpMs = (OFFLINE_TIMEOUT_SEC * 1000) / 2;
+  const needsBump = !current.lastOnlineAt ||
+    (now.getTime() - new Date(current.lastOnlineAt).getTime()) > bumpMs;
+
+  if (!changed && !needsBump) return null; // nothing to do
+
+  if (needsBump) {
+    data.lastOnlineAt = now;
+    data.lastSeen = now;
+  }
+
+  const host = await prisma.host.update({ where: { id }, data });
+
+  // Invalidate cache
+  await redis.del(`host:${id}`);
+  await redis.del(`host:hostname:${current.hostname}`);
+  await redis.del(`host:mac:${current.macAddress.toLowerCase()}`);
+
+  // WS broadcast only on status/OS change (not on pure lastOnlineAt bump)
+  if (changed) {
+    ws.broadcast('host.status.changed', {
+      hostId: host.id,
+      hostname: host.hostname,
+      status: host.status,
+      detectedOs: host.detectedOs || null,
+      lastSeen: host.lastSeen,
+    });
+  }
+
+  return host;
 }
 
 /**
@@ -291,6 +371,7 @@ module.exports = {
   bulkUpdateStatus,
   getStaleHosts,
   markStaleHostsOffline,
+  updateHostScanResult,
   getHostConfig,
   getSyncProgress,
   getHostsByRoom,

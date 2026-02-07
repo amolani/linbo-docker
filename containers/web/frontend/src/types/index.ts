@@ -43,7 +43,9 @@ export interface Host {
   roomId?: string;
   configId?: string;
   status: HostStatus;
+  detectedOs?: 'linbo' | 'linux' | 'windows' | null;
   lastSeen?: string;
+  lastOnlineAt?: string;
   bootMode?: string;
   hardware?: HardwareInfo;
   cacheInfo?: CacheInfo;

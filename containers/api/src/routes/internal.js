@@ -66,9 +66,10 @@ router.post('/rsync-event', authenticateInternal, async (req, res, next) => {
         // Update host last seen + mark online
         if (host) {
           const wasOffline = host.status !== 'online';
+          const now = new Date();
           await prisma.host.update({
             where: { id: host.id },
-            data: { lastSeen: new Date(), status: 'online' },
+            data: { lastSeen: now, lastOnlineAt: now, status: 'online' },
           });
           if (wasOffline) {
             ws.broadcast('host.status.changed', {
