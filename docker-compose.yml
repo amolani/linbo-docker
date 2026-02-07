@@ -195,6 +195,8 @@ services:
       - CSV_COL0_SOURCE=${CSV_COL0_SOURCE:-room}
       # Internal API key (container-to-container auth)
       - INTERNAL_API_KEY=${INTERNAL_API_KEY:-linbo-internal-secret}
+      # HTTP Boot
+      - WEB_PORT=${WEB_PORT:-8080}
       # CORS
       - CORS_ORIGIN=${CORS_ORIGIN:-*}
     depends_on:
@@ -228,6 +230,8 @@ services:
     container_name: linbo-web
     ports:
       - "${WEB_PORT:-8080}:80"
+    volumes:
+      - linbo_srv_data:/srv/linbo:ro
     depends_on:
       api:
         condition: service_healthy

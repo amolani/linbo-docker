@@ -59,20 +59,26 @@ menuentry 'LINBO' --class linbo {
 
  if [ -e "$linbo_kernel" -a -e "$linbo_initrd" ]; then
   set bootflag=localboot
- elif [ -n "$pxe_default_server" ]; then
-  set root="(tftp)"
-  set bootflag=netboot
- elif [ -n "$net_default_server" ]; then
-  set root="(tftp)"
+ elif [ -n "$pxe_default_server" -o -n "$net_default_server" ]; then
+  insmod http
+  set http_root="(http,@@server@@:@@httpport@@)"
   set bootflag=netboot
  fi
 
  if [ -n "$bootflag" ]; then
-  echo -n "Loading $linbo_kernel ..."
-  linux $linbo_kernel @@kopts@@ $bootflag
-  echo
-  echo -n "Loading $linbo_initrd ..."
-  initrd $linbo_initrd
+  if [ "$bootflag" = "netboot" ]; then
+   echo -n "Loading ${http_root}$linbo_kernel ..."
+   linux ${http_root}$linbo_kernel @@kopts@@ $bootflag
+   echo
+   echo -n "Loading ${http_root}$linbo_initrd ..."
+   initrd ${http_root}$linbo_initrd
+  else
+   echo -n "Loading $linbo_kernel ..."
+   linux $linbo_kernel @@kopts@@ $bootflag
+   echo
+   echo -n "Loading $linbo_initrd ..."
+   initrd $linbo_initrd
+  fi
   boot
  else
   if [ "$grub_platform" = "pc" ]; then

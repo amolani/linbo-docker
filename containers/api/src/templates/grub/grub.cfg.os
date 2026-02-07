@@ -56,11 +56,9 @@ menuentry '@@osname@@ (Linbo-Start)' --class @@ostype@@_start {
 
  if [ -e "$linbo_kernel" -a -e "$linbo_initrd" ]; then
   set bootflag=localboot
- elif [ -n "$pxe_default_server" ]; then
-  set root="(tftp)"
-  set bootflag=netboot
- elif [ -n "$net_default_server" ]; then
-  set root="(tftp)"
+ elif [ -n "$pxe_default_server" -o -n "$net_default_server" ]; then
+  insmod http
+  set http_root="(http,@@server@@:@@httpport@@)"
   set bootflag=netboot
  fi
 
@@ -68,10 +66,10 @@ menuentry '@@osname@@ (Linbo-Start)' --class @@ostype@@_start {
   echo LINBO $bootflag for group @@group@@
   echo
   echo -n "Loading $linbo_kernel ..."
-  linux $linbo_kernel @@kopts@@ linbocmd=start:@@osnr@@ $bootflag
+  linux ${http_root}$linbo_kernel @@kopts@@ linbocmd=start:@@osnr@@ $bootflag
   echo
   echo -n "Loading $linbo_initrd ..."
-  initrd $linbo_initrd
+  initrd ${http_root}$linbo_initrd
   boot
  fi
 
@@ -82,11 +80,9 @@ menuentry '@@osname@@ (Sync+Start)' --class @@ostype@@_syncstart {
 
  if [ -e "$linbo_kernel" -a -e "$linbo_initrd" ]; then
   set bootflag=localboot
- elif [ -n "$pxe_default_server" ]; then
-  set root="(tftp)"
-  set bootflag=netboot
- elif [ -n "$net_default_server" ]; then
-  set root="(tftp)"
+ elif [ -n "$pxe_default_server" -o -n "$net_default_server" ]; then
+  insmod http
+  set http_root="(http,@@server@@:@@httpport@@)"
   set bootflag=netboot
  fi
 
@@ -94,10 +90,10 @@ menuentry '@@osname@@ (Sync+Start)' --class @@ostype@@_syncstart {
   echo LINBO $bootflag for group @@group@@
   echo
   echo -n "Loading $linbo_kernel ..."
-  linux $linbo_kernel @@kopts@@ linbocmd=sync:@@osnr@@,start:@@osnr@@ $bootflag
+  linux ${http_root}$linbo_kernel @@kopts@@ linbocmd=sync:@@osnr@@,start:@@osnr@@ $bootflag
   echo
   echo -n "Loading $linbo_initrd ..."
-  initrd $linbo_initrd
+  initrd ${http_root}$linbo_initrd
   boot
  fi
 
@@ -108,11 +104,9 @@ menuentry '@@osname@@ (Neu+Start)' --class @@ostype@@_newstart {
 
  if [ -e "$linbo_kernel" -a -e "$linbo_initrd" ]; then
   set bootflag=localboot
- elif [ -n "$pxe_default_server" ]; then
-  set root="(tftp)"
-  set bootflag=netboot
- elif [ -n "$net_default_server" ]; then
-  set root="(tftp)"
+ elif [ -n "$pxe_default_server" -o -n "$net_default_server" ]; then
+  insmod http
+  set http_root="(http,@@server@@:@@httpport@@)"
   set bootflag=netboot
  fi
 
@@ -120,10 +114,10 @@ menuentry '@@osname@@ (Neu+Start)' --class @@ostype@@_newstart {
   echo LINBO $bootflag for group @@group@@
   echo
   echo -n "Loading $linbo_kernel ..."
-  linux $linbo_kernel @@kopts@@ linbocmd=format:@@partnr@@,sync:@@osnr@@,start:@@osnr@@ $bootflag
+  linux ${http_root}$linbo_kernel @@kopts@@ linbocmd=format:@@partnr@@,sync:@@osnr@@,start:@@osnr@@ $bootflag
   echo
   echo -n "Loading $linbo_initrd ..."
-  initrd $linbo_initrd
+  initrd ${http_root}$linbo_initrd
   boot
  fi
 

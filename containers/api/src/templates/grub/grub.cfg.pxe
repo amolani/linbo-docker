@@ -34,8 +34,10 @@ if [ -z "$cfg_loaded" ]; then
   insmod part_msdos
   insmod ext2
   insmod all_video
+  insmod http
 
-  linux /linbo64 quiet splash server=@@server@@
-  initrd /linbofs64
+  set http_root="(http,@@server@@:@@httpport@@)"
+  linux ${http_root}/linbo64 quiet splash server=@@server@@
+  initrd ${http_root}/linbofs64
   boot
 fi

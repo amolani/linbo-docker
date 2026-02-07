@@ -11,6 +11,7 @@ const os = require('os');
 const TEST_DIR = path.join(os.tmpdir(), `linbo-grub-test-${Date.now()}`);
 process.env.LINBO_DIR = TEST_DIR;
 process.env.LINBO_SERVER_IP = '10.0.0.1';
+process.env.WEB_PORT = '8080';
 
 // Mock Prisma
 jest.mock('../../src/lib/prisma', () => ({
@@ -326,6 +327,34 @@ describe('GRUB Service', () => {
       expect(result.content).toContain('set cfg_loaded=1');
     });
 
+    test('should use HTTP boot for netboot kernel/initrd loading', async () => {
+      prisma.config.findFirst.mockResolvedValue(mockConfig);
+
+      const result = await grubService.generateConfigGrubConfig('win11_efi_sata');
+
+      // Global template: insmod http and http_root variable
+      expect(result.content).toContain('insmod http');
+      expect(result.content).toContain('set http_root="(http,10.0.0.11:8080)"');
+      // Kernel/initrd loaded via http_root prefix
+      expect(result.content).toContain('${http_root}$linbo_kernel');
+      expect(result.content).toContain('${http_root}$linbo_initrd');
+    });
+
+    test('should pass server and httpport to OS template', async () => {
+      prisma.config.findFirst.mockResolvedValue(mockConfig);
+
+      const result = await grubService.generateConfigGrubConfig('win11_efi_sata');
+
+      // OS entries should also have insmod http and http_root
+      // Count insmod http: 1 in global + 3 in OS entries = 4
+      const httpMatches = result.content.match(/insmod http\b/g);
+      expect(httpMatches.length).toBe(4);
+
+      // Count http_root definitions: 1 in global + 3 in OS = 4
+      const httpRootMatches = result.content.match(/set http_root=".*8080.*"/g);
+      expect(httpRootMatches.length).toBe(4);
+    });
+
     test('should generate OS menu entries', async () => {
       prisma.config.findFirst.mockResolvedValue(mockConfig);
 
@@ -522,12 +551,14 @@ describe('GRUB Service', () => {
       expect(matches.length).toBe(3);
     });
 
-    test('should include direct boot fallback with server from env', async () => {
+    test('should include direct boot fallback with HTTP and server from env', async () => {
       const result = await grubService.generateMainGrubConfig();
 
       expect(result.content).toContain('if [ -z "$cfg_loaded" ]');
-      expect(result.content).toContain('linux /linbo64 quiet splash server=10.0.0.1');
-      expect(result.content).toContain('initrd /linbofs64');
+      expect(result.content).toContain('insmod http');
+      expect(result.content).toContain('set http_root="(http,10.0.0.1:8080)"');
+      expect(result.content).toContain('linux ${http_root}/linbo64 quiet splash server=10.0.0.1');
+      expect(result.content).toContain('initrd ${http_root}/linbofs64');
     });
 
     test('should use nested if instead of && in elif', async () => {
