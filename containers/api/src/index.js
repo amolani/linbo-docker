@@ -291,6 +291,17 @@ async function startServer() {
     console.log('  Operation Worker disabled');
   }
 
+  // Start Host Status Worker (stale timeout + port scanner)
+  if (process.env.HOST_STATUS_WORKER !== 'false') {
+    const hostStatusWorker = require('./workers/host-status.worker');
+    hostStatusWorker.startWorker();
+    console.log('  Host Status Worker started');
+    // Store reference for shutdown
+    server._hostStatusWorker = hostStatusWorker;
+  } else {
+    console.log('  Host Status Worker disabled');
+  }
+
   // Start HTTP server
   server.listen(PORT, HOST, () => {
     console.log(`
@@ -319,6 +330,12 @@ async function shutdown(signal) {
   // Stop accepting new connections
   server.close(async () => {
     console.log('HTTP server closed');
+
+    // Stop Host Status Worker
+    if (server._hostStatusWorker) {
+      server._hostStatusWorker.stopWorker();
+      console.log('Host Status Worker stopped');
+    }
 
     // Close WebSocket connections
     const wss = websocket.getServer();

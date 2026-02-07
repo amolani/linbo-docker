@@ -199,6 +199,12 @@ services:
       - WEB_PORT=${WEB_PORT:-8080}
       # CORS
       - CORS_ORIGIN=${CORS_ORIGIN:-*}
+      # Host Status Worker
+      - HOST_OFFLINE_TIMEOUT_SEC=${HOST_OFFLINE_TIMEOUT_SEC:-300}
+      - HOST_SCAN_ENABLED=${HOST_SCAN_ENABLED:-true}
+      - HOST_SCAN_INTERVAL_SEC=${HOST_SCAN_INTERVAL_SEC:-60}
+      - HOST_SCAN_CONCURRENCY=${HOST_SCAN_CONCURRENCY:-30}
+      - HOST_SCAN_PORT_TIMEOUT_MS=${HOST_SCAN_PORT_TIMEOUT_MS:-500}
     depends_on:
       db:
         condition: service_healthy

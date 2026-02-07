@@ -24,7 +24,7 @@ interface HostState {
   selectAll: () => void;
   deselectAll: () => void;
   toggleHost: (id: string) => void;
-  updateHostStatus: (id: string, status: string) => void;
+  updateHostStatus: (id: string, status: string, detectedOs?: string | null) => void;
 }
 
 export const useHostStore = create<HostState>((set, get) => ({
@@ -117,10 +117,16 @@ export const useHostStore = create<HostState>((set, get) => ({
     }
   },
 
-  updateHostStatus: (id: string, status: string) => {
+  updateHostStatus: (id: string, status: string, detectedOs?: string | null) => {
     set((state) => ({
       hosts: state.hosts.map((h) =>
-        h.id === id ? { ...h, status: status as Host['status'] } : h
+        h.id === id
+          ? {
+              ...h,
+              status: status as Host['status'],
+              ...(detectedOs !== undefined ? { detectedOs: detectedOs as Host['detectedOs'] } : {}),
+            }
+          : h
       ),
     }));
   },

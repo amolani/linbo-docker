@@ -69,6 +69,8 @@ model Host {
   hardware   Json?
   cacheInfo  Json?     @map("cache_info")
   metadata        Json?
+  detectedOs      String?   @map("detected_os") @db.VarChar(20)
+  lastOnlineAt    DateTime? @map("last_online_at") @db.Timestamptz
   provisionStatus String?   @map("provision_status") @db.VarChar(50)
   provisionOpId   String?   @map("provision_op_id") @db.Uuid
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz

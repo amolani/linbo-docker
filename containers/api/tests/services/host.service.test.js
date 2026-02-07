@@ -240,27 +240,33 @@ describe('Host Service', () => {
   });
 
   describe('getStaleHosts', () => {
-    test('should find hosts not seen within threshold', async () => {
+    test('should find hosts where both lastSeen and lastOnlineAt are old', async () => {
       const staleHost = {
         id: 'stale-1',
         hostname: 'pc-stale',
-        lastSeen: new Date(Date.now() - 20 * 60 * 1000), // 20 minutes ago
+        lastSeen: new Date(Date.now() - 700 * 1000),
+        lastOnlineAt: new Date(Date.now() - 700 * 1000),
       };
       prisma.host.findMany.mockResolvedValue([staleHost]);
 
-      const result = await hostService.getStaleHosts(10);
+      const result = await hostService.getStaleHosts(600);
 
       expect(result).toEqual([staleHost]);
       expect(prisma.host.findMany).toHaveBeenCalledWith({
         where: {
           status: 'online',
-          lastSeen: { lt: expect.any(Date) },
+          OR: expect.any(Array),
         },
-        select: expect.any(Object),
+        select: expect.objectContaining({
+          id: true,
+          hostname: true,
+          lastSeen: true,
+          lastOnlineAt: true,
+        }),
       });
     });
 
-    test('should use default 10 minutes threshold', async () => {
+    test('should use default 600 seconds threshold', async () => {
       prisma.host.findMany.mockResolvedValue([]);
 
       await hostService.getStaleHosts();
@@ -268,25 +274,38 @@ describe('Host Service', () => {
       expect(prisma.host.findMany).toHaveBeenCalledWith({
         where: {
           status: 'online',
-          lastSeen: { lt: expect.any(Date) },
+          OR: expect.any(Array),
         },
         select: expect.any(Object),
       });
     });
+
+    test('AC5: host with fresh lastOnlineAt is NOT stale even if lastSeen is old', async () => {
+      // This test verifies the query structure includes OR with AND conditions
+      prisma.host.findMany.mockResolvedValue([]);
+
+      await hostService.getStaleHosts(600);
+
+      const call = prisma.host.findMany.mock.calls[0][0];
+      // Verify the OR structure handles both null and non-null lastOnlineAt
+      expect(call.where.OR).toHaveLength(2);
+      expect(call.where.OR[0]).toHaveProperty('lastOnlineAt', null);
+      expect(call.where.OR[1]).toHaveProperty('AND');
+    });
   });
 
   describe('markStaleHostsOffline', () => {
-    test('should mark stale hosts as offline', async () => {
+    test('should mark stale hosts as offline using seconds', async () => {
       const staleHosts = [
-        { id: 'stale-1', hostname: 'pc-1', lastSeen: new Date() },
-        { id: 'stale-2', hostname: 'pc-2', lastSeen: new Date() },
+        { id: 'stale-1', hostname: 'pc-1', lastSeen: new Date(), lastOnlineAt: null },
+        { id: 'stale-2', hostname: 'pc-2', lastSeen: new Date(), lastOnlineAt: null },
       ];
       prisma.host.findMany
         .mockResolvedValueOnce(staleHosts) // First call for getStaleHosts
         .mockResolvedValueOnce(staleHosts); // Second call for bulkUpdateStatus
       prisma.host.updateMany.mockResolvedValue({ count: 2 });
 
-      const result = await hostService.markStaleHostsOffline(10);
+      const result = await hostService.markStaleHostsOffline(600);
 
       expect(result.count).toBe(2);
       expect(prisma.host.updateMany).toHaveBeenCalledWith(
@@ -299,10 +318,145 @@ describe('Host Service', () => {
     test('should return zero if no stale hosts', async () => {
       prisma.host.findMany.mockResolvedValue([]);
 
-      const result = await hostService.markStaleHostsOffline(10);
+      const result = await hostService.markStaleHostsOffline(600);
 
       expect(result.count).toBe(0);
       expect(prisma.host.updateMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateHostScanResult', () => {
+    const currentHost = {
+      id: 'host-1',
+      hostname: 'pc-01',
+      macAddress: 'aa:bb:cc:dd:ee:ff',
+      ipAddress: '10.0.0.1',
+      status: 'offline',
+      detectedOs: null,
+      lastOnlineAt: null,
+    };
+
+    test('AC1: no DB write when isOnline is false', async () => {
+      const result = await hostService.updateHostScanResult(
+        'host-1', currentHost, { isOnline: false }
+      );
+
+      expect(result).toBeNull();
+      expect(prisma.host.update).not.toHaveBeenCalled();
+    });
+
+    test('should update status on online hit for offline host', async () => {
+      prisma.host.update.mockResolvedValue({
+        ...currentHost,
+        status: 'online',
+        detectedOs: 'linbo',
+      });
+
+      const result = await hostService.updateHostScanResult(
+        'host-1', currentHost, { isOnline: true, detectedOs: 'linbo' }
+      );
+
+      expect(result).not.toBeNull();
+      expect(prisma.host.update).toHaveBeenCalledWith({
+        where: { id: 'host-1' },
+        data: expect.objectContaining({
+          status: 'online',
+          detectedOs: 'linbo',
+        }),
+      });
+      expect(ws.broadcast).toHaveBeenCalledWith('host.status.changed', expect.objectContaining({
+        hostId: 'host-1',
+        status: 'online',
+        detectedOs: 'linbo',
+      }));
+    });
+
+    test('AC4: no DB write when already online, same OS, lastOnlineAt is recent', async () => {
+      const recentHost = {
+        ...currentHost,
+        status: 'online',
+        detectedOs: 'linbo',
+        lastOnlineAt: new Date(), // Just now — within TIMEOUT/2
+      };
+
+      const result = await hostService.updateHostScanResult(
+        'host-1', recentHost, { isOnline: true, detectedOs: 'linbo' }
+      );
+
+      expect(result).toBeNull();
+      expect(prisma.host.update).not.toHaveBeenCalled();
+    });
+
+    test('AC4: throttled bump when lastOnlineAt is old', async () => {
+      const oldHost = {
+        ...currentHost,
+        status: 'online',
+        detectedOs: 'linbo',
+        lastOnlineAt: new Date(Date.now() - 200 * 1000), // 200s ago, > 150s threshold
+      };
+      prisma.host.update.mockResolvedValue({ ...oldHost, lastOnlineAt: new Date() });
+
+      const result = await hostService.updateHostScanResult(
+        'host-1', oldHost, { isOnline: true, detectedOs: 'linbo' }
+      );
+
+      expect(result).not.toBeNull();
+      expect(prisma.host.update).toHaveBeenCalledWith({
+        where: { id: 'host-1' },
+        data: expect.objectContaining({
+          lastOnlineAt: expect.any(Date),
+          lastSeen: expect.any(Date),
+        }),
+      });
+      // No WS broadcast for pure throttled bump
+      expect(ws.broadcast).not.toHaveBeenCalled();
+    });
+
+    test('should broadcast on OS change', async () => {
+      const onlineHost = {
+        ...currentHost,
+        status: 'online',
+        detectedOs: 'linbo',
+        lastOnlineAt: new Date(),
+      };
+      prisma.host.update.mockResolvedValue({ ...onlineHost, detectedOs: 'windows' });
+
+      await hostService.updateHostScanResult(
+        'host-1', onlineHost, { isOnline: true, detectedOs: 'windows' }
+      );
+
+      expect(ws.broadcast).toHaveBeenCalledWith('host.status.changed', expect.objectContaining({
+        hostId: 'host-1',
+      }));
+    });
+
+    test('should invalidate caches on update', async () => {
+      prisma.host.update.mockResolvedValue({ ...currentHost, status: 'online' });
+
+      await hostService.updateHostScanResult(
+        'host-1', currentHost, { isOnline: true, detectedOs: 'linbo' }
+      );
+
+      expect(redis.del).toHaveBeenCalledWith('host:host-1');
+      expect(redis.del).toHaveBeenCalledWith('host:hostname:pc-01');
+      expect(redis.del).toHaveBeenCalledWith('host:mac:aa:bb:cc:dd:ee:ff');
+    });
+
+    test('AC3: scanner never sets offline (verified at service level)', async () => {
+      // updateHostScanResult returns null when isOnline=false — never sets offline
+      const onlineHost = {
+        ...currentHost,
+        status: 'online',
+        detectedOs: 'windows',
+        lastOnlineAt: new Date(),
+      };
+
+      const result = await hostService.updateHostScanResult(
+        'host-1', onlineHost, { isOnline: false }
+      );
+
+      expect(result).toBeNull();
+      expect(prisma.host.update).not.toHaveBeenCalled();
     });
   });
 
