@@ -51,7 +51,7 @@ export function ImagesPage() {
   };
 
   // Reactive: refetch images on WS entity changes
-  useDataInvalidation('image', fetchImages);
+  const { suppress: suppressImageInvalidation } = useDataInvalidation('image', fetchImages);
 
   useEffect(() => {
     fetchImages();
@@ -85,6 +85,7 @@ export function ImagesPage() {
     setIsSubmitting(true);
 
     try {
+      suppressImageInvalidation();
       if (editingImage) {
         await imagesApi.update(editingImage.id, {
           description: formData.description || undefined,
@@ -114,6 +115,7 @@ export function ImagesPage() {
     setIsSubmitting(true);
 
     try {
+      suppressImageInvalidation();
       await imagesApi.delete(deleteConfirmImage.id);
       notify.success('Image gelöscht');
       setDeleteConfirmImage(null);

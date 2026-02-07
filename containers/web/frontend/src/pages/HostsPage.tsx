@@ -33,7 +33,7 @@ export function HostsPage() {
   const { filters, updateFilter, clearFilters } = useHostFilters();
 
   // Reactive: refetch hosts on WS entity changes (AC2: debounced)
-  useDataInvalidation('host', fetchHosts);
+  const { suppress: suppressHostInvalidation } = useDataInvalidation('host', fetchHosts);
 
   const {
     isActionLoading,
@@ -109,6 +109,7 @@ export function HostsPage() {
       configId: formData.configId || undefined,
     };
 
+    suppressHostInvalidation();
     if (editingHost) {
       await updateHost(editingHost.id, data);
     } else {
@@ -119,6 +120,7 @@ export function HostsPage() {
 
   const handleDelete = async () => {
     if (deleteConfirmHost) {
+      suppressHostInvalidation();
       await deleteHost(deleteConfirmHost.id);
       setDeleteConfirmHost(null);
     }
@@ -451,6 +453,7 @@ export function HostsPage() {
         isOpen={bulkDeleteConfirm}
         onClose={() => setBulkDeleteConfirm(false)}
         onConfirm={async () => {
+          suppressHostInvalidation();
           await bulkDelete(selectedHosts);
           deselectAll();
           setBulkDeleteConfirm(false);

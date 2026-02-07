@@ -80,7 +80,7 @@ export function OperationsPage() {
   });
 
   // Reactive: refetch on operation lifecycle events (NOT progress — AC3)
-  useDataInvalidation('operation', fetchOperations, { showToast: false });
+  const { suppress: suppressOpInvalidation } = useDataInvalidation('operation', fetchOperations, { showToast: false });
 
   const handleViewDetails = async (operationId: string) => {
     try {
@@ -94,6 +94,7 @@ export function OperationsPage() {
 
   const handleCancel = async (operationId: string) => {
     try {
+      suppressOpInvalidation();
       await operationsApi.cancel(operationId);
       notify.success('Operation abgebrochen');
       fetchOperations();
