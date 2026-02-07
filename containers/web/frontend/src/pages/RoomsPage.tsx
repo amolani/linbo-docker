@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, ChevronRight, Trash2, Power, Pencil } from 'lucide-react';
 import { roomsApi } from '@/api/rooms';
+import { useDataInvalidation } from '@/hooks/useDataInvalidation';
 import { Button, Modal, Input, Textarea, ConfirmModal, StatusBadge } from '@/components/ui';
 import { notify } from '@/stores/notificationStore';
 import type { Room, Host } from '@/types';
@@ -38,6 +39,10 @@ export function RoomsPage() {
       setIsLoading(false);
     }
   };
+
+  // Reactive: refetch rooms on WS entity changes
+  useDataInvalidation('room', fetchRooms);
+  useDataInvalidation('host', fetchRooms, { showToast: false }); // Host changes → room counts
 
   useEffect(() => {
     fetchRooms();

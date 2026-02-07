@@ -14,6 +14,7 @@ const {
 } = require('../middleware/validate');
 const { auditAction } = require('../middleware/audit');
 const redis = require('../lib/redis');
+const ws = require('../lib/websocket');
 const fs = require('fs').promises;
 const path = require('path');
 
@@ -200,6 +201,9 @@ router.post(
       // Invalidate cache
       await redis.delPattern('images:*');
 
+      // Broadcast WS event for reactive frontend
+      ws.broadcast('image.created', { id: image.id, name: image.filename });
+
       res.status(201).json({ data: image });
     } catch (error) {
       if (error.code === 'P2002') {
@@ -274,6 +278,9 @@ router.post(
       // Invalidate cache
       await redis.delPattern('images:*');
 
+      // Broadcast WS event for reactive frontend
+      ws.broadcast('image.created', { id: image.id, name: image.filename });
+
       res.status(201).json({ data: image });
     } catch (error) {
       if (error.code === 'P2002') {
@@ -310,6 +317,9 @@ router.patch(
 
       // Invalidate cache
       await redis.delPattern('images:*');
+
+      // Broadcast WS event for reactive frontend
+      ws.broadcast('image.updated', { id: image.id, name: image.filename });
 
       res.json({ data: image });
     } catch (error) {
@@ -389,6 +399,9 @@ router.delete(
 
       // Invalidate cache
       await redis.delPattern('images:*');
+
+      // Broadcast WS event for reactive frontend
+      ws.broadcast('image.deleted', { id: req.params.id });
 
       res.json({
         data: {

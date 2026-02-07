@@ -209,6 +209,9 @@ router.post(
       // Invalidate cache
       await redis.delPattern('configs:*');
 
+      // Broadcast WS event for reactive frontend
+      ws.broadcast('config.created', { id: config.id, name: config.name });
+
       res.status(201).json({ data: config });
     } catch (error) {
       next(error);
@@ -302,6 +305,9 @@ router.patch(
       // Regenerate GRUB configs for groups using this config
       await regenerateGrubForConfig(req.params.id);
 
+      // Broadcast WS event for reactive frontend
+      ws.broadcast('config.updated', { id: config.id, name: config.name });
+
       res.json({ data: config });
     } catch (error) {
       if (error.code === 'P2025') {
@@ -361,6 +367,9 @@ router.delete(
 
       // Invalidate cache
       await redis.delPattern('configs:*');
+
+      // Broadcast WS event for reactive frontend
+      ws.broadcast('config.deleted', { id: req.params.id });
 
       res.json({
         data: {
@@ -515,6 +524,9 @@ router.post(
 
       // Invalidate cache
       await redis.delPattern('configs:*');
+
+      // Broadcast WS event for reactive frontend
+      ws.broadcast('config.created', { id: clone.id, name: clone.name });
 
       res.status(201).json({ data: clone });
     } catch (error) {

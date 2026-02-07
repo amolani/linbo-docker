@@ -4,6 +4,26 @@ import { useHostStore } from '@/stores/hostStore';
 import { notify } from '@/stores/notificationStore';
 import type { WsEvent, WsHostStatusEvent, WsNotificationEvent } from '@/types';
 
+// Module-level — warns max 1x per page load
+let legacyWarned = false;
+
+/**
+ * Extract event data with legacy fallback.
+ * Prefers .data (current API contract), falls back to .payload (legacy).
+ * Returns `unknown` — caller must cast/assert.
+ */
+export function getEventData(event: WsEvent): unknown {
+  if ('data' in event && event.data != null) return event.data;
+  if ('payload' in event && event.payload != null) {
+    if (!legacyWarned) {
+      console.warn('[WS] Legacy payload field used for event:', event.type, '— migrate to data');
+      legacyWarned = true;
+    }
+    return event.payload;
+  }
+  return {};
+}
+
 export function useWebSocket() {
   const { connect, disconnect, isConnected, subscribe, send } = useWsStore();
 
@@ -21,8 +41,8 @@ export function useHostStatusUpdates() {
 
   useEffect(() => {
     const unsubscribe = subscribe('host.status.changed', (event: WsEvent) => {
-      const { payload } = event as WsHostStatusEvent;
-      updateHostStatus(payload.hostId, payload.status);
+      const data = getEventData(event) as WsHostStatusEvent['data'];
+      updateHostStatus(data.hostId, data.status);
     });
 
     return unsubscribe;
@@ -34,8 +54,8 @@ export function useNotificationEvents() {
 
   useEffect(() => {
     const unsubscribe = subscribe('notification', (event: WsEvent) => {
-      const { payload } = event as WsNotificationEvent;
-      notify[payload.level](payload.title, payload.message);
+      const data = getEventData(event) as WsNotificationEvent['data'];
+      notify[data.level](data.title, data.message);
     });
 
     return unsubscribe;

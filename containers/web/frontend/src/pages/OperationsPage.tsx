@@ -4,7 +4,8 @@ import { operationsApi } from '@/api/operations';
 import { Table, Pagination, OperationStatusBadge, Modal, Button, Select } from '@/components/ui';
 import { RemoteCommandModal, ScheduledCommandsSection } from '@/components/operations';
 import { notify } from '@/stores/notificationStore';
-import { useWsEventHandler } from '@/hooks/useWebSocket';
+import { useWsEventHandler, getEventData } from '@/hooks/useWebSocket';
+import { useDataInvalidation } from '@/hooks/useDataInvalidation';
 import type { Operation, Session, Column, WsOperationProgressEvent } from '@/types';
 
 function formatDate(dateString: string): string {
@@ -68,15 +69,18 @@ export function OperationsPage() {
     fetchOperations();
   }, [fetchOperations]);
 
-  // Listen for real-time updates
+  // Listen for real-time progress updates (AC3: direct state update, no refetch)
   useWsEventHandler<WsOperationProgressEvent>('operation.progress', (event) => {
-    const { operationId, progress, stats } = event.payload;
+    const data = getEventData(event) as WsOperationProgressEvent['data'];
     setOperations((prev) =>
       prev.map((op) =>
-        op.id === operationId ? { ...op, progress, stats } : op
+        op.id === data.operationId ? { ...op, progress: data.progress, stats: data.stats } : op
       )
     );
   });
+
+  // Reactive: refetch on operation lifecycle events (NOT progress — AC3)
+  useDataInvalidation('operation', fetchOperations, { showToast: false });
 
   const handleViewDetails = async (operationId: string) => {
     try {
