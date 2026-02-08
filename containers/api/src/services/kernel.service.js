@@ -290,7 +290,7 @@ async function switchKernel(variant) {
 
 async function triggerRebuild(variant, jobId) {
   const scriptPath = process.env.UPDATE_LINBOFS_SCRIPT ||
-    path.join(__dirname, '..', '..', '..', '..', 'scripts', 'server', 'update-linbofs.sh');
+    '/usr/share/linuxmuster/linbo/update-linbofs.sh';
 
   try {
     const env = {

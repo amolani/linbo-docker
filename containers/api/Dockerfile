@@ -36,6 +36,8 @@ LABEL version="1.0.0"
 
 # Install runtime dependencies
 RUN apk add --no-cache \
+    argon2 \
+    bash \
     curl \
     openssh-client \
     openssl \
