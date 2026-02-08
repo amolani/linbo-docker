@@ -29,6 +29,9 @@ env:
   LINBO_DEB_BASE: "https://deb.linuxmuster.net"
   LINBO_DEB_DIST: "lmn73"
 
+permissions:
+  contents: write
+
 jobs:
   check-and-update:
     runs-on: ubuntu-latest
