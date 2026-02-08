@@ -194,7 +194,7 @@ jobs:
             # Clean old modules and inject stable variant's modules
             rm -rf "$BUILDDIR/lib/modules"
             mkdir -p "$BUILDDIR/lib/modules"
-            tar xf "$BOOT_ABS/kernels/stable/modules.tar.xz" --no-absolute-filenames -C "$BUILDDIR"
+            tar xf "$BOOT_ABS/kernels/stable/modules.tar.xz" -C "$BUILDDIR"
 
             # Run depmod if a single module dir exists
             MOD_KVER=$(ls -d "$BUILDDIR/lib/modules"/*/ 2>/dev/null | head -1 | xargs basename 2>/dev/null || echo "")
