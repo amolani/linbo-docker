@@ -183,30 +183,29 @@ jobs:
           fi
 
           # linbofs64: build from template + stable modules
-          if [ -f "$TEMPLATE" ] && [ -f "$STABLE_DIR/modules.tar.xz" ]; then
+          BOOT_ABS="$(cd .. && pwd)/boot-files"
+          if [ -f "$BOOT_ABS/linbofs64.xz" ] && [ -f "$BOOT_ABS/kernels/stable/modules.tar.xz" ]; then
             echo "  Building linbofs64 from template + stable modules..."
             BUILDDIR=$(mktemp -d)
-            cd "$BUILDDIR"
 
             # Extract template
-            xzcat "$OLDPWD/$TEMPLATE" | cpio -i -d -H newc --no-absolute-filenames 2>/dev/null
+            xzcat "$BOOT_ABS/linbofs64.xz" | (cd "$BUILDDIR" && cpio -i -d -H newc --no-absolute-filenames 2>/dev/null || true)
 
             # Clean old modules and inject stable variant's modules
-            rm -rf lib/modules/*
-            mkdir -p lib/modules
-            tar xf "$OLDPWD/$STABLE_DIR/modules.tar.xz" --no-absolute-filenames
+            rm -rf "$BUILDDIR/lib/modules"
+            mkdir -p "$BUILDDIR/lib/modules"
+            tar xf "$BOOT_ABS/kernels/stable/modules.tar.xz" --no-absolute-filenames -C "$BUILDDIR"
 
             # Run depmod if a single module dir exists
-            MOD_KVER=$(ls -d lib/modules/*/ 2>/dev/null | head -1 | xargs basename 2>/dev/null || echo "")
+            MOD_KVER=$(ls -d "$BUILDDIR/lib/modules"/*/ 2>/dev/null | head -1 | xargs basename 2>/dev/null || echo "")
             if [ -n "$MOD_KVER" ] && command -v depmod &>/dev/null; then
-              depmod -a -b . "$MOD_KVER" 2>/dev/null || true
+              depmod -a -b "$BUILDDIR" "$MOD_KVER" 2>/dev/null || true
             fi
 
             # Repack as linbofs64 (uncompressed cpio — this is what GRUB loads)
-            find . -print0 | cpio -o -0 -H newc > "$OLDPWD/../boot-files/linbofs64" 2>/dev/null
-            echo "  - linbofs64 built ($(du -h "$OLDPWD/../boot-files/linbofs64" | cut -f1))"
+            (cd "$BUILDDIR" && find . -print0 | cpio -o -0 -H newc 2>/dev/null) > "$BOOT_ABS/linbofs64"
+            echo "  - linbofs64 built ($(du -h "$BOOT_ABS/linbofs64" | cut -f1))"
 
-            cd "$OLDPWD"
             rm -rf "$BUILDDIR"
           else
             echo "WARNING: Cannot build linbofs64 — template or stable modules missing"
