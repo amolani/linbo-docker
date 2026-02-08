@@ -9,7 +9,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import { systemApi } from '@/api/system';
-import { useWebSocket } from '@/hooks/useWebSocket';
+import { useWsStore } from '@/stores/wsStore';
 import type { KernelStatus } from '@/types';
 import { ConfirmModal } from '@/components/ui';
 
@@ -58,15 +58,15 @@ export function KernelSwitcher() {
   }, [isPolling]);
 
   // Listen for WS events
-  useWebSocket((event) => {
-    if (
-      event.type === 'system.kernel_switched' ||
-      event.type === 'system.kernel_switch_failed' ||
-      event.type === 'system.kernel_switch_started'
-    ) {
-      fetchStatus();
-    }
-  });
+  const { subscribe } = useWsStore();
+  useEffect(() => {
+    const unsubs = [
+      subscribe('system.kernel_switched', () => fetchStatus()),
+      subscribe('system.kernel_switch_failed', () => fetchStatus()),
+      subscribe('system.kernel_switch_started', () => fetchStatus()),
+    ];
+    return () => unsubs.forEach(fn => fn());
+  }, [subscribe, fetchStatus]);
 
   useEffect(() => {
     fetchStatus();
@@ -126,7 +126,6 @@ export function KernelSwitcher() {
 
   if (!status) return null;
 
-  const activeVariant = status.variants.find(v => v.isActive);
   const switchTargetVariant = status.variants.find(v => v.name === switchTarget);
 
   return (
@@ -305,7 +304,7 @@ export function KernelSwitcher() {
           onConfirm={() => handleSwitch(switchTarget)}
           title="Kernel wechseln"
           message={`Kernel wechseln zu '${switchTarget}' v${switchTargetVariant.version}? Alle LINBO-Clients erhalten den neuen Kernel beim nächsten PXE-Boot.`}
-          confirmText="Wechseln"
+          confirmLabel="Wechseln"
           variant="warning"
         />
       )}
