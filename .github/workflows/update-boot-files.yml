@@ -26,7 +26,8 @@ on:
 
 env:
   LINBO_REPO: "linuxmuster/linuxmuster-linbo7"
-  LINBO_ARCHIVE_URL: "https://archive.linuxmuster.net/lmn73"
+  LINBO_DEB_BASE: "https://deb.linuxmuster.net"
+  LINBO_DEB_DIST: "lmn73"
 
 jobs:
   check-and-update:
@@ -41,18 +42,28 @@ jobs:
       - name: Get latest LINBO version
         id: linbo-version
         run: |
-          # Get latest version from linuxmuster archive
-          LATEST_DEB=$(curl -sL "${LINBO_ARCHIVE_URL}/" | grep -oP 'linuxmuster-linbo7_[0-9.]+-[0-9]+_all\.deb' | sort -V | tail -1)
+          # Get latest version from APT Packages file
+          PACKAGES_URL="${LINBO_DEB_BASE}/dists/${LINBO_DEB_DIST}/main/binary-amd64/Packages"
+          echo "Fetching package index: $PACKAGES_URL"
 
-          if [ -z "$LATEST_DEB" ]; then
-            echo "ERROR: Could not find LINBO package"
+          # Try compressed first, then plain
+          PACKAGES=$(curl -sL "${PACKAGES_URL}.gz" | gunzip 2>/dev/null || curl -sL "$PACKAGES_URL")
+
+          # Extract linuxmuster-linbo7 package info
+          VERSION=$(echo "$PACKAGES" | awk '/^Package: linuxmuster-linbo7$/,/^$/' | grep "^Version:" | tail -1 | awk '{print $2}')
+          FILENAME=$(echo "$PACKAGES" | awk '/^Package: linuxmuster-linbo7$/,/^$/' | grep "^Filename:" | tail -1 | awk '{print $2}')
+
+          if [ -z "$VERSION" ] || [ -z "$FILENAME" ]; then
+            echo "ERROR: Could not find LINBO package in APT repo"
+            echo "Tried: $PACKAGES_URL"
             exit 1
           fi
 
-          VERSION=$(echo "$LATEST_DEB" | grep -oP '[0-9.]+-[0-9]+')
+          DEB_URL="${LINBO_DEB_BASE}/${FILENAME}"
           echo "Latest LINBO version: $VERSION"
+          echo "Deb URL: $DEB_URL"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "deb_file=$LATEST_DEB" >> $GITHUB_OUTPUT
+          echo "deb_url=$DEB_URL" >> $GITHUB_OUTPUT
 
       - name: Check current version
         id: current-version
@@ -81,12 +92,14 @@ jobs:
           cd work
 
           # Download the deb package
-          echo "Downloading ${{ steps.linbo-version.outputs.deb_file }}..."
-          wget -q "${LINBO_ARCHIVE_URL}/${{ steps.linbo-version.outputs.deb_file }}"
+          DEB_URL="${{ steps.linbo-version.outputs.deb_url }}"
+          DEB_FILE=$(basename "$DEB_URL")
+          echo "Downloading $DEB_FILE..."
+          wget -q "$DEB_URL"
 
           # Extract deb
           echo "Extracting package..."
-          dpkg-deb -x "${{ steps.linbo-version.outputs.deb_file }}" extracted/
+          dpkg-deb -x "$DEB_FILE" extracted/
 
           # Copy boot files
           echo "Copying boot files..."
