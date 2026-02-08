@@ -8,6 +8,7 @@ import {
   HardDrive,
   Globe,
   ClipboardList,
+  Cpu,
   PanelLeftClose,
   PanelLeftOpen,
   Wifi,
@@ -33,6 +34,7 @@ const configNavigation = [
 
 const systemNavigation = [
   { name: 'Operationen', href: '/operations', icon: ClipboardList },
+  { name: 'Kernel', href: '/kernel', icon: Cpu },
 ];
 
 export function Sidebar() {

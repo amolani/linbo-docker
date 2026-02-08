@@ -11,6 +11,7 @@ import { ConfigsPage } from '@/pages/ConfigsPage';
 import { ImagesPage } from '@/pages/ImagesPage';
 import { OperationsPage } from '@/pages/OperationsPage';
 import { DhcpPage } from '@/pages/DhcpPage';
+import { KernelPage } from '@/pages/KernelPage';
 
 export function AppRoutes() {
   return (
@@ -90,6 +91,17 @@ export function AppRoutes() {
           <ProtectedRoute>
             <AppLayout>
               <DhcpPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/kernel"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <KernelPage />
             </AppLayout>
           </ProtectedRoute>
         }

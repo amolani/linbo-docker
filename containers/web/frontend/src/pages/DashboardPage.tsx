@@ -5,13 +5,16 @@ import {
   Building2,
   Settings,
   HardDrive,
+  Cpu,
+  Loader2,
+  ArrowRight,
 } from 'lucide-react';
 import { statsApi } from '@/api/stats';
 import { operationsApi } from '@/api/operations';
+import { systemApi } from '@/api/system';
 import { useDataInvalidation } from '@/hooks/useDataInvalidation';
-import type { DashboardStats, Operation } from '@/types';
+import type { DashboardStats, Operation, KernelStatus } from '@/types';
 import { OperationStatusBadge } from '@/components/ui';
-import { KernelSwitcher } from '@/components/system/KernelSwitcher';
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -34,16 +37,19 @@ function formatDate(dateString: string): string {
 export function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentOperations, setRecentOperations] = useState<Operation[]>([]);
+  const [kernelStatus, setKernelStatus] = useState<KernelStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
     try {
-      const [statsData, opsData] = await Promise.all([
+      const [statsData, opsData, kernelData] = await Promise.all([
         statsApi.overview(),
         operationsApi.list({ limit: 5 }),
+        systemApi.getKernelStatus().catch(() => null),
       ]);
       setStats(statsData);
       setRecentOperations(opsData.data);
+      setKernelStatus(kernelData);
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
     } finally {
@@ -222,8 +228,43 @@ export function DashboardPage() {
         </div>
       </div>
 
-      {/* Kernel Switcher */}
-      <KernelSwitcher />
+      {/* Kernel Status Card */}
+      {kernelStatus && (
+        <Link
+          to="/kernel"
+          className="block bg-card shadow-sm rounded-lg hover:shadow-md transition-shadow"
+        >
+          <div className="p-5 flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="bg-cyan-500 rounded-md p-3">
+                <Cpu className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-muted-foreground">LINBO Kernel</h3>
+                <div className="flex items-center space-x-2">
+                  {kernelStatus.rebuildRunning ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400" />
+                      <span className="text-sm text-blue-400">Rebuilding...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-lg font-semibold text-foreground capitalize">
+                        {kernelStatus.activeVariant}
+                      </span>
+                      <span className="text-sm text-muted-foreground">
+                        v{kernelStatus.activeVersion}
+                      </span>
+                      <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+            <ArrowRight className="h-5 w-5 text-muted-foreground" />
+          </div>
+        </Link>
+      )}
 
       {/* Recent Operations */}
       <div className="bg-card shadow-sm rounded-lg">
