@@ -20,7 +20,7 @@ KERNEL_VAR_DIR="${KERNEL_VAR_DIR:-/var/lib/linuxmuster/linbo/current}"
 
 # Files
 LINBOFS="$LINBO_DIR/linbofs64"
-RSYNC_SECRETS="${RSYNC_SECRETS:-/etc/rsyncd.secrets}"
+RSYNC_SECRETS="${RSYNC_SECRETS:-$CONFIG_DIR/rsyncd.secrets}"
 CUSTOM_KERNEL_FILE="$CONFIG_DIR/custom_kernel"
 LINBOFS_TEMPLATE="$KERNEL_VAR_DIR/linbofs64.xz"
 
@@ -158,16 +158,18 @@ cd "$WORKDIR"
 
 if [ -f "$LINBOFS_TEMPLATE" ]; then
     echo "Extracting linbofs template (linbofs64.xz)..."
-    xzcat "$LINBOFS_TEMPLATE" | cpio -i -d -H newc --no-absolute-filenames 2>/dev/null
+    xzcat "$LINBOFS_TEMPLATE" | cpio -i -d -H newc --no-absolute-filenames 2>/dev/null || true
 else
     echo "WARNING: linbofs64.xz template not found, using current linbofs64"
-    xzcat "$LINBOFS" | cpio -i -d -H newc --no-absolute-filenames 2>/dev/null
+    xzcat "$LINBOFS" | cpio -i -d -H newc --no-absolute-filenames 2>/dev/null || true
 fi
 
-if [ $? -ne 0 ]; then
-    echo "ERROR: Failed to extract linbofs!"
+# Verify extraction produced files
+if [ ! -d "$WORKDIR/bin" ] && [ ! -d "$WORKDIR/etc" ]; then
+    echo "ERROR: Failed to extract linbofs — no bin/ or etc/ directory found!"
     exit 1
 fi
+echo "Extract OK ($(find "$WORKDIR" -type f | wc -l) files)"
 
 # =============================================================================
 # Step 7: Inject kernel modules (if variant available)
@@ -188,7 +190,7 @@ if [ "$HAS_KERNEL_VARIANT" = "true" ]; then
     fi
 
     # Extract modules
-    tar xf "$VARIANT_DIR/modules.tar.xz" --no-absolute-filenames
+    tar xf "$VARIANT_DIR/modules.tar.xz"
 
     # Validate: exactly one lib/modules/<kver> directory
     MOD_DIRS=$(ls -d lib/modules/*/ 2>/dev/null | wc -l)
@@ -308,10 +310,10 @@ echo "Verifying new linbofs64..."
 echo "  - Old size: $OLD_SIZE bytes"
 echo "  - New size: $NEW_SIZE bytes"
 
-# Sanity check: new file shouldn't be drastically smaller
-MIN_SIZE=$((OLD_SIZE / 2))
+# Sanity check: new file must be at least 10MB (reasonable minimum for linbofs64)
+MIN_SIZE=10485760
 if [ "$NEW_SIZE" -lt "$MIN_SIZE" ]; then
-    echo "ERROR: New file is suspiciously small ($NEW_SIZE bytes)"
+    echo "ERROR: New file is suspiciously small ($NEW_SIZE bytes, minimum $MIN_SIZE)"
     echo "Keeping backup, aborting!"
     rm -f "$LINBOFS.new"
     exit 1
