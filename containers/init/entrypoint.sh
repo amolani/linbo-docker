@@ -247,16 +247,12 @@ tar -xzf boot-files.tar.gz -C "${LINBO_DIR}"
 
 # Verify essential files
 echo "Verifying installation..."
-MISSING_FILES=""
-for file in linbo64 linbofs64; do
-    if [ ! -f "${LINBO_DIR}/${file}" ]; then
-        MISSING_FILES="${MISSING_FILES} ${file}"
-    fi
-done
-
-if [ -n "${MISSING_FILES}" ]; then
-    echo "ERROR: Missing essential files:${MISSING_FILES}"
+if [ ! -f "${LINBO_DIR}/linbo64" ]; then
+    echo "ERROR: Missing essential file: linbo64"
     exit 1
+fi
+if [ ! -f "${LINBO_DIR}/linbofs64" ]; then
+    echo "WARNING: linbofs64 not found — will be built by update-linbofs.sh on first API start"
 fi
 
 # Write marker file with version info
