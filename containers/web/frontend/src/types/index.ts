@@ -373,6 +373,39 @@ export interface DhcpExportOptions {
   includeSubnet?: boolean;
 }
 
+// Kernel
+export interface KernelVariant {
+  name: string;
+  version: string;
+  kernelSize: number;
+  modulesSize: number;
+  isActive: boolean;
+  available: boolean;
+}
+
+export interface KernelStatus {
+  variants: KernelVariant[];
+  activeVariant: string;
+  activeVersion: string;
+  configValid: boolean;
+  configWarning: string | null;
+  hasTemplate: boolean;
+  rebuildRunning: boolean;
+  lastSwitchAt: string | null;
+  lastError: string | null;
+  currentLinbo64: {
+    size: number;
+    md5: string | null;
+    modifiedAt: string | null;
+  };
+}
+
+export interface KernelSwitchResponse {
+  jobId: string;
+  startedAt: string;
+  requestedVariant: string;
+}
+
 // Filters
 export interface HostFilters {
   search?: string;

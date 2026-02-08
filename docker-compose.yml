@@ -12,6 +12,7 @@ services:
     container_name: linbo-init
     volumes:
       - linbo_srv_data:/srv/linbo
+      - linbo_kernel_data:/var/lib/linuxmuster/linbo
     environment:
       - BOOT_FILES_URL=${BOOT_FILES_URL:-https://github.com/amolani/linbo-docker/releases/latest/download/linbo-boot-files.tar.gz}
       - FORCE_UPDATE=${FORCE_BOOT_UPDATE:-false}
@@ -153,6 +154,7 @@ services:
       - linbo_srv_data:/srv/linbo
       - linbo_config:/etc/linuxmuster/linbo
       - linbo_log:/var/log/linuxmuster/linbo
+      - linbo_kernel_data:/var/lib/linuxmuster/linbo
     environment:
       # Server
       - NODE_ENV=${NODE_ENV:-production}
@@ -289,6 +291,8 @@ volumes:
     name: linbo_postgres_data
   linbo_redis_data:
     name: linbo_redis_data
+  linbo_kernel_data:
+    name: linbo_kernel_data
 
 # =============================================================================
 # Networks

@@ -11,6 +11,7 @@ import { operationsApi } from '@/api/operations';
 import { useDataInvalidation } from '@/hooks/useDataInvalidation';
 import type { DashboardStats, Operation } from '@/types';
 import { OperationStatusBadge } from '@/components/ui';
+import { KernelSwitcher } from '@/components/system/KernelSwitcher';
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -220,6 +221,9 @@ export function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Kernel Switcher */}
+      <KernelSwitcher />
 
       {/* Recent Operations */}
       <div className="bg-card shadow-sm rounded-lg">

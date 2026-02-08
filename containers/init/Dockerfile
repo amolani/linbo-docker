@@ -7,6 +7,7 @@ RUN apk add --no-cache \
     curl \
     tar \
     gzip \
+    xz \
     ca-certificates
 
 COPY entrypoint.sh /entrypoint.sh
