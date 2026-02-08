@@ -1,10 +1,10 @@
 #!/bin/bash
 #
 # LINBO Docker - Update-Linbofs Script
-# Injects SSH-Keys and RSYNC-Password hash into linbofs64
+# Injects SSH-Keys, RSYNC-Password hash, and selected kernel modules into linbofs64
 #
 # Based on the original linuxmuster.net update-linbofs script
-# Adapted for LINBO Docker standalone solution
+# Adapted for LINBO Docker standalone solution with kernel variant support
 #
 
 set -e
@@ -16,29 +16,30 @@ set -e
 LINBO_DIR="${LINBO_DIR:-/srv/linbo}"
 CONFIG_DIR="${CONFIG_DIR:-/etc/linuxmuster/linbo}"
 CACHE_DIR="/var/cache/linbo"
-WORK_DIR="$CACHE_DIR/linbofs-update"
+KERNEL_VAR_DIR="${KERNEL_VAR_DIR:-/var/lib/linuxmuster/linbo/current}"
 
 # Files
 LINBOFS="$LINBO_DIR/linbofs64"
 RSYNC_SECRETS="${RSYNC_SECRETS:-/etc/rsyncd.secrets}"
+CUSTOM_KERNEL_FILE="$CONFIG_DIR/custom_kernel"
+LINBOFS_TEMPLATE="$KERNEL_VAR_DIR/linbofs64.xz"
 
 echo "=== LINBO Docker Update-Linbofs ==="
 echo "Date: $(date)"
 echo ""
 
 # =============================================================================
-# Lockfile handling
+# Lockfile handling (flock-based for shared volume safety)
 # =============================================================================
 
-LOCKER="/tmp/.update-linbofs.lock"
-if [ -e "$LOCKER" ]; then
+REBUILD_LOCK="${CONFIG_DIR}/.rebuild.lock"
+exec 8>"$REBUILD_LOCK"
+if ! flock -n 8; then
     echo "ERROR: Another update-linbofs process is running!"
-    echo "If this is not the case, remove the lockfile: $LOCKER"
+    echo "If this is not the case, the lock will be released when the process exits."
     exit 1
 fi
-touch "$LOCKER"
-chmod 400 "$LOCKER"
-trap "rm -f $LOCKER" EXIT
+# Lock is held until script exits (fd 8 is closed automatically)
 
 # =============================================================================
 # Validate prerequisites
@@ -66,7 +67,54 @@ for tool in xz cpio argon2; do
 done
 
 # =============================================================================
-# Step 1: Read and hash RSYNC password
+# Step 1: Read kernel variant from custom_kernel
+# =============================================================================
+
+KTYPE="stable"
+
+if [ -s "$CUSTOM_KERNEL_FILE" ]; then
+    # Tolerant parsing: ignore comments, quotes, whitespace, take last KERNELPATH=
+    KPATH=$(grep -E '^[[:space:]]*KERNELPATH=' "$CUSTOM_KERNEL_FILE" 2>/dev/null | tail -1 | sed 's/.*=//;s/[" ]//g')
+    case "$KPATH" in
+        legacy|longterm|stable) KTYPE="$KPATH" ;;
+        "") KTYPE="stable" ;;
+        *) echo "ERROR: Invalid KERNELPATH '$KPATH' in custom_kernel"; exit 1 ;;
+    esac
+fi
+
+echo "Kernel variant: $KTYPE"
+
+# =============================================================================
+# Step 2: Validate kernel variant directory (if available)
+# =============================================================================
+
+VARIANT_DIR="$KERNEL_VAR_DIR/$KTYPE"
+HAS_KERNEL_VARIANT=false
+
+if [ -d "$VARIANT_DIR" ]; then
+    MISSING_VARIANT_FILES=""
+    for f in linbo64 modules.tar.xz version; do
+        if [ ! -f "$VARIANT_DIR/$f" ]; then
+            MISSING_VARIANT_FILES="$MISSING_VARIANT_FILES $f"
+        fi
+    done
+
+    if [ -n "$MISSING_VARIANT_FILES" ]; then
+        echo "WARNING: Incomplete variant '$KTYPE': missing$MISSING_VARIANT_FILES"
+        echo "Proceeding without kernel module injection"
+    else
+        HAS_KERNEL_VARIANT=true
+        KVERS=$(cat "$VARIANT_DIR/version")
+        echo "Kernel version: $KVERS"
+    fi
+else
+    echo "INFO: Kernel variant directory not found ($VARIANT_DIR)"
+    echo "Proceeding without kernel module injection"
+    echo "(This is normal for setups without kernel variant provisioning)"
+fi
+
+# =============================================================================
+# Step 3: Read and hash RSYNC password
 # =============================================================================
 
 linbo_passwd="$(grep ^linbo "$RSYNC_SECRETS" | awk -F: '{print $2}')"
@@ -87,44 +135,104 @@ fi
 echo "OK"
 
 # =============================================================================
-# Step 2: Prepare work directory
+# Step 4: Prepare work directory (unique per run)
 # =============================================================================
 
-echo "Preparing work directory..."
-rm -rf "$WORK_DIR"
-mkdir -p "$WORK_DIR"
-cd "$WORK_DIR"
+WORKDIR=$(mktemp -d "${CACHE_DIR}/linbofs-build.XXXXXX")
+trap "rm -rf $WORKDIR" EXIT
+
+echo "Work directory: $WORKDIR"
 
 # =============================================================================
-# Step 3: Create backup
+# Step 5: Create backup
 # =============================================================================
 
 echo "Creating backup: ${LINBOFS}.bak"
 cp "$LINBOFS" "${LINBOFS}.bak"
 
 # =============================================================================
-# Step 4: Extract linbofs64
+# Step 6: Extract linbofs64 template or current linbofs64
 # =============================================================================
 
-echo "Extracting linbofs64..."
-xzcat "$LINBOFS" | cpio -i -d -H newc --no-absolute-filenames 2>/dev/null
+cd "$WORKDIR"
+
+if [ -f "$LINBOFS_TEMPLATE" ]; then
+    echo "Extracting linbofs template (linbofs64.xz)..."
+    xzcat "$LINBOFS_TEMPLATE" | cpio -i -d -H newc --no-absolute-filenames 2>/dev/null
+else
+    echo "WARNING: linbofs64.xz template not found, using current linbofs64"
+    xzcat "$LINBOFS" | cpio -i -d -H newc --no-absolute-filenames 2>/dev/null
+fi
+
 if [ $? -ne 0 ]; then
-    echo "ERROR: Failed to extract linbofs64!"
+    echo "ERROR: Failed to extract linbofs!"
     exit 1
 fi
 
 # =============================================================================
-# Step 5: Inject password hash
+# Step 7: Inject kernel modules (if variant available)
+# =============================================================================
+
+if [ "$HAS_KERNEL_VARIANT" = "true" ]; then
+    echo "Injecting kernel modules from variant '$KTYPE'..."
+
+    # Ensure lib/modules exists
+    mkdir -p lib/modules
+    # Remove old modules completely
+    rm -rf lib/modules/*
+
+    # Tar safety: check for path traversal
+    if tar tf "$VARIANT_DIR/modules.tar.xz" | grep -qE '(^/|\.\.)'; then
+        echo "ERROR: modules.tar.xz contains absolute paths or .. segments — refusing to extract"
+        exit 1
+    fi
+
+    # Extract modules
+    tar xf "$VARIANT_DIR/modules.tar.xz" --no-absolute-filenames
+
+    # Validate: exactly one lib/modules/<kver> directory
+    MOD_DIRS=$(ls -d lib/modules/*/ 2>/dev/null | wc -l)
+    if [ "$MOD_DIRS" -ne 1 ]; then
+        echo "ERROR: Expected exactly 1 modules directory, found $MOD_DIRS"
+        exit 1
+    fi
+
+    MOD_KVER=$(basename $(ls -d lib/modules/*/))
+
+    # Sanity check on module version format
+    if [ -z "$MOD_KVER" ] || [ ${#MOD_KVER} -lt 3 ] || ! echo "$MOD_KVER" | grep -qE '^[0-9]+\.'; then
+        echo "ERROR: Suspicious module version '$MOD_KVER' — expected format like '6.12.57'"
+        exit 1
+    fi
+
+    echo "  - Modules: $MOD_KVER (variant version: $KVERS)"
+
+    # Verify modules extracted successfully
+    if [ ! -d "lib/modules" ] || [ -z "$(ls -A lib/modules/ 2>/dev/null)" ]; then
+        echo "ERROR: No lib/modules/ found after extracting modules.tar.xz — archive may be corrupt"
+        exit 1
+    fi
+
+    # Run depmod if available
+    if command -v depmod &>/dev/null; then
+        depmod -a -b . "$MOD_KVER"
+        echo "  - depmod completed"
+    fi
+fi
+
+# =============================================================================
+# Step 8: Inject password hash
 # =============================================================================
 
 echo "Injecting password hash..."
+mkdir -p etc
 echo -n "$linbo_pwhash" > etc/linbo_pwhash
 echo -n "$linbo_salt" > etc/linbo_salt
 chmod 600 etc/linbo_*
 echo "  - Password hash injected"
 
 # =============================================================================
-# Step 6: Inject SSH keys
+# Step 9: Inject SSH keys
 # =============================================================================
 
 echo "Injecting SSH keys..."
@@ -169,7 +277,7 @@ fi
 chmod 700 .ssh 2>/dev/null || true
 
 # =============================================================================
-# Step 7: Copy default start.conf
+# Step 10: Copy default start.conf
 # =============================================================================
 
 if [ -f "$LINBO_DIR/start.conf" ]; then
@@ -178,7 +286,7 @@ if [ -f "$LINBO_DIR/start.conf" ]; then
 fi
 
 # =============================================================================
-# Step 8: Repack linbofs64
+# Step 11: Repack linbofs64
 # =============================================================================
 
 echo "Repacking linbofs64 (this may take a while)..."
@@ -190,7 +298,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # =============================================================================
-# Step 9: Verify new file
+# Step 12: Verify new file
 # =============================================================================
 
 NEW_SIZE=$(stat -c%s "$LINBOFS.new")
@@ -210,14 +318,14 @@ if [ "$NEW_SIZE" -lt "$MIN_SIZE" ]; then
 fi
 
 # =============================================================================
-# Step 10: Replace original file
+# Step 13: Replace original file
 # =============================================================================
 
 echo "Replacing original linbofs64..."
 mv "$LINBOFS.new" "$LINBOFS"
 
 # =============================================================================
-# Step 11: Generate MD5 hash
+# Step 14: Generate MD5 hash
 # =============================================================================
 
 echo "Generating MD5 hash..."
@@ -225,11 +333,15 @@ md5sum "$LINBOFS" | awk '{print $1}' > "${LINBOFS}.md5"
 echo "  - MD5: $(cat ${LINBOFS}.md5)"
 
 # =============================================================================
-# Step 12: Cleanup
+# Step 15: Copy kernel from variant (if available)
 # =============================================================================
 
-echo "Cleaning up..."
-rm -rf "$WORK_DIR"
+if [ "$HAS_KERNEL_VARIANT" = "true" ]; then
+    echo "Copying kernel from variant '$KTYPE'..."
+    cp "$VARIANT_DIR/linbo64" "$LINBO_DIR/linbo64"
+    md5sum "$LINBO_DIR/linbo64" | awk '{print $1}' > "$LINBO_DIR/linbo64.md5"
+    echo "  - linbo64: $(cat $LINBO_DIR/linbo64.md5)"
+fi
 
 # =============================================================================
 # Summary
@@ -240,4 +352,7 @@ echo "=== Update-Linbofs completed successfully ==="
 echo "File: $LINBOFS"
 echo "Size: $NEW_SIZE bytes"
 echo "Keys: Dropbear=$DROPBEAR_KEYS, SSH=$SSH_KEYS, Authorized=$AUTH_KEYS"
+if [ "$HAS_KERNEL_VARIANT" = "true" ]; then
+    echo "Kernel: $KTYPE ($KVERS)"
+fi
 echo ""

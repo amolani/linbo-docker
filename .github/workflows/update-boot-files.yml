@@ -103,6 +103,57 @@ jobs:
           mkdir -p ../boot-files/icons
           cp -r extracted/srv/linbo/icons/* ../boot-files/icons/ 2>/dev/null || true
 
+          # Kernel variants (stable, longterm, legacy)
+          echo "Extracting kernel variants..."
+          mkdir -p ../boot-files/kernels
+          for variant in stable longterm legacy; do
+            src="extracted/var/lib/linuxmuster/linbo/$variant"
+            if [ -d "$src" ]; then
+              mkdir -p "../boot-files/kernels/$variant"
+              cp "$src/linbo64" "../boot-files/kernels/$variant/" 2>/dev/null || true
+              cp "$src/modules.tar.xz" "../boot-files/kernels/$variant/" 2>/dev/null || true
+              cp "$src/version" "../boot-files/kernels/$variant/" 2>/dev/null || true
+              echo "  - $variant: $(cat "$src/version" 2>/dev/null || echo 'unknown')"
+            else
+              echo "  - $variant: not found in package"
+            fi
+          done
+
+          # linbofs64.xz template (base without modules)
+          if [ -f "extracted/var/lib/linuxmuster/linbo/linbofs64.xz" ]; then
+            cp "extracted/var/lib/linuxmuster/linbo/linbofs64.xz" ../boot-files/
+            echo "  - linbofs64.xz template copied"
+          fi
+
+          # Generate manifest.json with checksums
+          VERSION="${{ steps.linbo-version.outputs.version }}"
+          python3 -c "
+          import json, hashlib, os
+          manifest = {'variants': {}, 'linboVersion': '$VERSION'}
+          for v in ['stable','longterm','legacy']:
+              d = f'../boot-files/kernels/{v}'
+              if os.path.isdir(d):
+                  entry = {}
+                  for f in ['linbo64','modules.tar.xz','version']:
+                      fp = os.path.join(d, f)
+                      if os.path.isfile(fp):
+                          entry[f] = {
+                              'size': os.path.getsize(fp),
+                              'sha256': hashlib.sha256(open(fp,'rb').read()).hexdigest()
+                          }
+                          if f == 'version':
+                              entry['kernelVersion'] = open(fp).read().strip()
+                  manifest['variants'][v] = entry
+          tp = '../boot-files/linbofs64.xz'
+          if os.path.isfile(tp):
+              manifest['template'] = {
+                  'size': os.path.getsize(tp),
+                  'sha256': hashlib.sha256(open(tp,'rb').read()).hexdigest()
+              }
+          json.dump(manifest, open('../boot-files/kernels/manifest.json','w'), indent=2)
+          print('  - manifest.json generated')
+          "
+
           # Write version file
           echo "${{ steps.linbo-version.outputs.version }}" > ../boot-files/VERSION
 
@@ -112,6 +163,8 @@ jobs:
 
           echo "Boot files extracted successfully"
           ls -la boot-files/
+          echo "Kernel variants:"
+          ls -la boot-files/kernels/ 2>/dev/null || echo "  (none)"
 
       - name: Create boot files archive
         if: steps.current-version.outputs.needs_update == 'true'
@@ -140,8 +193,11 @@ jobs:
             ### Contents
             - `linbo64` - LINBO Linux kernel
             - `linbofs64` - LINBO initramfs
+            - `linbofs64.xz` - LINBO initramfs template (without modules)
             - `boot/grub/` - GRUB bootloader files
             - `icons/` - OS icons for LINBO GUI
+            - `kernels/` - Kernel variants (stable, longterm, legacy)
+            - `kernels/manifest.json` - Checksums and version info
 
             ### Usage
             These files are automatically downloaded by the linbo-init container on first start.
