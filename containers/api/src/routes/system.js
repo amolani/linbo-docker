@@ -12,6 +12,7 @@ const { z } = require('zod');
 const linbofsService = require('../services/linbofs.service');
 const grubService = require('../services/grub.service');
 const kernelService = require('../services/kernel.service');
+const firmwareService = require('../services/firmware.service');
 const operationWorker = require('../workers/operation.worker');
 
 const kernelSwitchSchema = z.object({
@@ -449,6 +450,386 @@ router.post(
           },
         });
       }
+      next(error);
+    }
+  }
+);
+
+// =============================================================================
+// Firmware Management
+// =============================================================================
+
+const firmwareEntrySchema = z.object({
+  entry: z.string().min(1).max(512),
+});
+
+const firmwareBulkSchema = z.object({
+  entries: z.array(z.string().min(1).max(512)).min(1).max(500),
+});
+
+const firmwareSearchSchema = z.object({
+  query: z.string().max(256).optional().default(''),
+  limit: z.coerce.number().int().min(1).max(200).optional().default(50),
+});
+
+const wlanConfigSchema = z.object({
+  ssid: z.string().min(1).max(32),
+  keyMgmt: z.enum(['WPA-PSK', 'NONE']),
+  psk: z.string().max(128).optional(),
+  scanSsid: z.boolean().optional(),
+});
+
+/**
+ * GET /system/firmware-entries
+ * List configured firmware entries with validation status
+ */
+router.get(
+  '/firmware-entries',
+  authenticateToken,
+  async (req, res, next) => {
+    try {
+      const entries = await firmwareService.getFirmwareEntries();
+      res.json({ data: entries });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /system/firmware-status
+ * Combined firmware status (entries + stats + rebuild state)
+ */
+router.get(
+  '/firmware-status',
+  authenticateToken,
+  async (req, res, next) => {
+    try {
+      const status = await firmwareService.getFirmwareStatus();
+      res.json({ data: status });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /system/firmware-entries
+ * Add a firmware entry to the config
+ */
+router.post(
+  '/firmware-entries',
+  authenticateToken,
+  requireRole(['admin']),
+  auditAction('system.firmware_add'),
+  async (req, res, next) => {
+    try {
+      const parsed = firmwareEntrySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          error: {
+            code: 'INVALID_ENTRY',
+            message: 'Invalid firmware entry',
+            details: parsed.error.issues,
+          },
+        });
+      }
+
+      const result = await firmwareService.addFirmwareEntry(parsed.data.entry);
+
+      ws.broadcast('system.firmware_changed', {
+        action: 'added',
+        entry: result.entry,
+        timestamp: new Date(),
+      });
+
+      res.status(201).json({ data: result });
+    } catch (error) {
+      if (error.statusCode === 409) {
+        return res.status(409).json({
+          error: { code: 'DUPLICATE_ENTRY', message: error.message },
+        });
+      }
+      if (error.statusCode === 404) {
+        return res.status(404).json({
+          error: { code: 'FIRMWARE_NOT_FOUND', message: error.message },
+        });
+      }
+      if (error.statusCode === 400) {
+        return res.status(400).json({
+          error: { code: 'INVALID_ENTRY', message: error.message },
+        });
+      }
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /system/firmware-entries/remove
+ * Remove a firmware entry (main endpoint — body-based to avoid URL encoding issues)
+ */
+router.post(
+  '/firmware-entries/remove',
+  authenticateToken,
+  requireRole(['admin']),
+  auditAction('system.firmware_remove'),
+  async (req, res, next) => {
+    try {
+      const parsed = firmwareEntrySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          error: {
+            code: 'INVALID_ENTRY',
+            message: 'Invalid firmware entry',
+            details: parsed.error.issues,
+          },
+        });
+      }
+
+      const result = await firmwareService.removeFirmwareEntry(parsed.data.entry);
+
+      ws.broadcast('system.firmware_changed', {
+        action: 'removed',
+        entry: result.removed,
+        timestamp: new Date(),
+      });
+
+      res.json({ data: result });
+    } catch (error) {
+      if (error.statusCode === 404) {
+        return res.status(404).json({
+          error: { code: 'ENTRY_NOT_FOUND', message: error.message },
+        });
+      }
+      if (error.statusCode === 400) {
+        return res.status(400).json({
+          error: { code: 'INVALID_ENTRY', message: error.message },
+        });
+      }
+      next(error);
+    }
+  }
+);
+
+/**
+ * DELETE /system/firmware-entries
+ * Remove a firmware entry (REST alias — same handler)
+ */
+router.delete(
+  '/firmware-entries',
+  authenticateToken,
+  requireRole(['admin']),
+  auditAction('system.firmware_remove'),
+  async (req, res, next) => {
+    try {
+      const parsed = firmwareEntrySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          error: {
+            code: 'INVALID_ENTRY',
+            message: 'Invalid firmware entry',
+            details: parsed.error.issues,
+          },
+        });
+      }
+
+      const result = await firmwareService.removeFirmwareEntry(parsed.data.entry);
+
+      ws.broadcast('system.firmware_changed', {
+        action: 'removed',
+        entry: result.removed,
+        timestamp: new Date(),
+      });
+
+      res.json({ data: result });
+    } catch (error) {
+      if (error.statusCode === 404) {
+        return res.status(404).json({
+          error: { code: 'ENTRY_NOT_FOUND', message: error.message },
+        });
+      }
+      if (error.statusCode === 400) {
+        return res.status(400).json({
+          error: { code: 'INVALID_ENTRY', message: error.message },
+        });
+      }
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /system/firmware-available
+ * Search available firmware on the host filesystem
+ */
+router.get(
+  '/firmware-available',
+  authenticateToken,
+  async (req, res, next) => {
+    try {
+      const parsed = firmwareSearchSchema.safeParse(req.query);
+      if (!parsed.success) {
+        return res.status(400).json({
+          error: {
+            code: 'INVALID_QUERY',
+            message: 'Invalid search parameters',
+            details: parsed.error.issues,
+          },
+        });
+      }
+
+      const results = await firmwareService.searchAvailableFirmware(
+        parsed.data.query,
+        parsed.data.limit
+      );
+      res.json({ data: results });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /system/firmware-catalog
+ * Get firmware catalog with vendor categories and availability
+ * Query: ?expand=true to include expandedFiles for prefix entries
+ */
+router.get(
+  '/firmware-catalog',
+  authenticateToken,
+  async (req, res, next) => {
+    try {
+      const expand = req.query.expand === 'true';
+      const catalog = await firmwareService.getFirmwareCatalog(expand);
+      res.json({ data: catalog });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /system/firmware-entries/bulk
+ * Add multiple firmware entries in one atomic write
+ */
+router.post(
+  '/firmware-entries/bulk',
+  authenticateToken,
+  requireRole(['admin']),
+  auditAction('system.firmware_bulk_add'),
+  async (req, res, next) => {
+    try {
+      const parsed = firmwareBulkSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          error: {
+            code: 'INVALID_ENTRIES',
+            message: 'Invalid bulk entries',
+            details: parsed.error.issues,
+          },
+        });
+      }
+
+      const result = await firmwareService.addBulkFirmwareEntries(parsed.data.entries);
+
+      if (result.added.length > 0) {
+        ws.broadcast('system.firmware_changed', {
+          action: 'bulk_added',
+          count: result.added.length,
+          timestamp: new Date(),
+        });
+      }
+
+      res.json({ data: result });
+    } catch (error) {
+      if (error.statusCode === 400) {
+        return res.status(400).json({
+          error: { code: 'INVALID_ENTRIES', message: error.message },
+        });
+      }
+      next(error);
+    }
+  }
+);
+
+// =============================================================================
+// WLAN Configuration
+// =============================================================================
+
+/**
+ * GET /system/wlan-config
+ * Get WLAN status (never returns PSK value)
+ */
+router.get(
+  '/wlan-config',
+  authenticateToken,
+  async (req, res, next) => {
+    try {
+      const config = await firmwareService.getWlanConfig();
+      res.json({ data: config });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * PUT /system/wlan-config
+ * Set WLAN configuration (PSK redacted in audit)
+ */
+router.put(
+  '/wlan-config',
+  authenticateToken,
+  requireRole(['admin']),
+  auditAction('system.wlan_update', {
+    getChanges: (req) => ({
+      ssid: req.body.ssid,
+      keyMgmt: req.body.keyMgmt,
+      psk: req.body.psk ? '[REDACTED]' : undefined,
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const parsed = wlanConfigSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          error: {
+            code: 'INVALID_CONFIG',
+            message: 'Invalid WLAN configuration',
+            details: parsed.error.issues,
+          },
+        });
+      }
+
+      await firmwareService.setWlanConfig(parsed.data);
+      const config = await firmwareService.getWlanConfig();
+      res.json({ data: config });
+    } catch (error) {
+      if (error.statusCode === 400) {
+        return res.status(400).json({
+          error: { code: 'INVALID_CONFIG', message: error.message },
+        });
+      }
+      next(error);
+    }
+  }
+);
+
+/**
+ * DELETE /system/wlan-config
+ * Disable WLAN (delete wpa_supplicant.conf)
+ */
+router.delete(
+  '/wlan-config',
+  authenticateToken,
+  requireRole(['admin']),
+  auditAction('system.wlan_delete'),
+  async (req, res, next) => {
+    try {
+      await firmwareService.disableWlan();
+      res.json({ data: { enabled: false } });
+    } catch (error) {
       next(error);
     }
   }

@@ -156,6 +156,7 @@ services:
       - linbo_log:/var/log/linuxmuster/linbo
       - linbo_kernel_data:/var/lib/linuxmuster/linbo
       - ./scripts/server:/usr/share/linuxmuster/linbo
+      - /lib/firmware:/lib/firmware:ro
     environment:
       # Server
       - NODE_ENV=${NODE_ENV:-production}

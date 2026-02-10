@@ -288,6 +288,115 @@ if [ -f "$LINBO_DIR/start.conf" ]; then
 fi
 
 # =============================================================================
+# Step 10.5: Inject firmware files
+# =============================================================================
+
+FIRMWARE_CONFIG="$CONFIG_DIR/firmware"
+FW_BASE="/lib/firmware"
+
+if [ -f "$FIRMWARE_CONFIG" ] && grep -qvE '^[[:space:]]*(#|$)' "$FIRMWARE_CONFIG" 2>/dev/null; then
+    echo "Injecting firmware files..."
+
+    # Clean slate — remove any old firmware from previous builds
+    rm -rf lib/firmware
+    mkdir -p lib/firmware
+
+    FIRMWARE_COUNT=0
+    FILES_COPIED=0
+
+    while IFS= read -r entry || [ -n "$entry" ]; do
+        # Trim whitespace + strip CR (Windows CRLF compat)
+        entry="$(echo "$entry" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/\r$//')"
+        [ -z "$entry" ] && continue
+        [ "${entry#\#}" != "$entry" ] && continue
+
+        # Strip /lib/firmware/ prefix (production compat)
+        entry="${entry#/lib/firmware/}"
+
+        # Segment-based traversal check (foo..bar.bin stays allowed)
+        if echo "$entry" | grep -qE '(^|/)\.\.(/|$)'; then
+            echo "  REJECT (path traversal): $entry"; continue
+        fi
+        case "$entry" in
+            /*|*\\*) echo "  REJECT (unsafe path): $entry"; continue ;;
+        esac
+
+        SOURCE="$FW_BASE/$entry"
+        TARGET="lib/firmware/$entry"
+
+        # Symlink-out-of-base check on entry root
+        if [ -e "$SOURCE" ]; then
+            REAL_SOURCE="$(realpath "$SOURCE" 2>/dev/null)" || REAL_SOURCE=""
+            if [ -n "$REAL_SOURCE" ]; then
+                case "$REAL_SOURCE" in
+                    "$FW_BASE"/*|"$FW_BASE") ;;
+                    *) echo "  REJECT (symlink outside base): $entry -> $REAL_SOURCE"; continue ;;
+                esac
+            fi
+        fi
+
+        # Handle .zst — decompress (lazy zstd check: only fail when actually needed)
+        if [ ! -e "$SOURCE" ] && [ -e "${SOURCE}.zst" ]; then
+            REAL_ZST="$(realpath "${SOURCE}.zst" 2>/dev/null)" || REAL_ZST=""
+            case "$REAL_ZST" in "$FW_BASE"/*|"$FW_BASE") ;; *)
+                echo "  REJECT (zst symlink outside base): $entry"; continue ;; esac
+            if ! command -v zstd >/dev/null 2>&1; then
+                echo "  ERROR: zstd not found but needed for: $entry"
+                exit 1
+            fi
+            mkdir -p "$(dirname "$TARGET")"
+            if ! zstd -d -q "${SOURCE}.zst" -o "$TARGET" 2>/dev/null; then
+                echo "  ERROR: zstd decompress failed: $entry"
+                exit 1
+            fi
+            echo "  + file (decompressed): $entry"
+            FIRMWARE_COUNT=$((FIRMWARE_COUNT + 1))
+            FILES_COPIED=$((FILES_COPIED + 1))
+            continue
+        fi
+
+        if [ ! -e "$SOURCE" ]; then
+            echo "  WARN: not found: $entry"; continue
+        fi
+
+        # Copy
+        if [ -d "$SOURCE" ]; then
+            mkdir -p "$TARGET"
+            # rsync --safe-links drops symlinks pointing outside source tree
+            rsync -a --links --safe-links "$SOURCE"/ "$TARGET"/
+            DIR_FILES=$(find "$TARGET" -type f | wc -l)
+            echo "  + dir: $entry ($DIR_FILES files)"
+            FIRMWARE_COUNT=$((FIRMWARE_COUNT + 1))
+            FILES_COPIED=$((FILES_COPIED + DIR_FILES))
+        else
+            mkdir -p "$(dirname "$TARGET")"
+            # Single file: cp -aL is safe (realpath already checked above)
+            cp -aL "$SOURCE" "$TARGET"
+            echo "  + file: $entry"
+            FIRMWARE_COUNT=$((FIRMWARE_COUNT + 1))
+            FILES_COPIED=$((FILES_COPIED + 1))
+        fi
+    done < "$FIRMWARE_CONFIG"
+
+    echo "Firmware: $FIRMWARE_COUNT entries, $FILES_COPIED files injected"
+else
+    echo "No firmware config or empty ($FIRMWARE_CONFIG), skipping firmware injection"
+fi
+
+# =============================================================================
+# Step 10.6: Inject wpa_supplicant config
+# =============================================================================
+
+WPA_CONF="$CONFIG_DIR/wpa_supplicant.conf"
+if [ -f "$WPA_CONF" ] && [ -s "$WPA_CONF" ]; then
+    echo "Injecting wpa_supplicant.conf..."
+    mkdir -p etc
+    cp "$WPA_CONF" etc/wpa_supplicant.conf
+    chmod 600 etc/wpa_supplicant.conf
+    echo "  - WLAN config injected"
+fi
+
+# =============================================================================
 # Step 11: Repack linbofs64
 # =============================================================================
 

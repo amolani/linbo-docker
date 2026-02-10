@@ -406,6 +406,79 @@ export interface KernelSwitchResponse {
   requestedVariant: string;
 }
 
+// Firmware
+export interface FirmwareEntry {
+  entry: string;
+  valid: boolean;
+  exists: boolean;
+  isFile?: boolean;
+  isDirectory?: boolean;
+  size?: number;
+  isZst?: boolean;
+  error?: string;
+}
+
+export interface FirmwareStats {
+  total: number;
+  valid: number;
+  existing: number;
+  missing: number;
+  files: number;
+  directories: number;
+}
+
+export interface FirmwareStatus {
+  entries: FirmwareEntry[];
+  stats: FirmwareStats;
+  rebuildRunning: boolean;
+  lastSwitchAt: string | null;
+}
+
+// Firmware Catalog
+export interface FirmwareCatalogEntry {
+  path: string;
+  type: 'dir' | 'prefix';
+  description: string;
+  available: boolean;
+  configured: boolean;
+  configuredCount: number;
+  totalCount: number;
+  expandedFiles?: string[];
+  configuredFiles?: string[];
+}
+
+export interface FirmwareCatalogVendor {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  entries: FirmwareCatalogEntry[];
+  configuredCount: number;
+  totalCount: number;
+}
+
+export interface FirmwareCatalogCategory {
+  id: string;
+  name: string;
+  icon: string;
+  vendors: FirmwareCatalogVendor[];
+}
+
+export interface BulkAddResult {
+  added: string[];
+  duplicates: string[];
+  invalid: string[];
+}
+
+// WLAN
+export interface WlanConfig {
+  enabled: boolean;
+  ssid: string;
+  keyMgmt: 'WPA-PSK' | 'NONE';
+  hasPsk: boolean;
+  scanSsid: boolean;
+}
+
 // Filters
 export interface HostFilters {
   search?: string;
