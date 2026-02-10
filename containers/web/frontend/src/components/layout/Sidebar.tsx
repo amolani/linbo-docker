@@ -9,6 +9,7 @@ import {
   Globe,
   ClipboardList,
   Cpu,
+  Package,
   PanelLeftClose,
   PanelLeftOpen,
   Wifi,
@@ -35,6 +36,7 @@ const configNavigation = [
 const systemNavigation = [
   { name: 'Operationen', href: '/operations', icon: ClipboardList },
   { name: 'Kernel', href: '/kernel', icon: Cpu },
+  { name: 'Firmware', href: '/firmware', icon: Package },
 ];
 
 export function Sidebar() {
