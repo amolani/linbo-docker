@@ -44,16 +44,14 @@ function toYesNo(value) {
 
 /**
  * Convert partition ID to hex string (without 0x prefix)
+ * Preserves canonical form: lowercase, no 0x prefix, leading zeros kept as-is
  */
 function toHexId(value) {
-  if (value === null || value === undefined) return '';
+  if (value === null || value === undefined || value === '') return '';
   if (typeof value === 'number') return value.toString(16);
   if (typeof value === 'string') {
-    // Already hex string
-    if (/^[0-9a-fA-F]+$/.test(value)) return value.toLowerCase();
-    // Decimal string
-    const num = parseInt(value, 10);
-    if (!isNaN(num)) return num.toString(16);
+    const stripped = value.replace(/^0x/i, '').toLowerCase();
+    if (/^[0-9a-f]+$/.test(stripped)) return stripped;
   }
   return String(value);
 }
@@ -90,6 +88,15 @@ async function generateStartConf(configId) {
   lines.push(`AutoFormat = ${toYesNo(getLinboSetting(ls, 'AutoFormat') || false)}`);
   lines.push(`AutoInitCache = ${toYesNo(getLinboSetting(ls, 'AutoInitCache') || false)}`);
   lines.push(`DownloadType = ${getLinboSetting(ls, 'DownloadType') || 'torrent'}`);
+  // GuiDisabled and UseMinimalLayout — only emit if explicitly true
+  const guiDisabled = getLinboSetting(ls, 'GuiDisabled');
+  if (guiDisabled === true || guiDisabled === 'yes') {
+    lines.push(`GuiDisabled = yes`);
+  }
+  const useMinimalLayout = getLinboSetting(ls, 'UseMinimalLayout');
+  if (useMinimalLayout === true || useMinimalLayout === 'yes') {
+    lines.push(`UseMinimalLayout = yes`);
+  }
   lines.push(`BackgroundFontColor = ${getLinboSetting(ls, 'BackgroundFontColor') || 'white'}`);
   lines.push(`ConsoleFontColorStdout = ${getLinboSetting(ls, 'ConsoleFontColorStdout') || 'lightgreen'}`);
   lines.push(`ConsoleFontColorStderr = ${getLinboSetting(ls, 'ConsoleFontColorStderr') || 'orange'}`);
@@ -122,7 +129,9 @@ async function generateStartConf(configId) {
     lines.push(`BaseImage = ${os.baseImage || ''}`);
     lines.push(`Boot = ${os.rootDevice || ''}`);
     lines.push(`Root = ${os.root || os.rootDevice || ''}`);
-    lines.push(`Kernel = ${os.kernel || ''}`);
+    // Windows kernel fallback: if OS name matches Windows pattern and kernel is empty, set 'auto'
+    const isWindows = /windows/i.test(os.name) || os.osType === 'windows';
+    lines.push(`Kernel = ${os.kernel || (isWindows ? 'auto' : '')}`);
     lines.push(`Initrd = ${os.initrd || ''}`);
     lines.push(`Append = ${os.append ? (Array.isArray(os.append) ? os.append.join(' ') : os.append) : ''}`);
     lines.push(`StartEnabled = ${toYesNo(os.startEnabled)}`);
@@ -391,19 +400,14 @@ function parseStartConf(content) {
     if (currentSection === 'linbo') {
       result.linboSettings = { ...currentData };
     } else if (currentSection === 'partition') {
-      // Parse partition ID - can be hex (0x83, ef) or decimal
+      // Parse partition ID — store as canonical hex string (lowercase, no 0x)
       let partId = null;
       if (currentData.id) {
-        const idStr = String(currentData.id).toLowerCase().trim();
-        if (idStr.startsWith('0x')) {
-          partId = parseInt(idStr, 16);
-        } else if (/^[0-9a-f]+$/i.test(idStr)) {
-          // Could be hex without 0x prefix (like "ef", "83")
-          partId = parseInt(idStr, 16);
-        } else {
-          partId = parseInt(idStr, 10);
+        const idStr = String(currentData.id).trim();
+        const stripped = idStr.replace(/^0x/i, '').toLowerCase();
+        if (/^[0-9a-f]+$/.test(stripped)) {
+          partId = stripped;
         }
-        if (isNaN(partId)) partId = null;
       }
 
       result.partitions.push({

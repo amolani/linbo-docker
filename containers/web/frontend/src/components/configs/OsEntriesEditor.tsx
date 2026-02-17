@@ -24,7 +24,7 @@ const defaultOsEntry: OsEntryData = {
   differentialImage: '',
   rootDevice: '/dev/sda1',
   root: '',
-  kernel: '',
+  kernel: 'auto',
   initrd: '',
   append: [],
   startEnabled: true,
@@ -52,11 +52,16 @@ const defaultActionOptions = [
 
 const iconOptions = [
   { value: 'windows.svg', label: 'Windows' },
+  { value: 'win10.svg', label: 'Windows 10' },
   { value: 'ubuntu.svg', label: 'Ubuntu' },
   { value: 'linux.svg', label: 'Linux (generisch)' },
   { value: 'mint.svg', label: 'Linux Mint' },
   { value: 'debian.svg', label: 'Debian' },
   { value: 'fedora.svg', label: 'Fedora' },
+  { value: 'opensuse.svg', label: 'openSUSE' },
+  { value: 'centos.svg', label: 'CentOS' },
+  { value: 'redhat.svg', label: 'Red Hat' },
+  { value: 'popos.svg', label: 'Pop!_OS' },
 ];
 
 export function OsEntriesEditor({ osEntries, partitions, onChange }: OsEntriesEditorProps) {
@@ -88,6 +93,29 @@ export function OsEntriesEditor({ osEntries, partitions, onChange }: OsEntriesEd
       .filter(img => img.type === 'differential' && img.status === 'available')
       .map(img => ({ value: img.filename, label: img.filename })),
   ];
+
+  const handleOsTypeChange = (newOsType: string) => {
+    const updates: Partial<OsEntryData> = { osType: newOsType };
+    if (newOsType === 'windows') {
+      updates.kernel = 'auto';
+      updates.initrd = '';
+      if (!formData.iconName || formData.iconName === 'linux.svg' || formData.iconName === 'ubuntu.svg') {
+        updates.iconName = 'windows.svg';
+      }
+    } else if (newOsType === 'linux') {
+      updates.kernel = 'boot/vmlinuz';
+      updates.initrd = 'boot/initrd.img';
+      if (!formData.iconName || formData.iconName === 'windows.svg' || formData.iconName === 'win10.svg') {
+        updates.iconName = 'ubuntu.svg';
+      }
+    }
+    setFormData({ ...formData, ...updates });
+  };
+
+  const handleRootDeviceChange = (device: string) => {
+    // Sync both Boot (rootDevice) and Root fields
+    setFormData({ ...formData, rootDevice: device, root: device });
+  };
 
   const handleOpenModal = (index?: number) => {
     if (index !== undefined) {
@@ -203,6 +231,7 @@ export function OsEntriesEditor({ osEntries, partitions, onChange }: OsEntriesEd
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
                       Root: {entry.rootDevice}
+                      {entry.kernel && ` | Kernel: ${entry.kernel}`}
                       {entry.autostart && ' | Autostart'}
                     </p>
                   </div>
@@ -269,7 +298,7 @@ export function OsEntriesEditor({ osEntries, partitions, onChange }: OsEntriesEd
             <Select
               label="Betriebssystem-Typ"
               value={formData.osType || 'windows'}
-              onChange={(e) => setFormData({ ...formData, osType: e.target.value })}
+              onChange={(e) => handleOsTypeChange(e.target.value)}
               options={osTypeOptions}
             />
           </div>
@@ -305,9 +334,9 @@ export function OsEntriesEditor({ osEntries, partitions, onChange }: OsEntriesEd
             <h4 className="text-sm font-medium text-foreground mb-3">Boot-Konfiguration</h4>
             <div className="grid grid-cols-2 gap-4">
               <Select
-                label="Root-Partition"
+                label="Root-Partition (Boot + Root)"
                 value={formData.rootDevice || ''}
-                onChange={(e) => setFormData({ ...formData, rootDevice: e.target.value })}
+                onChange={(e) => handleRootDeviceChange(e.target.value)}
                 options={partitionOptions.length > 0 ? partitionOptions : [{ value: formData.rootDevice || '', label: formData.rootDevice || '(Bitte Partition definieren)' }]}
               />
               <Select
@@ -317,22 +346,22 @@ export function OsEntriesEditor({ osEntries, partitions, onChange }: OsEntriesEd
                 options={iconOptions}
               />
             </div>
-            {formData.osType === 'linux' && (
-              <div className="grid grid-cols-2 gap-4 mt-4">
-                <Input
-                  label="Kernel"
-                  value={formData.kernel || ''}
-                  onChange={(e) => setFormData({ ...formData, kernel: e.target.value })}
-                  placeholder="vmlinuz"
-                />
-                <Input
-                  label="Initrd"
-                  value={formData.initrd || ''}
-                  onChange={(e) => setFormData({ ...formData, initrd: e.target.value })}
-                  placeholder="initrd.img"
-                />
-              </div>
-            )}
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              <Input
+                label="Kernel"
+                value={formData.kernel || ''}
+                onChange={(e) => setFormData({ ...formData, kernel: e.target.value })}
+                placeholder={formData.osType === 'windows' ? 'auto' : 'boot/vmlinuz'}
+                helperText={formData.osType === 'windows' ? 'Fuer Windows: "auto"' : 'Pfad zum Kernel relativ zur Root-Partition'}
+              />
+              <Input
+                label="Initrd"
+                value={formData.initrd || ''}
+                onChange={(e) => setFormData({ ...formData, initrd: e.target.value })}
+                placeholder={formData.osType === 'linux' ? 'boot/initrd.img' : ''}
+                helperText={formData.osType === 'windows' ? 'Fuer Windows leer lassen' : 'Pfad zur initrd relativ zur Root-Partition'}
+              />
+            </div>
           </div>
 
           {/* Boot Options */}
@@ -415,20 +444,18 @@ export function OsEntriesEditor({ osEntries, partitions, onChange }: OsEntriesEd
             </div>
           </div>
 
-          {/* Append (Linux only) */}
-          {formData.osType === 'linux' && (
-            <div className="border-t pt-4">
-              <h4 className="text-sm font-medium text-foreground mb-3">Kernel-Parameter (append)</h4>
-              <textarea
-                className="w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-ring focus:border-ring sm:text-sm font-mono bg-card text-foreground"
-                rows={3}
-                value={appendText}
-                onChange={(e) => setAppendText(e.target.value)}
-                placeholder="quiet splash&#10;root=/dev/sda2"
-              />
-              <p className="text-xs text-muted-foreground mt-1">Ein Parameter pro Zeile</p>
-            </div>
-          )}
+          {/* Append - always visible */}
+          <div className="border-t pt-4">
+            <h4 className="text-sm font-medium text-foreground mb-3">Kernel-Parameter (Append)</h4>
+            <textarea
+              className="w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-ring focus:border-ring sm:text-sm font-mono bg-card text-foreground"
+              rows={3}
+              value={appendText}
+              onChange={(e) => setAppendText(e.target.value)}
+              placeholder={formData.osType === 'linux' ? 'quiet splash\nroot=/dev/sda2' : 'Optional fuer Windows'}
+            />
+            <p className="text-xs text-muted-foreground mt-1">Ein Parameter pro Zeile</p>
+          </div>
 
           <div className="flex justify-end space-x-3 pt-4 border-t">
             <Button variant="secondary" onClick={() => setIsModalOpen(false)}>

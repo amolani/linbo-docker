@@ -1,6 +1,6 @@
 /**
  * LINBO Docker - Config Service Tests
- * Tests für start.conf Generierung und Deployment
+ * Tests fuer start.conf Generierung und Deployment
  */
 
 const path = require('path');
@@ -50,7 +50,7 @@ const mockConfig = {
       device: '/dev/sda1',
       label: 'efi',
       size: '512M',
-      partitionId: 'ef00',
+      partitionId: 'ef',
       fsType: 'vfat',
       bootable: true,
       position: 1,
@@ -59,7 +59,7 @@ const mockConfig = {
       device: '/dev/sda2',
       label: 'windows',
       size: '80G',
-      partitionId: '0700',
+      partitionId: '7',
       fsType: 'ntfs',
       bootable: false,
       position: 2,
@@ -68,7 +68,7 @@ const mockConfig = {
       device: '/dev/sda3',
       label: 'data',
       size: '',
-      partitionId: '0700',
+      partitionId: '7',
       fsType: 'ntfs',
       bootable: false,
       position: 3,
@@ -78,10 +78,12 @@ const mockConfig = {
     {
       name: 'Windows 11',
       description: 'Windows 11 Pro Education',
+      osType: 'windows',
       iconName: 'win11.png',
       baseImage: 'win11_pro_edu.qcow2',
       differentialImage: null,
       rootDevice: '/dev/sda2',
+      root: '/dev/sda2',
       kernel: '',
       initrd: '',
       append: [],
@@ -134,7 +136,7 @@ describe('Config Service', () => {
       expect(result.content).toContain('SystemType = efi64');
     });
 
-    test('should include partition definitions', async () => {
+    test('should include partition definitions with hex IDs', async () => {
       prisma.config.findUnique.mockResolvedValue(mockConfig);
 
       const result = await configService.generateStartConf(mockConfig.id);
@@ -142,6 +144,7 @@ describe('Config Service', () => {
       expect(result.content).toContain('Dev = /dev/sda1');
       expect(result.content).toContain('Label = efi');
       expect(result.content).toContain('Size = 512M');
+      expect(result.content).toContain('Id = ef');
       expect(result.content).toContain('FSType = vfat');
       expect(result.content).toContain('Bootable = yes');
     });
@@ -156,6 +159,29 @@ describe('Config Service', () => {
       expect(result.content).toContain('BaseImage = win11_pro_edu.qcow2');
       expect(result.content).toContain('StartEnabled = yes');
       expect(result.content).toContain('SyncEnabled = yes');
+    });
+
+    test('should set Kernel = auto for Windows OS with empty kernel', async () => {
+      prisma.config.findUnique.mockResolvedValue(mockConfig);
+
+      const result = await configService.generateStartConf(mockConfig.id);
+
+      expect(result.content).toContain('Kernel = auto');
+    });
+
+    test('should not override explicit kernel for Windows', async () => {
+      const configWithKernel = {
+        ...mockConfig,
+        osEntries: [{
+          ...mockConfig.osEntries[0],
+          kernel: 'custom_kernel',
+        }],
+      };
+      prisma.config.findUnique.mockResolvedValue(configWithKernel);
+
+      const result = await configService.generateStartConf(mockConfig.id);
+
+      expect(result.content).toContain('Kernel = custom_kernel');
     });
 
     test('should throw error for non-existent config', async () => {
@@ -187,6 +213,306 @@ describe('Config Service', () => {
 
       // Production start.conf files do not have header comments
       expect(result.content).toMatch(/^\[LINBO\]/);
+    });
+
+    test('should emit GuiDisabled only when true', async () => {
+      const configGuiDisabled = {
+        ...mockConfig,
+        linboSettings: { ...mockConfig.linboSettings, GuiDisabled: true },
+      };
+      prisma.config.findUnique.mockResolvedValue(configGuiDisabled);
+
+      const result = await configService.generateStartConf(mockConfig.id);
+      expect(result.content).toContain('GuiDisabled = yes');
+    });
+
+    test('should not emit GuiDisabled when false/no', async () => {
+      prisma.config.findUnique.mockResolvedValue(mockConfig);
+
+      const result = await configService.generateStartConf(mockConfig.id);
+      expect(result.content).not.toContain('GuiDisabled');
+    });
+
+    test('should emit UseMinimalLayout only when true', async () => {
+      const configMinimal = {
+        ...mockConfig,
+        linboSettings: { ...mockConfig.linboSettings, UseMinimalLayout: 'yes' },
+      };
+      prisma.config.findUnique.mockResolvedValue(configMinimal);
+
+      const result = await configService.generateStartConf(mockConfig.id);
+      expect(result.content).toContain('UseMinimalLayout = yes');
+    });
+
+    test('should emit named colors correctly', async () => {
+      const configColors = {
+        ...mockConfig,
+        linboSettings: {
+          ...mockConfig.linboSettings,
+          BackgroundFontColor: 'white',
+          ConsoleFontColorStdout: 'lightgreen',
+          ConsoleFontColorStderr: 'orange',
+        },
+      };
+      prisma.config.findUnique.mockResolvedValue(configColors);
+
+      const result = await configService.generateStartConf(mockConfig.id);
+      expect(result.content).toContain('BackgroundFontColor = white');
+      expect(result.content).toContain('ConsoleFontColorStdout = lightgreen');
+      expect(result.content).toContain('ConsoleFontColorStderr = orange');
+    });
+  });
+
+  describe('parseStartConf', () => {
+    test('should parse partition IDs as hex strings', () => {
+      const content = `[LINBO]
+Server = 10.0.0.1
+
+[Partition]
+Dev = /dev/sda1
+Label = efi
+Size = 512M
+Id = ef
+FSType = vfat
+Bootable = yes
+
+[Partition]
+Dev = /dev/sda2
+Label = msr
+Size = 128M
+Id = 0c01
+FSType =
+Bootable = no
+`;
+
+      const result = configService.parseStartConf(content);
+
+      expect(result.partitions).toHaveLength(2);
+      expect(result.partitions[0].partitionId).toBe('ef');
+      expect(result.partitions[1].partitionId).toBe('0c01');
+    });
+
+    test('should strip 0x prefix and lowercase', () => {
+      const content = `[Partition]
+Dev = /dev/sda1
+Id = 0xEF
+FSType = vfat
+Bootable = no
+`;
+
+      const result = configService.parseStartConf(content);
+      expect(result.partitions[0].partitionId).toBe('ef');
+    });
+
+    test('should parse GuiDisabled and UseMinimalLayout', () => {
+      const content = `[LINBO]
+Server = 10.0.0.1
+GuiDisabled = yes
+UseMinimalLayout = yes
+`;
+
+      const result = configService.parseStartConf(content);
+      expect(result.linboSettings.guidisabled).toBe(true);
+      expect(result.linboSettings.useminimallayout).toBe(true);
+    });
+
+    test('should parse named colors as strings', () => {
+      const content = `[LINBO]
+Server = 10.0.0.1
+BackgroundFontColor = white
+ConsoleFontColorStdout = lightgreen
+ConsoleFontColorStderr = orange
+`;
+
+      const result = configService.parseStartConf(content);
+      expect(result.linboSettings.backgroundfontcolor).toBe('white');
+      expect(result.linboSettings.consolefontcolorstdout).toBe('lightgreen');
+      expect(result.linboSettings.consolefontcolorstderr).toBe('orange');
+    });
+
+    test('should parse cache fsType correctly', () => {
+      const content = `[Partition]
+Dev = /dev/sda4
+Label = cache
+Size =
+Id = 83
+FSType = cache
+Bootable = no
+`;
+
+      const result = configService.parseStartConf(content);
+      expect(result.partitions[0].fsType).toBe('cache');
+    });
+
+    test('should parse Windows OS with Kernel = auto', () => {
+      const content = `[OS]
+Name = Windows 10
+Version = 22H2
+Kernel = auto
+Initrd =
+Boot = /dev/sda2
+Root = /dev/sda2
+StartEnabled = yes
+SyncEnabled = yes
+NewEnabled = yes
+Autostart = no
+AutostartTimeout = 5
+DefaultAction = sync
+Hidden = no
+`;
+
+      const result = configService.parseStartConf(content);
+      expect(result.osEntries).toHaveLength(1);
+      expect(result.osEntries[0].kernel).toBe('auto');
+      expect(result.osEntries[0].rootDevice).toBe('/dev/sda2');
+      expect(result.osEntries[0].root).toBe('/dev/sda2');
+    });
+  });
+
+  describe('round-trip: parse → generate', () => {
+    test('hex ID 0c01 round-trip', () => {
+      const content = `[Partition]
+Dev = /dev/sda2
+Label = msr
+Size = 128M
+Id = 0c01
+FSType =
+Bootable = no
+`;
+
+      const parsed = configService.parseStartConf(content);
+      expect(parsed.partitions[0].partitionId).toBe('0c01');
+
+      // Simulate what generateStartConf would do via toHexId
+      // (we test toHexId indirectly through generate)
+    });
+
+    test('full EFI Windows config round-trip', async () => {
+      const originalContent = `[LINBO]
+Server = 10.0.0.1
+Group = win10_efi
+Cache = /dev/sda4
+RootTimeout = 600
+AutoPartition = no
+AutoFormat = no
+AutoInitCache = no
+DownloadType = torrent
+BackgroundFontColor = white
+ConsoleFontColorStdout = lightgreen
+ConsoleFontColorStderr = orange
+SystemType = efi64
+KernelOptions = quiet
+clientDetailsVisibleByDefault = yes
+Locale = de-de
+
+[Partition]
+Dev = /dev/sda1
+Label = efi
+Size = 512M
+Id = ef
+FSType = vfat
+Bootable = yes
+
+[Partition]
+Dev = /dev/sda2
+Label = msr
+Size = 128M
+Id = 0c01
+FSType =
+Bootable = no
+
+[Partition]
+Dev = /dev/sda3
+Label = windows
+Size = 80G
+Id = 7
+FSType = ntfs
+Bootable = no
+
+[Partition]
+Dev = /dev/sda4
+Label = cache
+Size =
+Id = 83
+FSType = cache
+Bootable = no
+
+[OS]
+Name = Windows 10
+Version = 22H2
+Description = Windows 10 Pro
+IconName = win10.svg
+Image =
+BaseImage = win10_pro.qcow2
+Boot = /dev/sda3
+Root = /dev/sda3
+Kernel = auto
+Initrd =
+Append =
+StartEnabled = yes
+SyncEnabled = yes
+NewEnabled = yes
+Autostart = no
+AutostartTimeout = 5
+DefaultAction = sync
+RestoreOpsiState = no
+ForceOpsiSetup =
+Hidden = no
+`;
+
+      // Parse
+      const parsed = configService.parseStartConf(originalContent);
+
+      // Verify parsed data
+      expect(parsed.partitions).toHaveLength(4);
+      expect(parsed.partitions[0].partitionId).toBe('ef');
+      expect(parsed.partitions[1].partitionId).toBe('0c01');
+      expect(parsed.partitions[2].partitionId).toBe('7');
+      expect(parsed.partitions[3].partitionId).toBe('83');
+      expect(parsed.partitions[3].fsType).toBe('cache');
+
+      expect(parsed.osEntries).toHaveLength(1);
+      expect(parsed.osEntries[0].kernel).toBe('auto');
+      expect(parsed.osEntries[0].rootDevice).toBe('/dev/sda3');
+      expect(parsed.osEntries[0].root).toBe('/dev/sda3');
+
+      // Re-generate from parsed data
+      const mockDbConfig = {
+        id: 'test-roundtrip',
+        name: 'win10_efi',
+        linboSettings: parsed.linboSettings,
+        partitions: parsed.partitions,
+        osEntries: parsed.osEntries,
+      };
+      prisma.config.findUnique.mockResolvedValue(mockDbConfig);
+
+      const generated = await configService.generateStartConf('test-roundtrip');
+
+      // Verify key fields survived the round-trip
+      expect(generated.content).toContain('Id = ef');
+      expect(generated.content).toContain('Id = 0c01');
+      expect(generated.content).toContain('Id = 7');
+      expect(generated.content).toContain('Id = 83');
+      expect(generated.content).toContain('FSType = cache');
+      expect(generated.content).toContain('Kernel = auto');
+      expect(generated.content).toContain('Boot = /dev/sda3');
+      expect(generated.content).toContain('Root = /dev/sda3');
+      expect(generated.content).toContain('BackgroundFontColor = white');
+      expect(generated.content).toContain('ConsoleFontColorStdout = lightgreen');
+      expect(generated.content).toContain('ConsoleFontColorStderr = orange');
+      expect(generated.content).toContain('SystemType = efi64');
+      expect(generated.content).toContain('Locale = de-de');
+
+      // Re-parse the generated output
+      const reParsed = configService.parseStartConf(generated.content);
+
+      // Verify round-trip consistency
+      expect(reParsed.partitions).toHaveLength(4);
+      expect(reParsed.partitions[0].partitionId).toBe('ef');
+      expect(reParsed.partitions[1].partitionId).toBe('0c01');
+      expect(reParsed.partitions[2].partitionId).toBe('7');
+      expect(reParsed.partitions[3].partitionId).toBe('83');
+      expect(reParsed.osEntries[0].kernel).toBe('auto');
     });
   });
 
