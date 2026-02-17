@@ -98,7 +98,7 @@ model ConfigPartition {
   device      String   @db.VarChar(50)
   label       String?  @db.VarChar(255)
   size        String?  @db.VarChar(50)
-  partitionId Int?     @map("partition_id")
+  partitionId String?  @map("partition_id") @db.VarChar(10)
   fsType      String?  @map("fs_type") @db.VarChar(50)
   bootable    Boolean  @default(false)
 

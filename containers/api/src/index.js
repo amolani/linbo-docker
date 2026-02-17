@@ -12,6 +12,9 @@ const http = require('http');
 // Load environment variables
 require('dotenv').config();
 
+// BigInt JSON serialization support
+BigInt.prototype.toJSON = function () { return Number(this); };
+
 // Import libraries
 const { prisma, connectWithRetry, disconnect: disconnectPrisma } = require('./lib/prisma');
 const redis = require('./lib/redis');
@@ -59,6 +62,7 @@ app.get('/health', async (req, res) => {
     timestamp: new Date().toISOString(),
     version: process.env.npm_package_version || '1.0.0',
     uptime: process.uptime(),
+    serverIp: process.env.LINBO_SERVER_IP || '10.0.0.1',
     services: {
       api: 'up',
       database: 'unknown',

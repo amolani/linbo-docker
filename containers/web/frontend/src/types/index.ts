@@ -110,6 +110,9 @@ export interface LinboSettings {
   backgroundfontcolor?: string;
   consolefontcolorsstdout?: string;
   consolefontcolorstderr?: string;
+  guidisabled?: boolean;
+  useminimallayout?: boolean;
+  clientdetailsvisiblebydefault?: boolean;
 }
 
 export interface ConfigPartition {
@@ -119,7 +122,7 @@ export interface ConfigPartition {
   device: string;
   label?: string;
   size?: string;
-  partitionId?: number;
+  partitionId?: string;
   fsType?: string;
   bootable: boolean;
 }

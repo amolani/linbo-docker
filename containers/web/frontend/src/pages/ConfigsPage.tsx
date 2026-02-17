@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Plus, Copy, Eye, Code, CloudUpload } from 'lucide-react';
+import { Plus, Copy, Eye, Code, CloudUpload, Monitor, FileText } from 'lucide-react';
 import { configsApi } from '@/api/configs';
 import { useDataInvalidation } from '@/hooks/useDataInvalidation';
 import { Button, Table, Modal, Input, Textarea, Badge, ConfirmModal } from '@/components/ui';
 import { LinboSettingsForm, PartitionsEditor, OsEntriesEditor, RawConfigEditorModal } from '@/components/configs';
 import { notify } from '@/stores/notificationStore';
+import { useServerConfigStore } from '@/stores/serverConfigStore';
 import type { Config, Column, LinboSettings, ConfigPartition, ConfigOs } from '@/types';
 
 type PartitionData = Omit<ConfigPartition, 'id' | 'configId'>;
@@ -22,7 +23,104 @@ const defaultLinboSettings: LinboSettings = {
   autoinitcache: true,
 };
 
+// =============================================================================
+// Config Templates (based on production /srv/linbo/examples/)
+// =============================================================================
+
+interface ConfigTemplate {
+  id: string;
+  label: string;
+  description: string;
+  icon: 'windows' | 'linux';
+  name: string;
+  linboSettings: LinboSettings;
+  partitions: PartitionData[];
+  osEntries: OsEntryData[];
+}
+
+const configTemplates: ConfigTemplate[] = [
+  {
+    id: 'win-efi',
+    label: 'Windows UEFI',
+    description: 'Windows 10/11, GPT, EFI — 5 Partitionen (EFI, MSR, Windows, Cache, Daten)',
+    icon: 'windows',
+    name: 'win_efi',
+    linboSettings: {
+      server: '10.0.0.1',
+      cache: '/dev/sda4',
+      roottimeout: 600,
+      autopartition: false,
+      autoformat: false,
+      autoinitcache: false,
+      downloadType: 'torrent',
+      systemtype: 'efi64',
+      locale: 'de-de',
+      backgroundfontcolor: 'white',
+      consolefontcolorsstdout: 'lightgreen',
+      consolefontcolorstderr: 'orange',
+    },
+    partitions: [
+      { position: 1, device: '/dev/sda1', label: 'efi', size: '200M', partitionId: 'ef', fsType: 'vfat', bootable: true },
+      { position: 2, device: '/dev/sda2', label: 'msr', size: '128M', partitionId: '0c01', fsType: '', bootable: false },
+      { position: 3, device: '/dev/sda3', label: 'windows', size: '50G', partitionId: '7', fsType: 'ntfs', bootable: false },
+      { position: 4, device: '/dev/sda4', label: 'cache', size: '50G', partitionId: '83', fsType: 'ext4', bootable: false },
+      { position: 5, device: '/dev/sda5', label: 'data', size: '', partitionId: '7', fsType: 'ntfs', bootable: false },
+    ],
+    osEntries: [
+      {
+        position: 1, name: 'Windows 10', version: '', description: 'Windows 10',
+        osType: 'windows', iconName: 'win10.svg', image: '', baseImage: 'win10.qcow2',
+        differentialImage: '', rootDevice: '/dev/sda3', root: '/dev/sda3',
+        kernel: 'auto', initrd: '', append: [],
+        startEnabled: true, syncEnabled: true, newEnabled: true,
+        autostart: false, autostartTimeout: 5, defaultAction: 'sync',
+        hidden: false,
+      },
+    ],
+  },
+  {
+    id: 'ubuntu-efi',
+    label: 'Ubuntu UEFI',
+    description: 'Ubuntu/Linux, GPT, EFI — 5 Partitionen (EFI, Ubuntu, Cache, Swap, Daten)',
+    icon: 'linux',
+    name: 'ubuntu_efi',
+    linboSettings: {
+      server: '10.0.0.1',
+      cache: '/dev/sda3',
+      roottimeout: 600,
+      autopartition: false,
+      autoformat: false,
+      autoinitcache: false,
+      downloadType: 'torrent',
+      systemtype: 'efi64',
+      locale: 'de-de',
+      backgroundfontcolor: 'white',
+      consolefontcolorsstdout: 'lightgreen',
+      consolefontcolorstderr: 'orange',
+    },
+    partitions: [
+      { position: 1, device: '/dev/sda1', label: 'efi', size: '200M', partitionId: 'ef', fsType: 'vfat', bootable: true },
+      { position: 2, device: '/dev/sda2', label: 'ubuntu', size: '30G', partitionId: '83', fsType: 'ext4', bootable: false },
+      { position: 3, device: '/dev/sda3', label: 'cache', size: '30G', partitionId: '83', fsType: 'ext4', bootable: false },
+      { position: 4, device: '/dev/sda4', label: 'swap', size: '8G', partitionId: '82', fsType: 'swap', bootable: false },
+      { position: 5, device: '/dev/sda5', label: 'data', size: '', partitionId: '83', fsType: 'ext4', bootable: false },
+    ],
+    osEntries: [
+      {
+        position: 1, name: 'Ubuntu', version: '', description: 'Ubuntu',
+        osType: 'linux', iconName: 'ubuntu.svg', image: '', baseImage: 'ubuntu.qcow2',
+        differentialImage: '', rootDevice: '/dev/sda2', root: '/dev/sda2',
+        kernel: 'boot/vmlinuz', initrd: 'boot/initrd.img', append: ['ro', 'splash'],
+        startEnabled: true, syncEnabled: true, newEnabled: true,
+        autostart: false, autostartTimeout: 5, defaultAction: 'sync',
+        hidden: false,
+      },
+    ],
+  },
+];
+
 export function ConfigsPage() {
+  const { serverIp, fetchServerConfig } = useServerConfigStore();
   const [configs, setConfigs] = useState<Config[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -58,15 +156,24 @@ export function ConfigsPage() {
   const { suppress: suppressConfigInvalidation } = useDataInvalidation('config', fetchConfigs);
 
   useEffect(() => {
+    fetchServerConfig();
     fetchConfigs();
   }, []);
 
   const resetForm = () => {
     setFormData({ name: '', description: '' });
-    setLinboSettings(defaultLinboSettings);
+    setLinboSettings({ ...defaultLinboSettings, server: serverIp });
     setPartitions([]);
     setOsEntries([]);
     setActiveTab('basic');
+  };
+
+  const applyTemplate = (template: ConfigTemplate) => {
+    setFormData({ name: template.name, description: template.description });
+    setLinboSettings({ ...template.linboSettings, server: serverIp });
+    setPartitions(template.partitions.map(p => ({ ...p })));
+    setOsEntries(template.osEntries.map(o => ({ ...o, append: [...(o.append as string[] || [])] })));
+    notify.success(`Vorlage "${template.label}" angewendet — Werte koennen angepasst werden`);
   };
 
   const handleOpenModal = async (config?: Config) => {
@@ -348,6 +455,37 @@ export function ConfigsPage() {
           <div className="min-h-[300px]">
             {activeTab === 'basic' && (
               <div className="space-y-4">
+                {/* Template selection — only for new configs */}
+                {!editingConfig && (
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">Vorlage (optional)</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {configTemplates.map((tpl) => (
+                        <button
+                          key={tpl.id}
+                          type="button"
+                          onClick={() => applyTemplate(tpl)}
+                          className="flex items-start gap-3 p-3 rounded-lg border border-border bg-card hover:border-primary hover:bg-muted/50 transition-colors text-left"
+                        >
+                          <div className="mt-0.5">
+                            {tpl.icon === 'windows' ? (
+                              <Monitor className="h-5 w-5 text-blue-400" />
+                            ) : (
+                              <FileText className="h-5 w-5 text-orange-400" />
+                            )}
+                          </div>
+                          <div>
+                            <div className="font-medium text-foreground text-sm">{tpl.label}</div>
+                            <div className="text-xs text-muted-foreground mt-0.5">{tpl.description}</div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Vorlage befuellt alle Tabs — Name, Partitionen und OS koennen danach angepasst werden.
+                    </p>
+                  </div>
+                )}
                 <Input
                   label="Name"
                   required
@@ -368,6 +506,7 @@ export function ConfigsPage() {
               <LinboSettingsForm
                 settings={linboSettings}
                 onChange={setLinboSettings}
+                serverIp={serverIp}
               />
             )}
 

@@ -84,7 +84,7 @@ const partitionSchema = z.object({
   device: z.string().max(50),
   label: z.string().max(255).nullable().optional(),
   size: z.string().max(50).nullable().optional(),
-  partitionId: z.number().int().nullable().optional(),
+  partitionId: z.string().max(10).regex(/^[0-9a-fA-F]+$/, 'Hex-Wert erwartet').nullable().optional(),
   fsType: z.string().max(50).nullable().optional(),
   bootable: z.boolean().default(false),
 });
