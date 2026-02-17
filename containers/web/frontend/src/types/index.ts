@@ -479,6 +479,104 @@ export interface WlanConfig {
   scanSsid: boolean;
 }
 
+// Patchclass / Windows Drivers
+export interface Patchclass {
+  name: string;
+  modelCount: number;
+  driverSetCount: number;
+  totalSize: number;
+}
+
+export interface PatchclassDetail extends Patchclass {
+  driverSets: DriverSet[];
+  driverMap: DriverMap;
+}
+
+export interface DriverSet {
+  name: string;
+  fileCount: number;
+  totalSize: number;
+}
+
+export interface DriverMapModel {
+  name: string;
+  match: {
+    sys_vendor: string;
+    product_name?: string;
+    product_name_contains?: string;
+  };
+  drivers: string[];
+}
+
+export interface DeviceRuleMatch {
+  type: 'pci' | 'usb';
+  vendor: string;
+  device: string;
+  subvendor?: string;
+  subdevice?: string;
+}
+
+export interface DeviceRule {
+  name: string;
+  category: string;
+  match: DeviceRuleMatch;
+  drivers: string[];
+}
+
+export interface DriverMap {
+  version: number;
+  defaultDrivers: string[];
+  ignoredCategories: string[];
+  models: DriverMapModel[];
+  deviceRules: DeviceRule[];
+}
+
+// Driver Catalog
+export interface CatalogCategory {
+  id: string;
+  name: string;
+  icon: string;
+}
+
+export interface CatalogDevice {
+  vendor: string;
+  device: string;
+  name: string;
+  suggestedSet?: string;
+}
+
+export interface CatalogVendor {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  devices: CatalogDevice[];
+}
+
+export interface CatalogEntry {
+  category: CatalogCategory;
+  vendors: CatalogVendor[];
+}
+
+export interface CatalogSearchResult {
+  vendor: CatalogVendor;
+  device: CatalogDevice;
+  category: CatalogCategory | null;
+}
+
+export interface DriverFile {
+  name: string;
+  path: string;
+  size: number;
+  isDirectory: boolean;
+}
+
+export interface PostsyncDeployResult {
+  postsync: string;
+  patchclass: string;
+  image: string;
+}
+
 // Filters
 export interface HostFilters {
   search?: string;

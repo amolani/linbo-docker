@@ -17,6 +17,7 @@ const statsRoutes = require('./stats');
 const systemRoutes = require('./system');
 const internalRoutes = require('./internal');
 const dhcpRoutes = require('./dhcp');
+const patchclassRoutes = require('./patchclass');
 
 // Mount routes
 router.use('/auth', authRoutes);
@@ -29,6 +30,7 @@ router.use('/stats', statsRoutes);
 router.use('/system', systemRoutes);
 router.use('/internal', internalRoutes);
 router.use('/dhcp', dhcpRoutes);
+router.use('/patchclass', patchclassRoutes);
 
 // API info endpoint
 router.get('/', (req, res) => {
@@ -126,6 +128,21 @@ router.get('/', (req, res) => {
         'POST /system/generate-ssh-key': 'Generate specific SSH key',
         'POST /system/generate-dropbear-key': 'Generate Dropbear key',
         'POST /system/regenerate-grub-configs': 'Regenerate GRUB configs',
+      },
+      patchclass: {
+        'GET /patchclass': 'List all patchclasses',
+        'POST /patchclass': 'Create patchclass (admin)',
+        'GET /patchclass/:name': 'Get patchclass detail',
+        'DELETE /patchclass/:name': 'Delete patchclass (admin)',
+        'GET /patchclass/:name/driver-map': 'Get driver map',
+        'PUT /patchclass/:name/driver-map': 'Update driver map (admin)',
+        'GET /patchclass/:name/driver-sets': 'List driver sets',
+        'POST /patchclass/:name/driver-sets': 'Create driver set (admin)',
+        'DELETE /patchclass/:name/driver-sets/:set': 'Delete driver set (admin)',
+        'GET /patchclass/:name/driver-sets/:set/files': 'List files in set',
+        'POST /patchclass/:name/driver-sets/:set/upload': 'Upload file (admin)',
+        'POST /patchclass/:name/driver-sets/:set/extract': 'Extract ZIP (admin)',
+        'POST /patchclass/:name/deploy-postsync/:image': 'Deploy postsync (admin)',
       },
     },
     documentation: '/docs',

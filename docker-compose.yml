@@ -56,6 +56,7 @@ services:
       - "873:873"
     volumes:
       - linbo_srv_data:/srv/linbo
+      - linbo_driver_data:/var/lib/linbo/drivers:ro
       - ./config/rsyncd.conf:/etc/rsyncd.conf:ro
       - ./config/rsyncd.secrets:/etc/rsyncd.secrets:ro
     networks:
@@ -155,6 +156,7 @@ services:
       - linbo_config:/etc/linuxmuster/linbo
       - linbo_log:/var/log/linuxmuster/linbo
       - linbo_kernel_data:/var/lib/linuxmuster/linbo
+      - linbo_driver_data:/var/lib/linbo/drivers
       - ./scripts/server:/usr/share/linuxmuster/linbo
       - /lib/firmware:/lib/firmware:ro
     environment:
@@ -209,6 +211,8 @@ services:
       - HOST_SCAN_INTERVAL_SEC=${HOST_SCAN_INTERVAL_SEC:-60}
       - HOST_SCAN_CONCURRENCY=${HOST_SCAN_CONCURRENCY:-30}
       - HOST_SCAN_PORT_TIMEOUT_MS=${HOST_SCAN_PORT_TIMEOUT_MS:-500}
+      # Driver management (Phase 17)
+      - PATCHCLASS_BASE=${PATCHCLASS_BASE:-/var/lib/linbo/drivers}
     depends_on:
       db:
         condition: service_healthy
@@ -295,6 +299,8 @@ volumes:
     name: linbo_redis_data
   linbo_kernel_data:
     name: linbo_kernel_data
+  linbo_driver_data:
+    name: linbo_driver_data
 
 # =============================================================================
 # Networks
