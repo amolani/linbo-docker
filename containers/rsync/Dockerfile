@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     rsync \
     curl \
     && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p /srv/linbo /var/log /usr/share/linuxmuster/linbo
+    && mkdir -p /srv/linbo /var/log /usr/share/linuxmuster/linbo /var/lib/linbo/drivers
 
 # Create rsync log directory
 RUN mkdir -p /var/log && touch /var/log/rsyncd.log /var/log/rsync-hooks.log

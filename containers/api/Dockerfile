@@ -71,8 +71,8 @@ COPY prisma ./prisma/
 COPY src ./src/
 
 # Create required directories with correct permissions
-RUN mkdir -p /srv/linbo /var/log/linuxmuster/linbo /etc/linuxmuster/linbo /var/lib/linuxmuster/linbo /var/cache/linbo && \
-    chown -R linbo:linbo /app /srv/linbo /var/log/linuxmuster/linbo /etc/linuxmuster/linbo /var/lib/linuxmuster/linbo /var/cache/linbo
+RUN mkdir -p /srv/linbo /var/log/linuxmuster/linbo /etc/linuxmuster/linbo /var/lib/linuxmuster/linbo /var/cache/linbo /var/lib/linbo/drivers && \
+    chown -R linbo:linbo /app /srv/linbo /var/log/linuxmuster/linbo /etc/linuxmuster/linbo /var/lib/linuxmuster/linbo /var/cache/linbo /var/lib/linbo/drivers
 
 # Environment variables
 ENV NODE_ENV=production

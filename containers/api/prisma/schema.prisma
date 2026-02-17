@@ -42,6 +42,7 @@ model Config {
   createdBy     String?   @map("created_by") @db.VarChar(255)
   approvedBy    String?   @map("approved_by") @db.VarChar(255)
   approvedAt    DateTime? @map("approved_at") @db.Timestamptz
+  patchclass    String?   @db.VarChar(100)
   deployedAt    DateTime? @map("deployed_at") @db.Timestamptz
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz

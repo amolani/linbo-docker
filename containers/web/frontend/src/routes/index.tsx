@@ -13,6 +13,7 @@ import { OperationsPage } from '@/pages/OperationsPage';
 import { DhcpPage } from '@/pages/DhcpPage';
 import { KernelPage } from '@/pages/KernelPage';
 import { FirmwarePage } from '@/pages/FirmwarePage';
+import { DriversPage } from '@/pages/DriversPage';
 
 export function AppRoutes() {
   return (
@@ -114,6 +115,17 @@ export function AppRoutes() {
           <ProtectedRoute>
             <AppLayout>
               <FirmwarePage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/drivers"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <DriversPage />
             </AppLayout>
           </ProtectedRoute>
         }

@@ -131,6 +131,7 @@ const createConfigSchema = z.object({
   description: z.string().optional(),
   version: z.string().max(50).default('1.0.0'),
   status: z.enum(['draft', 'active', 'archived']).default('draft'),
+  patchclass: z.string().max(100).nullable().optional(),
   linboSettings: z.record(z.any()).default({}),
   partitions: z.array(partitionSchema).optional(),
   osEntries: z.array(osSchema).optional(),

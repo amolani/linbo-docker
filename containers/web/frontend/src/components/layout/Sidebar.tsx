@@ -10,6 +10,7 @@ import {
   ClipboardList,
   Cpu,
   Package,
+  Wrench,
   PanelLeftClose,
   PanelLeftOpen,
   Wifi,
@@ -37,6 +38,7 @@ const systemNavigation = [
   { name: 'Operationen', href: '/operations', icon: ClipboardList },
   { name: 'Kernel', href: '/kernel', icon: Cpu },
   { name: 'Firmware', href: '/firmware', icon: Package },
+  { name: 'Treiber', href: '/drivers', icon: Wrench },
 ];
 
 export function Sidebar() {
