@@ -277,4 +277,11 @@ ls -la "${LINBO_DIR}/" | head -15
 # Provision kernel variants
 provision_kernels
 
+# Fix permissions on driver volume (created as root by Docker)
+DRIVER_DIR="/var/lib/linbo/drivers"
+if [ -d "${DRIVER_DIR}" ]; then
+    chown 1001:1001 "${DRIVER_DIR}"
+    echo "Driver volume permissions set (1001:1001)"
+fi
+
 exit 0
