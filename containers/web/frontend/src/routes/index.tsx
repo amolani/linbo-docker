@@ -15,6 +15,7 @@ import { KernelPage } from '@/pages/KernelPage';
 import { FirmwarePage } from '@/pages/FirmwarePage';
 import { DriversPage } from '@/pages/DriversPage';
 import { GrubThemePage } from '@/pages/GrubThemePage';
+import { LinboGuiPage } from '@/pages/LinboGuiPage';
 
 export function AppRoutes() {
   return (
@@ -138,6 +139,17 @@ export function AppRoutes() {
           <ProtectedRoute>
             <AppLayout>
               <GrubThemePage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/linbo-gui"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <LinboGuiPage />
             </AppLayout>
           </ProtectedRoute>
         }
