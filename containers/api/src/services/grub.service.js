@@ -274,9 +274,10 @@ async function generateConfigGrubConfig(configName, options = {}) {
     || process.env.LINBO_SERVER_IP
     || '$net_default_server';
 
-  // Build kernel options string (strip any existing server= to avoid duplicates)
-  const cleanKopts = kernelOptions.replace(/\bserver=\S+/g, '').replace(/\s+/g, ' ').trim();
-  const kopts = `${cleanKopts} server=${server}`.trim();
+  // Build kernel options string (strip existing server=/group= to avoid duplicates)
+  const cleanKopts = kernelOptions.replace(/\bserver=\S+/g, '').replace(/\bgroup=\S+/g, '').replace(/\s+/g, ' ').trim();
+  const groupName = config?.name || options.groupName || '';
+  const kopts = `${cleanKopts} server=${server}${groupName ? ` group=${groupName}` : ''}`.trim();
 
   // Find cache partition
   const cachePartition = findCachePartition(partitions);
