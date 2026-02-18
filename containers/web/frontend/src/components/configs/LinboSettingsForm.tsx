@@ -109,6 +109,19 @@ export function LinboSettingsForm({ settings, onChange, serverIp = '10.0.0.1' }:
       </div>
 
       <div className="border-t pt-4">
+        <h4 className="text-sm font-medium text-foreground mb-3">GRUB Boot-Menu</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Input
+            label="Boot-Timeout (Sekunden)"
+            type="number"
+            value={settings.boottimeout ?? 0}
+            onChange={(e) => handleChange('boottimeout', parseInt(e.target.value) || 0)}
+            helperText="0 = kein Timeout (direkt booten), z.B. 10 = 10 Sek. Countdown"
+          />
+        </div>
+      </div>
+
+      <div className="border-t pt-4">
         <h4 className="text-sm font-medium text-foreground mb-3">Automatische Aktionen</h4>
         <div className="space-y-3">
           <label className="flex items-center">

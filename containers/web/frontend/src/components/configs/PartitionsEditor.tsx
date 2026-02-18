@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Plus, Trash2, Pencil } from 'lucide-react';
 import { Button, Input, Select, Modal } from '@/components/ui';
+import { DiskLayoutBar } from './DiskLayoutBar';
 import type { ConfigPartition } from '@/types';
 
 type PartitionData = Omit<ConfigPartition, 'id' | 'configId'>;
@@ -126,6 +127,8 @@ export function PartitionsEditor({ partitions, onChange }: PartitionsEditorProps
         </Button>
       </div>
 
+      {partitions.length > 0 && <DiskLayoutBar partitions={partitions} />}
+
       {partitions.length === 0 ? (
         <div className="text-center py-8 bg-secondary rounded-lg border-2 border-dashed border-border">
           <p className="text-muted-foreground">Keine Partitionen definiert</p>
@@ -156,6 +159,7 @@ export function PartitionsEditor({ partitions, onChange }: PartitionsEditorProps
                       <span>{partition.position}</span>
                       <div className="flex flex-col">
                         <button
+                          type="button"
                           onClick={() => movePartition(index, 'up')}
                           disabled={index === 0}
                           className="text-muted-foreground hover:text-foreground disabled:opacity-30"
@@ -163,6 +167,7 @@ export function PartitionsEditor({ partitions, onChange }: PartitionsEditorProps
                           <span className="text-xs">&#9650;</span>
                         </button>
                         <button
+                          type="button"
                           onClick={() => movePartition(index, 'down')}
                           disabled={index === partitions.length - 1}
                           className="text-muted-foreground hover:text-foreground disabled:opacity-30"
@@ -189,12 +194,14 @@ export function PartitionsEditor({ partitions, onChange }: PartitionsEditorProps
                   <td className="px-4 py-3 text-sm">
                     <div className="flex space-x-2">
                       <button
+                        type="button"
                         onClick={() => handleOpenModal(index)}
                         className="text-primary hover:text-primary/80"
                       >
                         <Pencil className="h-4 w-4" />
                       </button>
                       <button
+                        type="button"
                         onClick={() => handleDelete(index)}
                         className="text-red-400 hover:text-red-300"
                       >

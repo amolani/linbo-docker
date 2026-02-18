@@ -11,6 +11,7 @@ import {
   Cpu,
   Package,
   Wrench,
+  Palette,
   PanelLeftClose,
   PanelLeftOpen,
   Wifi,
@@ -39,6 +40,7 @@ const systemNavigation = [
   { name: 'Kernel', href: '/kernel', icon: Cpu },
   { name: 'Firmware', href: '/firmware', icon: Package },
   { name: 'Treiber', href: '/drivers', icon: Wrench },
+  { name: 'GRUB Theme', href: '/grub-theme', icon: Palette },
 ];
 
 export function Sidebar() {

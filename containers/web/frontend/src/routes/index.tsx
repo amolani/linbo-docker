@@ -14,6 +14,7 @@ import { DhcpPage } from '@/pages/DhcpPage';
 import { KernelPage } from '@/pages/KernelPage';
 import { FirmwarePage } from '@/pages/FirmwarePage';
 import { DriversPage } from '@/pages/DriversPage';
+import { GrubThemePage } from '@/pages/GrubThemePage';
 
 export function AppRoutes() {
   return (
@@ -126,6 +127,17 @@ export function AppRoutes() {
           <ProtectedRoute>
             <AppLayout>
               <DriversPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/grub-theme"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <GrubThemePage />
             </AppLayout>
           </ProtectedRoute>
         }

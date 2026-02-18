@@ -12,6 +12,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const { prisma } = require('../lib/prisma');
+const grubThemeService = require('./grub-theme.service');
 
 const LINBO_DIR = process.env.LINBO_DIR || '/srv/linbo';
 const GRUB_DIR = path.join(LINBO_DIR, 'boot/grub');
@@ -186,6 +187,16 @@ function getOsPartitionIndex(partitions, rootDevice) {
 }
 
 /**
+ * Convert hex color (#RRGGBB) to GRUB RGB format (R,G,B)
+ * @param {string} hex - Hex color string
+ * @returns {string} GRUB RGB format
+ */
+function hexToGrubRgb(hex) {
+  if (!hex || !/^#[0-9a-fA-F]{6}$/.test(hex)) return '42,68,87'; // default
+  return [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)).join(',');
+}
+
+/**
  * Load a GRUB template file
  *
  * @param {string} templateName - Template filename (e.g., 'grub.cfg.global')
@@ -272,6 +283,17 @@ async function generateConfigGrubConfig(configName, options = {}) {
   const cacheLabel = cachePartition?.label || '';
   const cacheRoot = cachePartition ? getGrubPart(cachePartition.dev) : '(hd0,2)';
 
+  // Get theme config for background color
+  let themeConfig;
+  try {
+    themeConfig = await grubThemeService.getThemeConfig();
+  } catch {
+    themeConfig = { desktopColor: '#2a4457' };
+  }
+
+  // Timeout comes from Config linboSettings, NOT from theme (R4)
+  const timeout = String(getLinboSetting(config?.linboSettings, 'BootTimeout') || 0);
+
   // Load and process global template
   const globalTemplate = await loadTemplate('grub.cfg.global');
   let content = applyTemplate(globalTemplate, {
@@ -282,6 +304,8 @@ async function generateConfigGrubConfig(configName, options = {}) {
     kopts: kopts,
     server: server,
     httpport: process.env.WEB_PORT || '8080',
+    timeout: timeout,
+    bgcolor_rgb: hexToGrubRgb(themeConfig.desktopColor),
   });
 
   // Load OS template
@@ -677,6 +701,7 @@ module.exports = {
   applyTemplate,
   getOsLabel,
   getLinboSetting,
+  hexToGrubRgb,
 
   // Main functions
   generateConfigGrubConfig,

@@ -107,6 +107,7 @@ export interface LinboSettings {
   kerneloptions?: string;
   systemtype?: 'bios' | 'bios64' | 'efi32' | 'efi64';
   locale?: string;
+  boottimeout?: number;
   backgroundfontcolor?: string;
   consolefontcolorsstdout?: string;
   consolefontcolorstderr?: string;
@@ -578,6 +579,45 @@ export interface PostsyncDeployResult {
   postsync: string;
   patchclass: string;
   image: string;
+}
+
+// GRUB Theme
+export interface GrubThemeConfig {
+  desktopColor: string;
+  itemColor: string;
+  selectedItemColor: string;
+  timeoutColor: string;
+  timeoutText: string;
+  iconWidth: number;
+  iconHeight: number;
+  itemHeight: number;
+  itemSpacing: number;
+  itemIconSpace: number;
+  logoFile: string;
+  logoWidth: number;
+  logoHeight: number;
+}
+
+export interface GrubThemeStatus {
+  config: GrubThemeConfig;
+  logo: {
+    file: string;
+    size?: number;
+    modifiedAt?: string;
+    isCustom: boolean;
+    hasDefault: boolean;
+  };
+  icons: {
+    total: number;
+    custom: number;
+    default: number;
+  };
+}
+
+export interface GrubIcon {
+  baseName: string;
+  variants: string[];
+  isCustom: boolean;
 }
 
 // Filters
