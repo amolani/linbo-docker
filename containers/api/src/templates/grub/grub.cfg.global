@@ -11,29 +11,10 @@ set timeout=@@timeout@@
 set fallback=1
 
 insmod all_video
-insmod png
-insmod gfxterm
-insmod gfxmenu
-insmod minicmd
-insmod progress
-
-set gfxmode=800x600
-terminal_output gfxterm
-
-background_color @@bgcolor_rgb@@
-
-# Let kernel/DRM set up framebuffer (avoids VBE mode conflicts on VMs)
-set gfxpayload=text
 
 # kernel & initrd
 set linbo_kernel=/linbo64
 set linbo_initrd=/linbofs64
-
-# theme settings (modify for custom theme)
-set theme=/boot/grub/themes/linbo/theme.txt
-export theme
-
-clear
 
 # find linbo cache partition
 set cachelabel="@@cachelabel@@"
