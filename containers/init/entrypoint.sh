@@ -185,6 +185,30 @@ print(t.get('sha256',''))
 }
 
 # =============================================================================
+# GUI Theme Provisioning
+# =============================================================================
+
+provision_themes() {
+    THEMES_SRC="/opt/linbo-themes"
+    THEMES_DST="${LINBO_DIR}/gui-themes"
+
+    if [ -d "${THEMES_SRC}" ] && [ "$(ls -A "${THEMES_SRC}" 2>/dev/null)" ]; then
+        echo ""
+        echo "=== GUI Theme Provisioning ==="
+        mkdir -p "${THEMES_DST}"
+        for theme_dir in "${THEMES_SRC}"/*/; do
+            [ -d "$theme_dir" ] || continue
+            theme_name=$(basename "$theme_dir")
+            mkdir -p "${THEMES_DST}/${theme_name}"
+            cp -r "${theme_dir}"* "${THEMES_DST}/${theme_name}/"
+            echo "  - Theme: ${theme_name}"
+        done
+        chown -R 1001:1001 "${THEMES_DST}"
+        echo "GUI themes provisioned to ${THEMES_DST}"
+    fi
+}
+
+# =============================================================================
 # Main: Boot Files Download
 # =============================================================================
 
@@ -199,6 +223,7 @@ if [ -f "${MARKER_FILE}" ] && [ "${FORCE_UPDATE}" != "true" ]; then
     echo "Boot files already installed (version: ${INSTALLED_VERSION})"
     echo "Set FORCE_UPDATE=true to force re-download"
     provision_kernels
+    provision_themes
     exit 0
 fi
 
@@ -207,6 +232,7 @@ if [ -f "${LINBO_DIR}/linbo64" ] && [ "${FORCE_UPDATE}" != "true" ]; then
     echo "Boot files found (linbo64 exists), skipping download"
     echo "Set FORCE_UPDATE=true to force re-download"
     provision_kernels
+    provision_themes
     exit 0
 fi
 
@@ -283,5 +309,8 @@ if [ -d "${DRIVER_DIR}" ]; then
     chown 1001:1001 "${DRIVER_DIR}"
     echo "Driver volume permissions set (1001:1001)"
 fi
+
+# Provision GUI themes
+provision_themes
 
 exit 0

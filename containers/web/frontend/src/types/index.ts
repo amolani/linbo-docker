@@ -114,6 +114,7 @@ export interface LinboSettings {
   guidisabled?: boolean;
   useminimallayout?: boolean;
   clientdetailsvisiblebydefault?: boolean;
+  theme?: string;
 }
 
 export interface ConfigPartition {

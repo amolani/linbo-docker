@@ -14,6 +14,7 @@ services:
       - linbo_srv_data:/srv/linbo
       - linbo_kernel_data:/var/lib/linuxmuster/linbo
       - linbo_driver_data:/var/lib/linbo/drivers
+      - ./themes:/opt/linbo-themes:ro
     environment:
       - BOOT_FILES_URL=${BOOT_FILES_URL:-https://github.com/amolani/linbo-docker/releases/latest/download/linbo-boot-files.tar.gz}
       - FORCE_UPDATE=${FORCE_BOOT_UPDATE:-false}
