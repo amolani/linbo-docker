@@ -10,8 +10,7 @@ set default=0
 set timeout=@@timeout@@
 set fallback=1
 
-set gfxmode=auto
-set gfxpayload=keep
+set gfxpayload=800x600x16
 
 insmod all_video
 insmod png
