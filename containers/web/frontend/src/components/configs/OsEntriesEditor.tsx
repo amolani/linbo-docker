@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, Trash2, Pencil } from 'lucide-react';
 import { Button, Input, Select, Modal } from '@/components/ui';
+import { IconSelect } from './IconSelect';
 import { imagesApi } from '@/api/images';
 import type { ConfigOs, ConfigPartition, Image } from '@/types';
 
@@ -10,6 +11,8 @@ interface OsEntriesEditorProps {
   osEntries: OsEntryData[];
   partitions: Omit<ConfigPartition, 'id' | 'configId'>[];
   onChange: (osEntries: OsEntryData[]) => void;
+  iconOptions: Array<{ value: string; label: string }>;
+  getIconUrl: (baseName: string, suffix?: string) => string;
 }
 
 const defaultOsEntry: OsEntryData = {
@@ -18,7 +21,7 @@ const defaultOsEntry: OsEntryData = {
   version: '',
   description: '',
   osType: 'windows',
-  iconName: 'windows.svg',
+  iconName: 'win10',
   image: '',
   baseImage: '',
   differentialImage: '',
@@ -50,21 +53,7 @@ const defaultActionOptions = [
   { value: 'new', label: 'Neu installieren' },
 ];
 
-const iconOptions = [
-  { value: 'windows.svg', label: 'Windows' },
-  { value: 'win10.svg', label: 'Windows 10' },
-  { value: 'ubuntu.svg', label: 'Ubuntu' },
-  { value: 'linux.svg', label: 'Linux (generisch)' },
-  { value: 'mint.svg', label: 'Linux Mint' },
-  { value: 'debian.svg', label: 'Debian' },
-  { value: 'fedora.svg', label: 'Fedora' },
-  { value: 'opensuse.svg', label: 'openSUSE' },
-  { value: 'centos.svg', label: 'CentOS' },
-  { value: 'redhat.svg', label: 'Red Hat' },
-  { value: 'popos.svg', label: 'Pop!_OS' },
-];
-
-export function OsEntriesEditor({ osEntries, partitions, onChange }: OsEntriesEditorProps) {
+export function OsEntriesEditor({ osEntries, partitions, onChange, iconOptions, getIconUrl }: OsEntriesEditorProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [formData, setFormData] = useState<OsEntryData>(defaultOsEntry);
@@ -99,14 +88,14 @@ export function OsEntriesEditor({ osEntries, partitions, onChange }: OsEntriesEd
     if (newOsType === 'windows') {
       updates.kernel = 'auto';
       updates.initrd = '';
-      if (!formData.iconName || formData.iconName === 'linux.svg' || formData.iconName === 'ubuntu.svg') {
-        updates.iconName = 'windows.svg';
+      if (!formData.iconName || formData.iconName === 'linux' || formData.iconName === 'ubuntu') {
+        updates.iconName = 'win10';
       }
     } else if (newOsType === 'linux') {
       updates.kernel = 'boot/vmlinuz';
       updates.initrd = 'boot/initrd.img';
-      if (!formData.iconName || formData.iconName === 'windows.svg' || formData.iconName === 'win10.svg') {
-        updates.iconName = 'ubuntu.svg';
+      if (!formData.iconName || formData.iconName === 'win' || formData.iconName === 'win10') {
+        updates.iconName = 'ubuntu';
       }
     }
     setFormData({ ...formData, ...updates });
@@ -223,6 +212,12 @@ export function OsEntriesEditor({ osEntries, partitions, onChange }: OsEntriesEd
                       </button>
                     </div>
                   </div>
+                  <img
+                    src={getIconUrl(entry.iconName || 'unknown')}
+                    alt=""
+                    className="w-8 h-8 rounded flex-shrink-0"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
                   <div>
                     <h4 className="font-medium text-foreground">{entry.name || 'Unbenannt'}</h4>
                     <p className="text-sm text-muted-foreground">
@@ -339,11 +334,12 @@ export function OsEntriesEditor({ osEntries, partitions, onChange }: OsEntriesEd
                 onChange={(e) => handleRootDeviceChange(e.target.value)}
                 options={partitionOptions.length > 0 ? partitionOptions : [{ value: formData.rootDevice || '', label: formData.rootDevice || '(Bitte Partition definieren)' }]}
               />
-              <Select
-                label="Icon"
-                value={formData.iconName || 'windows.svg'}
-                onChange={(e) => setFormData({ ...formData, iconName: e.target.value })}
+              <IconSelect
+                value={formData.iconName || 'win10'}
+                onChange={(v) => setFormData({ ...formData, iconName: v })}
                 options={iconOptions}
+                getIconUrl={getIconUrl}
+                label="Icon"
               />
             </div>
             <div className="grid grid-cols-2 gap-4 mt-4">

@@ -7,7 +7,7 @@
 # ### managed by linuxmuster.net ###
 
 set default=0
-set timeout=0
+set timeout=@@timeout@@
 set fallback=1
 
 set gfxmode=auto
@@ -22,7 +22,7 @@ insmod progress
 
 terminal_output gfxterm
 
-background_color 42,68,87
+background_color @@bgcolor_rgb@@
 
 # kernel & initrd
 set linbo_kernel=/linbo64

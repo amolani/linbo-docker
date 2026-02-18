@@ -1,5 +1,5 @@
 import apiClient from './client';
-import type { KernelVariant, KernelStatus, KernelSwitchResponse, FirmwareEntry, FirmwareStatus, FirmwareCatalogCategory, BulkAddResult, WlanConfig } from '@/types';
+import type { KernelVariant, KernelStatus, KernelSwitchResponse, FirmwareEntry, FirmwareStatus, FirmwareCatalogCategory, BulkAddResult, WlanConfig, GrubThemeConfig, GrubThemeStatus, GrubIcon } from '@/types';
 
 interface ApiResponse<T> {
   data: T;
@@ -90,5 +90,51 @@ export const systemApi = {
 
   deleteWlanConfig: async (): Promise<void> => {
     await apiClient.delete('/system/wlan-config');
+  },
+
+  // GRUB Theme
+  getGrubThemeStatus: async (): Promise<GrubThemeStatus> => {
+    const response = await apiClient.get<ApiResponse<GrubThemeStatus>>('/system/grub-theme');
+    return response.data.data;
+  },
+
+  updateGrubTheme: async (config: Partial<GrubThemeConfig>): Promise<GrubThemeConfig> => {
+    const response = await apiClient.put<ApiResponse<GrubThemeConfig>>('/system/grub-theme', config);
+    return response.data.data;
+  },
+
+  resetGrubTheme: async (): Promise<GrubThemeConfig> => {
+    const response = await apiClient.post<ApiResponse<GrubThemeConfig>>('/system/grub-theme/reset');
+    return response.data.data;
+  },
+
+  getGrubThemeIcons: async (): Promise<GrubIcon[]> => {
+    const response = await apiClient.get<ApiResponse<GrubIcon[]>>('/system/grub-theme/icons');
+    return response.data.data;
+  },
+
+  uploadGrubThemeIcon: async (file: File, baseName: string): Promise<void> => {
+    const formData = new FormData();
+    formData.append('icon', file);
+    formData.append('baseName', baseName);
+    await apiClient.post('/system/grub-theme/icons', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  deleteGrubThemeIcon: async (baseName: string): Promise<void> => {
+    await apiClient.delete(`/system/grub-theme/icons/${baseName}`);
+  },
+
+  uploadGrubThemeLogo: async (file: File): Promise<void> => {
+    const formData = new FormData();
+    formData.append('logo', file);
+    await apiClient.post('/system/grub-theme/logo', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  resetGrubThemeLogo: async (): Promise<void> => {
+    await apiClient.post('/system/grub-theme/logo/reset');
   },
 };

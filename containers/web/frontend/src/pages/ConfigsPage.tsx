@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Plus, Copy, Eye, Code, CloudUpload, Monitor, FileText } from 'lucide-react';
 import { configsApi } from '@/api/configs';
+import { systemApi } from '@/api/system';
 import { useDataInvalidation } from '@/hooks/useDataInvalidation';
+import { useIconCache } from '@/hooks/useIconCache';
 import { Button, Table, Modal, Input, Textarea, Badge, ConfirmModal } from '@/components/ui';
-import { LinboSettingsForm, PartitionsEditor, OsEntriesEditor, RawConfigEditorModal } from '@/components/configs';
+import { LinboSettingsForm, PartitionsEditor, OsEntriesEditor, RawConfigEditorModal, GrubMenuPreview } from '@/components/configs';
 import { notify } from '@/stores/notificationStore';
 import { useServerConfigStore } from '@/stores/serverConfigStore';
-import type { Config, Column, LinboSettings, ConfigPartition, ConfigOs } from '@/types';
+import type { Config, Column, LinboSettings, ConfigPartition, ConfigOs, GrubThemeConfig } from '@/types';
 
 type PartitionData = Omit<ConfigPartition, 'id' | 'configId'>;
 type OsEntryData = Omit<ConfigOs, 'id' | 'configId'>;
@@ -69,7 +71,7 @@ const configTemplates: ConfigTemplate[] = [
     osEntries: [
       {
         position: 1, name: 'Windows 10', version: '', description: 'Windows 10',
-        osType: 'windows', iconName: 'win10.svg', image: '', baseImage: 'win10.qcow2',
+        osType: 'windows', iconName: 'win10', image: '', baseImage: 'win10.qcow2',
         differentialImage: '', rootDevice: '/dev/sda3', root: '/dev/sda3',
         kernel: 'auto', initrd: '', append: [],
         startEnabled: true, syncEnabled: true, newEnabled: true,
@@ -108,8 +110,57 @@ const configTemplates: ConfigTemplate[] = [
     osEntries: [
       {
         position: 1, name: 'Ubuntu', version: '', description: 'Ubuntu',
-        osType: 'linux', iconName: 'ubuntu.svg', image: '', baseImage: 'ubuntu.qcow2',
+        osType: 'linux', iconName: 'ubuntu', image: '', baseImage: 'ubuntu.qcow2',
         differentialImage: '', rootDevice: '/dev/sda2', root: '/dev/sda2',
+        kernel: 'boot/vmlinuz', initrd: 'boot/initrd.img', append: ['ro', 'splash'],
+        startEnabled: true, syncEnabled: true, newEnabled: true,
+        autostart: false, autostartTimeout: 5, defaultAction: 'sync',
+        hidden: false,
+      },
+    ],
+  },
+  {
+    id: 'dual-efi',
+    label: 'Dual-Boot UEFI',
+    description: 'Windows + Ubuntu, GPT, EFI — 6 Partitionen (EFI, MSR, Windows, Ubuntu, Cache, Daten)',
+    icon: 'windows',
+    name: 'dual_efi',
+    linboSettings: {
+      server: '10.0.0.1',
+      cache: '/dev/sda5',
+      roottimeout: 600,
+      autopartition: false,
+      autoformat: false,
+      autoinitcache: false,
+      downloadType: 'torrent',
+      systemtype: 'efi64',
+      locale: 'de-de',
+      backgroundfontcolor: 'white',
+      consolefontcolorsstdout: 'lightgreen',
+      consolefontcolorstderr: 'orange',
+    },
+    partitions: [
+      { position: 1, device: '/dev/sda1', label: 'efi', size: '200M', partitionId: 'ef', fsType: 'vfat', bootable: true },
+      { position: 2, device: '/dev/sda2', label: 'msr', size: '128M', partitionId: '0c01', fsType: '', bootable: false },
+      { position: 3, device: '/dev/sda3', label: 'windows', size: '50G', partitionId: '7', fsType: 'ntfs', bootable: false },
+      { position: 4, device: '/dev/sda4', label: 'ubuntu', size: '30G', partitionId: '83', fsType: 'ext4', bootable: false },
+      { position: 5, device: '/dev/sda5', label: 'cache', size: '50G', partitionId: '83', fsType: 'ext4', bootable: false },
+      { position: 6, device: '/dev/sda6', label: 'data', size: '', partitionId: '7', fsType: 'ntfs', bootable: false },
+    ],
+    osEntries: [
+      {
+        position: 1, name: 'Windows 10', version: '', description: 'Windows 10',
+        osType: 'windows', iconName: 'win10', image: '', baseImage: 'win10.qcow2',
+        differentialImage: '', rootDevice: '/dev/sda3', root: '/dev/sda3',
+        kernel: 'auto', initrd: '', append: [],
+        startEnabled: true, syncEnabled: true, newEnabled: true,
+        autostart: false, autostartTimeout: 5, defaultAction: 'sync',
+        hidden: false,
+      },
+      {
+        position: 2, name: 'Ubuntu', version: '', description: 'Ubuntu',
+        osType: 'linux', iconName: 'ubuntu', image: '', baseImage: 'ubuntu.qcow2',
+        differentialImage: '', rootDevice: '/dev/sda4', root: '/dev/sda4',
         kernel: 'boot/vmlinuz', initrd: 'boot/initrd.img', append: ['ro', 'splash'],
         startEnabled: true, syncEnabled: true, newEnabled: true,
         autostart: false, autostartTimeout: 5, defaultAction: 'sync',
@@ -140,6 +191,8 @@ export function ConfigsPage() {
   const [linboSettings, setLinboSettings] = useState<LinboSettings>(defaultLinboSettings);
   const [partitions, setPartitions] = useState<PartitionData[]>([]);
   const [osEntries, setOsEntries] = useState<OsEntryData[]>([]);
+  const [themeConfig, setThemeConfig] = useState<GrubThemeConfig | null>(null);
+  const iconCache = useIconCache();
 
   const fetchConfigs = async () => {
     try {
@@ -201,6 +254,8 @@ export function ConfigsPage() {
       setEditingConfig(null);
       resetForm();
     }
+    // Load GRUB theme config for preview
+    systemApi.getGrubThemeStatus().then(s => setThemeConfig(s.config)).catch(() => {});
     setIsModalOpen(true);
   };
 
@@ -421,7 +476,7 @@ export function ConfigsPage() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         title={editingConfig ? 'Konfiguration bearbeiten' : 'Neue Konfiguration'}
-        size="xl"
+        size="full"
       >
         <form onSubmit={handleSubmit}>
           {/* Tabs */}
@@ -518,11 +573,31 @@ export function ConfigsPage() {
             )}
 
             {activeTab === 'os' && (
-              <OsEntriesEditor
-                osEntries={osEntries}
-                partitions={partitions}
-                onChange={setOsEntries}
-              />
+              <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                <div className="lg:col-span-3">
+                  <OsEntriesEditor
+                    osEntries={osEntries}
+                    partitions={partitions}
+                    onChange={setOsEntries}
+                    iconOptions={iconCache.iconOptions}
+                    getIconUrl={iconCache.getIconUrl}
+                  />
+                </div>
+                <div className="lg:col-span-2">
+                  <div className="sticky top-0">
+                    <h4 className="text-sm font-medium text-foreground mb-2">GRUB-Menu Vorschau</h4>
+                    <GrubMenuPreview
+                      osEntries={osEntries}
+                      linboSettings={linboSettings}
+                      themeConfig={themeConfig}
+                      getIconUrl={iconCache.getIconUrl}
+                    />
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Vorschau basiert auf aktuellem GRUB-Theme
+                    </p>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
 

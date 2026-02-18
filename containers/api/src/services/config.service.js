@@ -104,6 +104,10 @@ async function generateStartConf(configId) {
   lines.push(`KernelOptions = ${getLinboSetting(ls, 'KernelOptions') || ''}`);
   lines.push(`clientDetailsVisibleByDefault = ${toYesNo(getLinboSetting(ls, 'clientDetailsVisibleByDefault') ?? true)}`);
   lines.push(`Locale = ${getLinboSetting(ls, 'Locale') || 'de-DE'}`);
+  const bootTimeout = getLinboSetting(ls, 'BootTimeout');
+  if (bootTimeout !== undefined && bootTimeout !== null) {
+    lines.push(`BootTimeout = ${bootTimeout}`);
+  }
   lines.push('');
 
   // [Partition] sections
@@ -391,7 +395,7 @@ function parseStartConf(content) {
   ];
 
   const integerFields = [
-    'roottimeout', 'autostarttimeout', 'position'
+    'roottimeout', 'autostarttimeout', 'position', 'boottimeout'
   ];
 
   function saveCurrentSection() {
