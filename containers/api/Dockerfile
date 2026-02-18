@@ -41,6 +41,7 @@ RUN apk add --no-cache \
     curl \
     openssh-client \
     openssl \
+    rsync \
     tini \
     xz \
     cpio \

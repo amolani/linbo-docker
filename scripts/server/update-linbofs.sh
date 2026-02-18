@@ -397,6 +397,44 @@ if [ -f "$WPA_CONF" ] && [ -s "$WPA_CONF" ]; then
 fi
 
 # =============================================================================
+# Step 10.7: Inject GUI themes and custom linbo_gui binary
+# =============================================================================
+
+# 10.7a: GUI themes — copy from provisioned themes into linbofs
+GUI_THEMES_SRC="$LINBO_DIR/gui-themes"
+if [ -d "$GUI_THEMES_SRC" ] && [ "$(ls -A "$GUI_THEMES_SRC" 2>/dev/null)" ]; then
+    echo "Injecting GUI themes..."
+    THEME_COUNT=0
+    for theme_dir in "$GUI_THEMES_SRC"/*/; do
+        [ -d "$theme_dir" ] || continue
+        theme_name=$(basename "$theme_dir")
+        # Validate theme name (alphanumeric + hyphens only)
+        case "$theme_name" in
+            *[!a-zA-Z0-9_-]*) echo "  REJECT (invalid name): $theme_name"; continue ;;
+        esac
+        mkdir -p "themes/$theme_name"
+        cp -r "$theme_dir"* "themes/$theme_name/"
+        echo "  + theme: $theme_name"
+        THEME_COUNT=$((THEME_COUNT + 1))
+    done
+    echo "GUI themes: $THEME_COUNT injected"
+else
+    echo "No GUI themes found ($GUI_THEMES_SRC), skipping"
+fi
+
+# 10.7b: Custom linbo_gui binary — override the default binary in linbofs
+CUSTOM_GUI="$CONFIG_DIR/linbo_gui"
+if [ -f "$CUSTOM_GUI" ]; then
+    echo "Injecting custom linbo_gui binary..."
+    if [ ! -x "$CUSTOM_GUI" ]; then
+        echo "  WARNING: $CUSTOM_GUI is not executable, setting +x"
+    fi
+    cp "$CUSTOM_GUI" "usr/bin/linbo_gui"
+    chmod 755 "usr/bin/linbo_gui"
+    echo "  - Custom linbo_gui injected ($(stat -c%s "$CUSTOM_GUI") bytes)"
+fi
+
+# =============================================================================
 # Step 11: Repack linbofs64
 # =============================================================================
 

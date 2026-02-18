@@ -168,6 +168,15 @@ export function LinboSettingsForm({ settings, onChange, serverIp = '10.0.0.1' }:
 
       <div className="border-t pt-4">
         <h4 className="text-sm font-medium text-foreground mb-3">Darstellung</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <Input
+            label="GUI-Theme"
+            value={settings.theme || ''}
+            onChange={(e) => handleChange('theme', e.target.value)}
+            placeholder="z.B. linbo-modern"
+            helperText="Name des LINBO-GUI-Themes (leer = Standard)"
+          />
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Select
             label="Hintergrund-Schriftfarbe"
