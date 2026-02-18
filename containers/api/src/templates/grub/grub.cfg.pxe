@@ -27,6 +27,9 @@ if [ -z "$cfg_loaded" -a -n "$group" ]; then
   fi
 fi
 
+# MAC-based config lookup (for proxy DHCP without hostname)
+@@mac_mapping@@
+
 # Fallback: if no config was sourced, boot LINBO directly
 if [ -z "$cfg_loaded" ]; then
   insmod gzio

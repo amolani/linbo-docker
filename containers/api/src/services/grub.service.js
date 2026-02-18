@@ -390,11 +390,37 @@ async function generateHostGrubConfig(hostname, configName, options = {}) {
  * @returns {Promise<{filepath: string, content: string}>}
  */
 async function generateMainGrubConfig() {
+  // Query all hosts with configs for MAC-based lookup
+  const hosts = await prisma.host.findMany({
+    where: { configId: { not: null } },
+    include: { config: { select: { name: true } } },
+  });
+
+  // Build MAC→config mapping for GRUB
+  // GRUB $net_default_mac format varies by firmware — generate both cases
+  let macMapping = '';
+  if (hosts.length > 0) {
+    const lines = ['if [ -z "$cfg_loaded" -a -n "$net_default_mac" ]; then'];
+    for (const host of hosts) {
+      if (!host.macAddress || !host.config?.name) continue;
+      const macLower = host.macAddress.toLowerCase();
+      const macUpper = host.macAddress.toUpperCase();
+      const cfgName = host.config.name;
+      lines.push(`  if [ "$net_default_mac" = "${macLower}" -o "$net_default_mac" = "${macUpper}" ]; then`);
+      lines.push(`    source $prefix/${cfgName}.cfg`);
+      lines.push(`    set cfg_loaded=1`);
+      lines.push(`  fi`);
+    }
+    lines.push('fi');
+    macMapping = lines.join('\n');
+  }
+
   const template = await loadTemplate('grub.cfg.pxe');
   const content = applyTemplate(template, {
     timestamp: new Date().toISOString(),
     server: process.env.LINBO_SERVER_IP || '10.0.0.1',
     httpport: process.env.WEB_PORT || '8080',
+    mac_mapping: macMapping,
   });
 
   await fs.mkdir(GRUB_DIR, { recursive: true });
@@ -402,7 +428,7 @@ async function generateMainGrubConfig() {
   const filepath = path.join(GRUB_DIR, 'grub.cfg');
   await fs.writeFile(filepath, content, 'utf8');
 
-  console.log(`[GrubService] Generated main grub.cfg: ${filepath}`);
+  console.log(`[GrubService] Generated main grub.cfg: ${filepath} (${hosts.length} MAC entries)`);
 
   return { filepath, content };
 }
