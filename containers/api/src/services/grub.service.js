@@ -390,14 +390,18 @@ async function generateHostGrubConfig(hostname, configName, options = {}) {
  * @returns {Promise<{filepath: string, content: string}>}
  */
 async function generateMainGrubConfig() {
-  // Query all hosts with configs for MAC-based lookup
+  const server = process.env.LINBO_SERVER_IP || '10.0.0.1';
+  const httpport = process.env.WEB_PORT || '8080';
+
+  // Query all hosts with configs for MAC-based inline boot
   const hosts = await prisma.host.findMany({
     where: { configId: { not: null } },
-    include: { config: { select: { name: true } } },
+    include: { config: { select: { name: true, linboSettings: true } } },
   });
 
-  // Build MAC→config mapping for GRUB
-  // GRUB $net_default_mac format varies by firmware — generate both cases
+  // Build MAC→inline boot mapping for GRUB
+  // Instead of source (which requires TFTP + menuentry execution),
+  // directly embed boot commands per MAC address
   let macMapping = '';
   if (hosts.length > 0) {
     const lines = ['if [ -z "$cfg_loaded" -a -n "$net_default_mac" ]; then'];
@@ -405,10 +409,20 @@ async function generateMainGrubConfig() {
       if (!host.macAddress || !host.config?.name) continue;
       const macLower = host.macAddress.toLowerCase();
       const macUpper = host.macAddress.toUpperCase();
-      const cfgName = host.config.name;
+      const groupName = host.config.name;
+
+      // Build kernel options from config
+      const ls = host.config.linboSettings || {};
+      let kernelOptions = getLinboSetting(ls, 'KernelOptions') || 'quiet splash';
+      const cleanKopts = kernelOptions.replace(/\bserver=\S+/g, '').replace(/\bgroup=\S+/g, '').replace(/\s+/g, ' ').trim();
+      const kopts = `${cleanKopts} server=${server} group=${groupName}`.trim();
+
       lines.push(`  if [ "$net_default_mac" = "${macLower}" -o "$net_default_mac" = "${macUpper}" ]; then`);
-      lines.push(`    source $prefix/${cfgName}.cfg`);
-      lines.push(`    set cfg_loaded=1`);
+      lines.push(`    insmod http`);
+      lines.push(`    set http_root="(http,${server}:${httpport})"`);
+      lines.push(`    linux \${http_root}/linbo64 ${kopts}`);
+      lines.push(`    initrd \${http_root}/linbofs64`);
+      lines.push(`    boot`);
       lines.push(`  fi`);
     }
     lines.push('fi');
@@ -418,8 +432,8 @@ async function generateMainGrubConfig() {
   const template = await loadTemplate('grub.cfg.pxe');
   const content = applyTemplate(template, {
     timestamp: new Date().toISOString(),
-    server: process.env.LINBO_SERVER_IP || '10.0.0.1',
-    httpport: process.env.WEB_PORT || '8080',
+    server: server,
+    httpport: httpport,
     mac_mapping: macMapping,
   });
 
