@@ -429,12 +429,21 @@ async function generateMainGrubConfig() {
     macMapping = lines.join('\n');
   }
 
+  // Determine default group for fallback (first config with hosts, or first config)
+  const configs = await prisma.config.findMany({
+    include: { _count: { select: { hosts: true } } },
+    orderBy: { updatedAt: 'desc' },
+  });
+  const defaultConfig = configs.find(c => c._count.hosts > 0) || configs[0];
+  const defaultGroup = defaultConfig ? `group=${defaultConfig.name}` : '';
+
   const template = await loadTemplate('grub.cfg.pxe');
   const content = applyTemplate(template, {
     timestamp: new Date().toISOString(),
     server: server,
     httpport: httpport,
     mac_mapping: macMapping,
+    default_group: defaultGroup,
   });
 
   await fs.mkdir(GRUB_DIR, { recursive: true });
