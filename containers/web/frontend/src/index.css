@@ -13,8 +13,8 @@
     --foreground: #fafafa;
     --primary: #0081c6;
     --primary-foreground: #ffffff;
-    --secondary: #d1d5db;
-    --secondary-foreground: #2d2d30;
+    --secondary: #1e293b;
+    --secondary-foreground: #d1d5db;
     --muted: #2d3748;
     --muted-foreground: #bbbbbb;
     --accent: #2d2d30;
@@ -38,6 +38,16 @@
   * {
     @apply border-border;
   }
+}
+
+/* Native form elements dark styling */
+select option {
+  background: var(--card);
+  color: var(--foreground);
+}
+
+input[type="checkbox"] {
+  accent-color: var(--primary);
 }
 
 /* Scrollbar (Edulution-style) */
