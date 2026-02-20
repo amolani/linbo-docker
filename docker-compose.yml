@@ -243,6 +243,7 @@ services:
       dockerfile: Dockerfile
       args:
         GIT_HASH: ${GIT_HASH:-dev}
+        GITHUB_TOKEN: ${GITHUB_TOKEN:-}
     container_name: linbo-web
     ports:
       - "${WEB_PORT:-8080}:80"
