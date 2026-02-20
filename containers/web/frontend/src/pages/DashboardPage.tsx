@@ -81,14 +81,14 @@ export function DashboardPage() {
       value: stats?.hosts.online || 0,
       total: stats?.hosts.total || 0,
       icon: Monitor,
-      color: 'bg-green-500',
+      color: 'bg-ciGreen',
       link: '/hosts',
     },
     {
       name: 'Räume',
       value: stats?.rooms || 0,
       icon: Building2,
-      color: 'bg-blue-500',
+      color: 'bg-primary',
       link: '/rooms',
     },
     {
@@ -163,7 +163,7 @@ export function DashboardPage() {
           <div className="space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">Online</span>
-              <span className="font-medium text-green-400">
+              <span className="font-medium text-ciGreen">
                 {stats?.hosts.online || 0}
               </span>
             </div>
@@ -175,7 +175,7 @@ export function DashboardPage() {
             </div>
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">Synchronisiert</span>
-              <span className="font-medium text-blue-400">
+              <span className="font-medium text-primary">
                 {stats?.hosts.syncing || 0}
               </span>
             </div>
@@ -183,13 +183,13 @@ export function DashboardPage() {
               {stats && stats.hosts.total > 0 && (
                 <>
                   <div
-                    className="h-full bg-green-500 float-left"
+                    className="h-full bg-ciGreen float-left"
                     style={{
                       width: `${(stats.hosts.online / stats.hosts.total) * 100}%`,
                     }}
                   />
                   <div
-                    className="h-full bg-blue-500 float-left"
+                    className="h-full bg-primary float-left"
                     style={{
                       width: `${(stats.hosts.syncing / stats.hosts.total) * 100}%`,
                     }}
@@ -208,19 +208,19 @@ export function DashboardPage() {
           <div className="space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">Laufend</span>
-              <span className="font-medium text-blue-400">
+              <span className="font-medium text-primary">
                 {stats?.operations.running || 0}
               </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">Abgeschlossen</span>
-              <span className="font-medium text-green-400">
+              <span className="font-medium text-ciGreen">
                 {stats?.operations.completed || 0}
               </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">Fehlgeschlagen</span>
-              <span className="font-medium text-red-400">
+              <span className="font-medium text-destructive">
                 {stats?.operations.failed || 0}
               </span>
             </div>
@@ -244,8 +244,8 @@ export function DashboardPage() {
                 <div className="flex items-center space-x-2">
                   {kernelStatus.rebuildRunning ? (
                     <>
-                      <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400" />
-                      <span className="text-sm text-blue-400">Rebuilding...</span>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                      <span className="text-sm text-primary">Rebuilding...</span>
                     </>
                   ) : (
                     <>
@@ -255,7 +255,7 @@ export function DashboardPage() {
                       <span className="text-sm text-muted-foreground">
                         v{kernelStatus.activeVersion}
                       </span>
-                      <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+                      <span className="inline-block w-2 h-2 rounded-full bg-ciGreen" />
                     </>
                   )}
                 </div>

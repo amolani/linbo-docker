@@ -23,19 +23,19 @@ export function ProvisionBadge({ status, opId }: ProvisionBadgeProps) {
       classes: 'text-yellow-400 bg-yellow-600/20 border-yellow-600/30',
     },
     running: {
-      dot: 'bg-blue-400 animate-pulse',
+      dot: 'bg-primary animate-pulse',
       text: 'Provisioning...',
-      classes: 'text-blue-400 bg-primary/20 border-blue-600/30',
+      classes: 'text-primary bg-primary/20 border-primary/30',
     },
     synced: {
-      dot: 'bg-green-400',
+      dot: 'bg-ciGreen',
       text: 'Synced',
-      classes: 'text-green-400 bg-green-600/20 border-green-600/30',
+      classes: 'text-ciGreen bg-ciGreen/20 border-ciGreen/30',
     },
     failed: {
-      dot: 'bg-red-400',
+      dot: 'bg-destructive',
       text: 'Failed',
-      classes: 'text-red-400 bg-destructive/10 border-destructive/30',
+      classes: 'text-destructive bg-destructive/10 border-destructive/30',
     },
   };
 

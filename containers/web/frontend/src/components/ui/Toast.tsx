@@ -11,10 +11,10 @@ const icons = {
 };
 
 const iconColors = {
-  info: 'text-blue-400',
-  success: 'text-green-400',
+  info: 'text-primary',
+  success: 'text-ciGreen',
   warning: 'text-yellow-400',
-  error: 'text-red-400',
+  error: 'text-destructive',
 };
 
 function ToastItem({ notification }: { notification: Notification }) {

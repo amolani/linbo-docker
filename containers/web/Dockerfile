@@ -10,10 +10,11 @@ ARG GIT_HASH=unknown
 
 WORKDIR /app
 
-# Copy package files
-COPY frontend/package*.json ./
+# Copy package files and registry config
+COPY frontend/package*.json frontend/.npmrc ./
 
-# Install dependencies
+# Install dependencies (GITHUB_TOKEN needed for @edulution-io/ui-kit)
+ARG GITHUB_TOKEN
 RUN npm ci
 
 # Copy source code

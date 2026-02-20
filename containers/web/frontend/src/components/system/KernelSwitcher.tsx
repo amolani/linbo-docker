@@ -116,7 +116,7 @@ export function KernelSwitcher() {
   if (error && !status) {
     return (
       <div className="bg-card shadow-sm rounded-lg p-6">
-        <div className="flex items-center space-x-2 text-red-400">
+        <div className="flex items-center space-x-2 text-destructive">
           <XCircle className="h-5 w-5" />
           <span>{error}</span>
         </div>
@@ -140,8 +140,8 @@ export function KernelSwitcher() {
             <div className="flex items-center space-x-2 text-sm">
               {status.rebuildRunning ? (
                 <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400" />
-                  <span className="text-blue-400">Rebuilding linbofs64...</span>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                  <span className="text-primary">Rebuilding linbofs64...</span>
                 </>
               ) : (
                 <>
@@ -149,7 +149,7 @@ export function KernelSwitcher() {
                     Aktiv: <span className="font-medium text-foreground">{status.activeVariant}</span>
                     {' '}v{status.activeVersion}
                   </span>
-                  <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+                  <span className="inline-block w-2 h-2 rounded-full bg-ciGreen" />
                 </>
               )}
             </div>
@@ -202,10 +202,10 @@ export function KernelSwitcher() {
       )}
 
       {status.lastError && (
-        <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-md">
+        <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md">
           <div className="flex items-center space-x-2">
-            <XCircle className="h-4 w-4 text-red-400" />
-            <p className="text-sm text-red-300">Letzter Fehler: {status.lastError}</p>
+            <XCircle className="h-4 w-4 text-destructive" />
+            <p className="text-sm text-destructive">Letzter Fehler: {status.lastError}</p>
           </div>
         </div>
       )}
@@ -241,7 +241,7 @@ export function KernelSwitcher() {
                 </td>
                 <td className="py-2.5 text-right">
                   {v.isActive ? (
-                    <span className="inline-flex items-center space-x-1 text-green-400 text-xs font-medium">
+                    <span className="inline-flex items-center space-x-1 text-ciGreen text-xs font-medium">
                       <CheckCircle className="h-3.5 w-3.5" />
                       <span>Aktiv</span>
                     </span>

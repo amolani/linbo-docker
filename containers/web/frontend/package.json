@@ -12,6 +12,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@edulution-io/ui-kit": "^0.0.1",
     "@headlessui/react": "^1.7.18",
     "axios": "^1.6.7",
     "clsx": "^2.1.1",

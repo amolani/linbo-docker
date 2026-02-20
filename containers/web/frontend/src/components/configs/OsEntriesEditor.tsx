@@ -234,10 +234,10 @@ export function OsEntriesEditor({ osEntries, partitions, onChange, iconOptions, 
                 <div className="flex items-center space-x-4">
                   <div className="flex space-x-2 text-xs">
                     {entry.startEnabled && (
-                      <span className="px-2 py-1 bg-green-600/20 text-green-400 rounded">Start</span>
+                      <span className="px-2 py-1 bg-ciGreen/20 text-ciGreen rounded">Start</span>
                     )}
                     {entry.syncEnabled && (
-                      <span className="px-2 py-1 bg-primary/20 text-blue-400 rounded">Sync</span>
+                      <span className="px-2 py-1 bg-primary/20 text-primary rounded">Sync</span>
                     )}
                     {entry.newEnabled && (
                       <span className="px-2 py-1 bg-yellow-600/20 text-yellow-400 rounded">Neu</span>
@@ -262,7 +262,7 @@ export function OsEntriesEditor({ osEntries, partitions, onChange, iconOptions, 
                         e.stopPropagation();
                         handleDelete(index);
                       }}
-                      className="text-red-400 hover:text-red-300"
+                      className="text-destructive hover:text-destructive/80"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>

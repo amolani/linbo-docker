@@ -97,12 +97,12 @@ export function Sidebar() {
               collapsed ? 'justify-center' : ''
             )}>
               {isConnected ? (
-                <Wifi className="h-4 w-4 text-green-400 flex-shrink-0" />
+                <Wifi className="h-4 w-4 text-ciGreen flex-shrink-0" />
               ) : (
-                <WifiOff className="h-4 w-4 text-red-400 flex-shrink-0" />
+                <WifiOff className="h-4 w-4 text-destructive flex-shrink-0" />
               )}
               {!collapsed && (
-                <span className={cn('ml-2', isConnected ? 'text-green-400' : 'text-red-400')}>
+                <span className={cn('ml-2', isConnected ? 'text-ciGreen' : 'text-destructive')}>
                   {isConnected ? 'Verbunden' : 'Getrennt'}
                 </span>
               )}

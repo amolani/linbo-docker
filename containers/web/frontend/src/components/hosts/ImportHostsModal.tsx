@@ -140,8 +140,8 @@ export function ImportHostsModal({ isOpen, onClose, onSuccess }: ImportHostsModa
 
             {error && (
               <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 flex items-start">
-                <XCircle className="h-5 w-5 text-red-400 mr-2 flex-shrink-0" />
-                <p className="text-sm text-red-400">{error}</p>
+                <XCircle className="h-5 w-5 text-destructive mr-2 flex-shrink-0" />
+                <p className="text-sm text-destructive">{error}</p>
               </div>
             )}
 
@@ -173,14 +173,14 @@ export function ImportHostsModal({ isOpen, onClose, onSuccess }: ImportHostsModa
                     </p>
                     <p className="text-xs text-muted-foreground">Gesamt</p>
                   </div>
-                  <div className="bg-green-600/20 rounded-lg p-3 text-center">
-                    <p className="text-2xl font-bold text-green-400">
+                  <div className="bg-ciGreen/20 rounded-lg p-3 text-center">
+                    <p className="text-2xl font-bold text-ciGreen">
                       {validationResult.toCreate}
                     </p>
                     <p className="text-xs text-muted-foreground">Neu</p>
                   </div>
                   <div className="bg-primary/20 rounded-lg p-3 text-center">
-                    <p className="text-2xl font-bold text-blue-400">
+                    <p className="text-2xl font-bold text-primary">
                       {validationResult.toUpdate}
                     </p>
                     <p className="text-xs text-muted-foreground">Update</p>
@@ -196,11 +196,11 @@ export function ImportHostsModal({ isOpen, onClose, onSuccess }: ImportHostsModa
                 {/* Errors */}
                 {validationResult.errors.length > 0 && (
                   <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4">
-                    <h4 className="text-sm font-medium text-red-400 mb-2 flex items-center">
+                    <h4 className="text-sm font-medium text-destructive mb-2 flex items-center">
                       <AlertTriangle className="h-5 w-5 mr-2" />
                       {validationResult.errors.length} Fehler gefunden
                     </h4>
-                    <ul className="text-sm text-red-400 space-y-1 max-h-32 overflow-y-auto">
+                    <ul className="text-sm text-destructive space-y-1 max-h-32 overflow-y-auto">
                       {validationResult.errors.map((err, i) => (
                         <li key={i}>
                           Zeile {err.line}: {err.hostname && `${err.hostname} - `}
@@ -253,9 +253,9 @@ export function ImportHostsModal({ isOpen, onClose, onSuccess }: ImportHostsModa
                                 <span
                                   className={`inline-flex px-2 py-0.5 text-xs rounded-full ${
                                     item.action === 'create'
-                                      ? 'bg-green-600/20 text-green-400'
+                                      ? 'bg-ciGreen/20 text-ciGreen'
                                       : item.action === 'update'
-                                      ? 'bg-primary/20 text-blue-400'
+                                      ? 'bg-primary/20 text-primary'
                                       : 'bg-background text-foreground'
                                   }`}
                                 >
@@ -303,17 +303,17 @@ export function ImportHostsModal({ isOpen, onClose, onSuccess }: ImportHostsModa
               <>
                 <div
                   className={`rounded-lg p-6 text-center ${
-                    importResult.success ? 'bg-green-600/20' : 'bg-destructive/10'
+                    importResult.success ? 'bg-ciGreen/20' : 'bg-destructive/10'
                   }`}
                 >
                   {importResult.success ? (
-                    <CheckCircle2 className="h-16 w-16 text-green-400 mx-auto mb-4" />
+                    <CheckCircle2 className="h-16 w-16 text-ciGreen mx-auto mb-4" />
                   ) : (
-                    <XCircle className="h-16 w-16 text-red-400 mx-auto mb-4" />
+                    <XCircle className="h-16 w-16 text-destructive mx-auto mb-4" />
                   )}
                   <h3
                     className={`text-xl font-semibold ${
-                      importResult.success ? 'text-green-400' : 'text-red-400'
+                      importResult.success ? 'text-ciGreen' : 'text-destructive'
                     }`}
                   >
                     {importResult.success ? 'Import erfolgreich!' : 'Import fehlgeschlagen'}
@@ -321,14 +321,14 @@ export function ImportHostsModal({ isOpen, onClose, onSuccess }: ImportHostsModa
                 </div>
 
                 <div className="grid grid-cols-3 gap-4">
-                  <div className="bg-green-600/20 rounded-lg p-4 text-center">
-                    <p className="text-3xl font-bold text-green-400">
+                  <div className="bg-ciGreen/20 rounded-lg p-4 text-center">
+                    <p className="text-3xl font-bold text-ciGreen">
                       {importResult.created}
                     </p>
                     <p className="text-sm text-muted-foreground">Erstellt</p>
                   </div>
                   <div className="bg-primary/20 rounded-lg p-4 text-center">
-                    <p className="text-3xl font-bold text-blue-400">
+                    <p className="text-3xl font-bold text-primary">
                       {importResult.updated}
                     </p>
                     <p className="text-sm text-muted-foreground">Aktualisiert</p>
@@ -343,10 +343,10 @@ export function ImportHostsModal({ isOpen, onClose, onSuccess }: ImportHostsModa
 
                 {importResult.errors.length > 0 && (
                   <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4">
-                    <h4 className="text-sm font-medium text-red-400 mb-2">
+                    <h4 className="text-sm font-medium text-destructive mb-2">
                       {importResult.errors.length} Fehler
                     </h4>
-                    <ul className="text-sm text-red-400 space-y-1 max-h-32 overflow-y-auto">
+                    <ul className="text-sm text-destructive space-y-1 max-h-32 overflow-y-auto">
                       {importResult.errors.map((err, i) => (
                         <li key={i}>
                           Zeile {err.line}: {err.error}
@@ -394,7 +394,7 @@ export function ImportHostsModal({ isOpen, onClose, onSuccess }: ImportHostsModa
                   step === s
                     ? 'bg-primary text-white'
                     : ['upload', 'validate', 'result'].indexOf(step) > i
-                    ? 'bg-green-500 text-white'
+                    ? 'bg-ciGreen text-white'
                     : 'bg-border text-muted-foreground'
                 }`}
               >
@@ -408,7 +408,7 @@ export function ImportHostsModal({ isOpen, onClose, onSuccess }: ImportHostsModa
                 <div
                   className={`w-16 h-1 mx-2 ${
                     ['upload', 'validate', 'result'].indexOf(step) > i
-                      ? 'bg-green-500'
+                      ? 'bg-ciGreen'
                       : 'bg-border'
                   }`}
                 />

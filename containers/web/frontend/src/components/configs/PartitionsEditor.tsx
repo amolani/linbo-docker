@@ -186,7 +186,7 @@ export function PartitionsEditor({ partitions, onChange }: PartitionsEditorProps
                   </td>
                   <td className="px-4 py-3 text-sm text-muted-foreground">
                     {partition.bootable ? (
-                      <span className="text-green-400">Ja</span>
+                      <span className="text-ciGreen">Ja</span>
                     ) : (
                       <span className="text-muted-foreground">Nein</span>
                     )}
@@ -203,7 +203,7 @@ export function PartitionsEditor({ partitions, onChange }: PartitionsEditorProps
                       <button
                         type="button"
                         onClick={() => handleDelete(index)}
-                        className="text-red-400 hover:text-red-300"
+                        className="text-destructive hover:text-destructive/80"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>

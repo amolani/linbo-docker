@@ -9,18 +9,18 @@ export interface BadgeProps {
 
 const variants = {
   default: 'bg-secondary text-secondary-foreground',
-  success: 'bg-green-600/20 text-green-400',
+  success: 'bg-ciGreen/20 text-ciGreen',
   warning: 'bg-yellow-600/20 text-yellow-400',
-  error: 'bg-destructive/20 text-red-400',
-  info: 'bg-primary/20 text-blue-400',
+  error: 'bg-destructive/20 text-destructive',
+  info: 'bg-primary/20 text-primary',
 };
 
 const dotColors = {
   default: 'bg-muted-foreground',
-  success: 'bg-green-400',
+  success: 'bg-ciGreen',
   warning: 'bg-yellow-400',
-  error: 'bg-red-400',
-  info: 'bg-blue-400',
+  error: 'bg-destructive',
+  info: 'bg-primary',
 };
 
 const sizes = {

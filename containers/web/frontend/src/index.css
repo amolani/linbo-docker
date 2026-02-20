@@ -3,8 +3,36 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --ci-light-green: #8fc046;
+    --ci-dark-blue: #0081c6;
+    --radius: 0.25rem;
+
+    /* Edulution Dark Mode Palette */
+    --background: #0a0a0a;
+    --foreground: #fafafa;
+    --primary: #0081c6;
+    --primary-foreground: #ffffff;
+    --secondary: #d1d5db;
+    --secondary-foreground: #2d2d30;
+    --muted: #2d3748;
+    --muted-foreground: #bbbbbb;
+    --accent: #2d2d30;
+    --accent-foreground: #f2f2f2;
+    --card: #111111;
+    --card-foreground: #ffffff;
+    --popover: #111111;
+    --popover-foreground: #ffffff;
+    --destructive: #dc2626;
+    --destructive-foreground: #ffffff;
+    --border: #333333;
+    --input: #1a1a1a;
+    --ring: #8ca4b6;
+  }
+
   body {
     @apply bg-background text-foreground;
+    font-family: 'Lato', sans-serif;
   }
 
   * {
@@ -12,27 +40,9 @@
   }
 }
 
-/* Dark scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: hsl(0 0% 4%);
-}
-
-::-webkit-scrollbar-thumb {
-  background: hsl(0 0% 20%);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: hsl(0 0% 30%);
-}
-
-/* Firefox scrollbar */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: hsl(0 0% 20%) hsl(0 0% 4%);
-}
+/* Scrollbar (Edulution-style) */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2d3748; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #3a4557; }
+* { scrollbar-width: thin; scrollbar-color: #2d3748 transparent; }

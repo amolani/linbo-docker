@@ -185,7 +185,7 @@ export function HostsPage() {
       render: (host) => {
         if (!host.detectedOs) return <span className="text-muted-foreground">-</span>;
         const osLabels: Record<string, { label: string; color: string }> = {
-          linbo: { label: 'LINBO', color: 'text-blue-500' },
+          linbo: { label: 'LINBO', color: 'text-primary' },
           linux: { label: 'Linux', color: 'text-orange-500' },
           windows: { label: 'Windows', color: 'text-sky-500' },
         };

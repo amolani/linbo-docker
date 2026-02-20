@@ -41,7 +41,7 @@ export function LoginPage() {
         <div className="bg-card border border-border rounded-lg shadow-xl p-8">
           <form className="space-y-6" onSubmit={handleSubmit}>
             {error && (
-              <div className="bg-destructive/10 border border-destructive/30 text-red-400 px-4 py-3 rounded-md text-sm">
+              <div className="bg-destructive/10 border border-destructive/30 text-destructive px-4 py-3 rounded-md text-sm">
                 {error}
               </div>
             )}

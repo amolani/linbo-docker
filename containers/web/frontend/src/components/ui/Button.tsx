@@ -32,7 +32,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
       destructive: 'bg-destructive text-white hover:bg-destructive/90',
       danger: 'bg-destructive text-white hover:bg-destructive/90',
-      success: 'bg-green-600 text-white hover:bg-green-700',
+      success: 'bg-ciGreen text-white hover:bg-ciGreen/90',
       ghost: 'bg-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground',
       outline: 'border border-border bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground',
     };
