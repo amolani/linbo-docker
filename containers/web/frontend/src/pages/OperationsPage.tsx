@@ -136,7 +136,7 @@ export function OperationsPage() {
           <div className="h-2 bg-secondary rounded-full overflow-hidden">
             <div
               className={`h-full transition-all ${
-                op.status === 'failed' ? 'bg-red-500' : 'bg-primary'
+                op.status === 'failed' ? 'bg-destructive' : 'bg-primary'
               }`}
               style={{ width: `${op.progress}%` }}
             />
@@ -173,7 +173,7 @@ export function OperationsPage() {
           {(op.status === 'pending' || op.status === 'running') && (
             <button
               onClick={() => handleCancel(op.id)}
-              className="text-red-400 hover:text-red-300 text-sm"
+              className="text-destructive hover:text-destructive/80 text-sm"
             >
               Abbrechen
             </button>
@@ -318,19 +318,19 @@ export function OperationsPage() {
                     <div className="text-xs text-muted-foreground">Gesamt</div>
                   </div>
                   <div className="bg-primary/10 rounded p-3">
-                    <div className="text-2xl font-bold text-blue-400">
+                    <div className="text-2xl font-bold text-primary">
                       {selectedOperation.stats.inProgress}
                     </div>
                     <div className="text-xs text-muted-foreground">Laufend</div>
                   </div>
-                  <div className="bg-green-600/20 rounded p-3">
-                    <div className="text-2xl font-bold text-green-400">
+                  <div className="bg-ciGreen/20 rounded p-3">
+                    <div className="text-2xl font-bold text-ciGreen">
                       {selectedOperation.stats.completed}
                     </div>
                     <div className="text-xs text-muted-foreground">Abgeschlossen</div>
                   </div>
                   <div className="bg-destructive/10 rounded p-3">
-                    <div className="text-2xl font-bold text-red-400">
+                    <div className="text-2xl font-bold text-destructive">
                       {selectedOperation.stats.failed}
                     </div>
                     <div className="text-xs text-muted-foreground">Fehlgeschlagen</div>

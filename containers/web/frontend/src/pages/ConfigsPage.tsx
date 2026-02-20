@@ -405,7 +405,7 @@ export function ConfigsPage() {
         <div className="flex space-x-2">
           <button
             onClick={() => handleDeploy(config.id, config.name)}
-            className="text-green-400 hover:text-green-300"
+            className="text-ciGreen hover:text-ciGreen/80"
             title="Deploy (start.conf schreiben)"
           >
             <CloudUpload className="h-4 w-4" />
@@ -439,7 +439,7 @@ export function ConfigsPage() {
           </button>
           <button
             onClick={() => setDeleteConfirmConfig(config)}
-            className="text-red-400 hover:text-red-300 text-sm"
+            className="text-destructive hover:text-destructive/80 text-sm"
           >
             Loeschen
           </button>
@@ -524,7 +524,7 @@ export function ConfigsPage() {
                         >
                           <div className="mt-0.5">
                             {tpl.icon === 'windows' ? (
-                              <Monitor className="h-5 w-5 text-blue-400" />
+                              <Monitor className="h-5 w-5 text-primary" />
                             ) : (
                               <FileText className="h-5 w-5 text-orange-400" />
                             )}

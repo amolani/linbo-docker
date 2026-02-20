@@ -68,7 +68,7 @@ export function LinboGuiPreview({ osEntries, linboSettings, getIconUrl }: LinboG
     <div
       className="relative rounded-xl overflow-hidden select-none"
       style={{
-        background: 'linear-gradient(135deg, #0f172a 0%, #0d3b4e 50%, #134e4a 100%)',
+        background: 'linear-gradient(135deg, #061e33 0%, #0a3258 50%, #0e4070 100%)',
         aspectRatio: '16 / 10',
         fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
       }}
@@ -77,7 +77,7 @@ export function LinboGuiPreview({ osEntries, linboSettings, getIconUrl }: LinboG
       <div
         className="absolute inset-0 opacity-10"
         style={{
-          backgroundImage: 'radial-gradient(circle at 20% 80%, rgba(56,189,248,0.3) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(20,184,166,0.3) 0%, transparent 50%)',
+          backgroundImage: 'radial-gradient(circle at 20% 80%, rgba(0,129,198,0.3) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(0,100,180,0.3) 0%, transparent 50%)',
         }}
       />
 
@@ -264,21 +264,21 @@ function OsCard({ os, getIconUrl, labels, isMinimal, isDisabled, isSingleColumn 
             <ActionButton
               icon={<RefreshCw className="w-2.5 h-2.5 sm:w-3 sm:h-3" />}
               label={isMinimal ? '' : labels.syncStart}
-              color="#4caf50"
+              color="#8fc046"
             />
           )}
           {os.startEnabled && (
             <ActionButton
               icon={<Play className="w-2.5 h-2.5 sm:w-3 sm:h-3" />}
               label={isMinimal ? '' : labels.start}
-              color="#f59c00"
+              color="#0081c6"
             />
           )}
           {os.newEnabled && (
             <ActionButton
               icon={<RotateCcw className="w-2.5 h-2.5 sm:w-3 sm:h-3" />}
               label={isMinimal ? '' : labels.newStart}
-              color="#e65100"
+              color="#dc2626"
             />
           )}
         </div>

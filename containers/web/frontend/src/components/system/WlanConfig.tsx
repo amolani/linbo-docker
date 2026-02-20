@@ -115,7 +115,7 @@ export function WlanConfig() {
   return (
     <div className="bg-card shadow-sm rounded-lg p-6">
       <div className="flex items-center space-x-3 mb-4">
-        <div className={`rounded-md p-2 ${isEnabled ? 'bg-blue-500' : 'bg-gray-500'}`}>
+        <div className={`rounded-md p-2 ${isEnabled ? 'bg-primary' : 'bg-gray-500'}`}>
           {isEnabled ? (
             <Wifi className="h-5 w-5 text-white" />
           ) : (
@@ -131,10 +131,10 @@ export function WlanConfig() {
       </div>
 
       {/* Info banner */}
-      <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-md">
+      <div className="mb-4 p-3 bg-primary/10 border border-primary/20 rounded-md">
         <div className="flex items-start space-x-2">
-          <Info className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
-          <p className="text-sm text-blue-300">
+          <Info className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+          <p className="text-sm text-primary">
             Diese Konfiguration gilt nur fuer das LINBO-Client-Netzwerk (PXE-Boot).
             Das installierte Betriebssystem (Windows/Linux) ist davon nicht betroffen.
           </p>
@@ -143,13 +143,13 @@ export function WlanConfig() {
 
       {/* Status messages */}
       {error && (
-        <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-md">
-          <p className="text-sm text-red-300">{error}</p>
+        <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md">
+          <p className="text-sm text-destructive">{error}</p>
         </div>
       )}
       {success && (
-        <div className="mb-4 p-3 bg-green-500/10 border border-green-500/20 rounded-md">
-          <p className="text-sm text-green-300">{success}</p>
+        <div className="mb-4 p-3 bg-ciGreen/10 border border-ciGreen/20 rounded-md">
+          <p className="text-sm text-ciGreen">{success}</p>
         </div>
       )}
 
@@ -240,7 +240,7 @@ export function WlanConfig() {
               <button
                 onClick={handleDisable}
                 disabled={isSaving}
-                className="flex items-center space-x-1 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 rounded-md transition-colors disabled:opacity-50"
+                className="flex items-center space-x-1 px-3 py-2 text-sm text-destructive hover:bg-destructive/10 rounded-md transition-colors disabled:opacity-50"
               >
                 <Trash2 className="h-4 w-4" />
                 <span>WLAN deaktivieren</span>

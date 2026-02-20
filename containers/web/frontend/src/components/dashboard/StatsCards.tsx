@@ -27,14 +27,14 @@ export function StatsCards({ stats, isLoading }: StatsCardsProps) {
       value: stats?.hosts.online || 0,
       total: stats?.hosts.total || 0,
       icon: Monitor,
-      color: 'bg-green-500',
+      color: 'bg-ciGreen',
       link: '/hosts',
     },
     {
       name: 'Räume',
       value: stats?.rooms || 0,
       icon: Building2,
-      color: 'bg-blue-500',
+      color: 'bg-primary',
       link: '/rooms',
     },
     {

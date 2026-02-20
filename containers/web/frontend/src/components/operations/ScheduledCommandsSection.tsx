@@ -97,7 +97,7 @@ export function ScheduledCommandsSection() {
               <button
                 onClick={() => setConfirmCancel(cmd)}
                 disabled={cancelingHost === cmd.hostname}
-                className="p-2 text-muted-foreground hover:text-red-400 disabled:opacity-50"
+                className="p-2 text-muted-foreground hover:text-destructive disabled:opacity-50"
               >
                 <Trash2 className="h-5 w-5" />
               </button>

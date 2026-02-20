@@ -84,12 +84,12 @@ export function GrubThemeManager() {
     <div className="space-y-6">
       {/* Messages */}
       {error && (
-        <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-md">
+        <div className="bg-destructive/10 border border-destructive/30 text-destructive px-4 py-3 rounded-md">
           {error}
         </div>
       )}
       {success && (
-        <div className="bg-green-500/10 border border-green-500/30 text-green-400 px-4 py-3 rounded-md">
+        <div className="bg-ciGreen/10 border border-ciGreen/30 text-ciGreen px-4 py-3 rounded-md">
           {success}
         </div>
       )}
@@ -479,7 +479,7 @@ function IconsTab({
                 <span className="text-[10px] text-primary">custom</span>
                 <button
                   onClick={() => handleDelete(icon.baseName)}
-                  className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 p-1"
+                  className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive/80 p-1"
                   title="Loeschen"
                 >
                   <Trash2 className="h-3 w-3" />

@@ -236,11 +236,11 @@ function DeviceRow({ device, vendor, configured, onAdd }: {
           {device.vendor}:{device.device}
         </span>
         {device.suggestedSet && (
-          <span className="ml-2 text-xs text-blue-500">{device.suggestedSet}</span>
+          <span className="ml-2 text-xs text-primary">{device.suggestedSet}</span>
         )}
       </div>
       {configured ? (
-        <span className="text-xs text-green-500 px-2 py-0.5 bg-green-500/10 rounded">Konfiguriert</span>
+        <span className="text-xs text-ciGreen px-2 py-0.5 bg-ciGreen/10 rounded">Konfiguriert</span>
       ) : (
         <button
           onClick={() => onAdd(device, vendor, device.suggestedSet)}

@@ -288,7 +288,7 @@ export function FirmwareManager() {
   if (error && !status) {
     return (
       <div className="bg-card shadow-sm rounded-lg p-6">
-        <div className="flex items-center space-x-2 text-red-400">
+        <div className="flex items-center space-x-2 text-destructive">
           <XCircle className="h-5 w-5" />
           <span>{error}</span>
         </div>
@@ -314,8 +314,8 @@ export function FirmwareManager() {
               <div className="flex items-center space-x-2 text-sm">
                 {status.rebuildRunning ? (
                   <>
-                    <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400" />
-                    <span className="text-blue-400">Rebuilding linbofs64...</span>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                    <span className="text-primary">Rebuilding linbofs64...</span>
                   </>
                 ) : (
                   <span className="text-muted-foreground">
@@ -362,20 +362,20 @@ export function FirmwareManager() {
 
         {/* Error message */}
         {error && (
-          <div className="mx-4 mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-md">
+          <div className="mx-4 mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md">
             <div className="flex items-center space-x-2">
-              <XCircle className="h-4 w-4 text-red-400" />
-              <p className="text-sm text-red-300">{error}</p>
+              <XCircle className="h-4 w-4 text-destructive" />
+              <p className="text-sm text-destructive">{error}</p>
             </div>
           </div>
         )}
 
         {/* Rebuild warning */}
         {status.rebuildRunning && (
-          <div className="mx-4 mt-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-md">
+          <div className="mx-4 mt-4 p-3 bg-primary/10 border border-primary/20 rounded-md">
             <div className="flex items-center space-x-2">
-              <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
-              <p className="text-sm text-blue-300">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              <p className="text-sm text-primary">
                 linbofs64 wird neu gebaut. Aenderungen werden beim naechsten Rebuild wirksam.
               </p>
             </div>
@@ -433,7 +433,7 @@ export function FirmwareManager() {
                       <span>Empfohlenes Set hinzufuegen ({recommendedMissing.length} Eintraege)</span>
                     </button>
                   ) : (
-                    <span className="flex items-center space-x-1 text-xs text-green-400">
+                    <span className="flex items-center space-x-1 text-xs text-ciGreen">
                       <CheckCircle className="h-3.5 w-3.5" />
                       <span>Alle empfohlenen Eintraege sind bereits konfiguriert</span>
                     </span>
@@ -528,10 +528,10 @@ export function FirmwareManager() {
         </div>
 
         {rebuildSuccess && (
-          <div className="mb-3 p-3 bg-green-500/10 border border-green-500/20 rounded-md">
+          <div className="mb-3 p-3 bg-ciGreen/10 border border-ciGreen/20 rounded-md">
             <div className="flex items-center space-x-2">
-              <CheckCircle className="h-4 w-4 text-green-400" />
-              <p className="text-sm text-green-300">{rebuildSuccess}</p>
+              <CheckCircle className="h-4 w-4 text-ciGreen" />
+              <p className="text-sm text-ciGreen">{rebuildSuccess}</p>
             </div>
           </div>
         )}
@@ -575,13 +575,13 @@ export function FirmwareManager() {
                       </td>
                       <td className="py-2.5 text-right">
                         {entry.exists ? (
-                          <span className="inline-flex items-center space-x-1 text-green-400 text-xs font-medium">
+                          <span className="inline-flex items-center space-x-1 text-ciGreen text-xs font-medium">
                             <CheckCircle className="h-3.5 w-3.5" />
                             <span>Verfuegbar</span>
                           </span>
                         ) : entry.error ? (
                           <span
-                            className="inline-flex items-center space-x-1 text-red-400 text-xs font-medium cursor-help"
+                            className="inline-flex items-center space-x-1 text-destructive text-xs font-medium cursor-help"
                             title={entry.error}
                           >
                             <XCircle className="h-3.5 w-3.5" />
@@ -597,7 +597,7 @@ export function FirmwareManager() {
                       <td className="py-2.5 text-right">
                         <button
                           onClick={() => setRemoveTarget(entry)}
-                          className="p-1 text-muted-foreground hover:text-red-400 rounded transition-colors"
+                          className="p-1 text-muted-foreground hover:text-destructive rounded transition-colors"
                           title="Entfernen"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -696,7 +696,7 @@ function VendorList({
                   <p className="text-xs text-muted-foreground">{vendor.description}</p>
                 </div>
               </div>
-              <span className={`text-xs font-medium ${vendor.configuredCount > 0 ? 'text-green-400' : 'text-muted-foreground'}`}>
+              <span className={`text-xs font-medium ${vendor.configuredCount > 0 ? 'text-ciGreen' : 'text-muted-foreground'}`}>
                 {vendor.configuredCount}/{vendor.totalCount} konfiguriert
               </span>
             </button>
@@ -780,7 +780,7 @@ function DirEntry({
       </div>
       <div>
         {entry.configured ? (
-          <span className="text-xs text-green-400 font-medium flex items-center space-x-1">
+          <span className="text-xs text-ciGreen font-medium flex items-center space-x-1">
             <CheckCircle className="h-3.5 w-3.5" />
             <span>Konfiguriert</span>
           </span>
@@ -844,11 +844,11 @@ function PrefixEntry({
     <div className="rounded-md bg-secondary/30 p-3">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center space-x-2">
-          <FileText className="h-4 w-4 text-blue-400 flex-shrink-0" />
+          <FileText className="h-4 w-4 text-primary flex-shrink-0" />
           <span className="text-sm font-mono text-foreground">{entry.path}*</span>
           <span className="text-xs text-muted-foreground">- {entry.description}</span>
         </div>
-        <span className={`text-xs font-medium ${entry.configuredCount > 0 ? 'text-green-400' : 'text-muted-foreground'}`}>
+        <span className={`text-xs font-medium ${entry.configuredCount > 0 ? 'text-ciGreen' : 'text-muted-foreground'}`}>
           {entry.configuredCount}/{entry.totalCount}
         </span>
       </div>
@@ -892,11 +892,11 @@ function PrefixEntry({
                   key={file}
                   className="flex items-center justify-between px-2 py-1 rounded hover:bg-secondary/80 group text-xs"
                 >
-                  <span className={`font-mono truncate ${isConfigured ? 'text-green-400' : 'text-foreground'}`}>
+                  <span className={`font-mono truncate ${isConfigured ? 'text-ciGreen' : 'text-foreground'}`}>
                     {file}
                   </span>
                   {isConfigured ? (
-                    <CheckCircle className="h-3 w-3 text-green-400 flex-shrink-0" />
+                    <CheckCircle className="h-3 w-3 text-ciGreen flex-shrink-0" />
                   ) : (
                     <button
                       onClick={() => onAdd(file)}

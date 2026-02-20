@@ -412,7 +412,7 @@ export function RemoteCommandModal({
                     <button
                       type="button"
                       onClick={() => removeCommand(cmd.id)}
-                      className="p-2 text-muted-foreground hover:text-red-400"
+                      className="p-2 text-muted-foreground hover:text-destructive"
                     >
                       <X className="h-5 w-5" />
                     </button>

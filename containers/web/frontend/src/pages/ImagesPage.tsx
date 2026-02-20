@@ -27,8 +27,8 @@ function formatDate(dateString: string | undefined): string {
 
 // Sidecar badge config
 const SIDECAR_BADGES = [
-  { key: 'hasInfo', label: 'I', title: 'Info (.info)', color: 'bg-blue-500/20 text-blue-400' },
-  { key: 'hasDesc', label: 'D', title: 'Beschreibung (.desc)', color: 'bg-green-500/20 text-green-400' },
+  { key: 'hasInfo', label: 'I', title: 'Info (.info)', color: 'bg-primary/20 text-primary' },
+  { key: 'hasDesc', label: 'D', title: 'Beschreibung (.desc)', color: 'bg-ciGreen/20 text-ciGreen' },
   { key: 'hasTorrent', label: 'T', title: 'Torrent (.torrent)', color: 'bg-purple-500/20 text-purple-400' },
   { key: 'hasMd5', label: 'M', title: 'Prüfsumme (.md5)', color: 'bg-yellow-500/20 text-yellow-400' },
   { key: 'hasReg', label: 'R', title: 'Registry (.reg)', color: 'bg-orange-500/20 text-orange-400' },
@@ -332,7 +332,7 @@ export function ImagesPage() {
           </button>
           <button
             onClick={() => setDeleteConfirmImage(image)}
-            className="text-red-400 hover:text-red-300 text-sm"
+            className="text-destructive hover:text-destructive/80 text-sm"
           >
             Löschen
           </button>
@@ -391,7 +391,7 @@ export function ImagesPage() {
                 <div className="grid grid-cols-2 gap-1 text-xs">
                   {Object.entries(detailImage.sidecars).map(([type, sc]) => (
                     <div key={type} className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full ${sc.exists ? 'bg-green-500' : 'bg-gray-600'}`} />
+                      <span className={`w-2 h-2 rounded-full ${sc.exists ? 'bg-ciGreen' : 'bg-gray-600'}`} />
                       <span className="font-mono">.{type}</span>
                       {sc.exists && sc.size != null && (
                         <span className="text-muted-foreground">{formatBytes(sc.size)}</span>
@@ -677,7 +677,7 @@ export function ImagesPage() {
               <span>Dateien auf dem Server löschen (inkl. Backups)</span>
             </label>
             {deleteWithFile && (
-              <div className="flex items-start gap-2 text-xs text-red-400 bg-red-500/10 rounded p-2">
+              <div className="flex items-start gap-2 text-xs text-destructive bg-destructive/10 rounded p-2">
                 <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
                 <span>Das gesamte Image-Verzeichnis wird unwiderruflich gelöscht!</span>
               </div>
