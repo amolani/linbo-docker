@@ -68,7 +68,7 @@ export function LinboGuiPreview({ osEntries, linboSettings, getIconUrl }: LinboG
     <div
       className="relative rounded-xl overflow-hidden select-none"
       style={{
-        background: 'linear-gradient(135deg, #061e33 0%, #0a3258 50%, #0e4070 100%)',
+        background: 'linear-gradient(135deg, #0a0a0a 0%, #0d1117 50%, #0a0f14 100%)',
         aspectRatio: '16 / 10',
         fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
       }}
@@ -77,7 +77,7 @@ export function LinboGuiPreview({ osEntries, linboSettings, getIconUrl }: LinboG
       <div
         className="absolute inset-0 opacity-10"
         style={{
-          backgroundImage: 'radial-gradient(circle at 20% 80%, rgba(0,129,198,0.3) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(0,100,180,0.3) 0%, transparent 50%)',
+          backgroundImage: 'radial-gradient(circle at 85% 10%, rgba(0,129,198,0.15) 0%, transparent 50%), radial-gradient(circle at 15% 90%, rgba(143,192,70,0.08) 0%, transparent 50%)',
         }}
       />
 
@@ -92,7 +92,7 @@ export function LinboGuiPreview({ osEntries, linboSettings, getIconUrl }: LinboG
             LINBO
           </h1>
           <div className="text-[9px] sm:text-[10px] text-white/40 tracking-wider mt-0.5">
-            {labels.by} linuxmuster.net
+            {labels.by} edulution
           </div>
         </div>
 
@@ -221,9 +221,9 @@ function OsCard({ os, getIconUrl, labels, isMinimal, isDisabled, isSingleColumn 
   return (
     <div
       className={`
-        rounded-lg border border-white/10 backdrop-blur-md
+        rounded border border-[#333333]
         transition-all duration-200
-        ${isDisabled ? 'opacity-50 pointer-events-none' : 'hover:border-white/20 hover:bg-white/[0.08]'}
+        ${isDisabled ? 'opacity-50 pointer-events-none' : 'hover:border-white/20 hover:bg-white/[0.06]'}
         ${isSingleColumn ? 'w-full max-w-md' : ''}
       `}
       style={{
@@ -318,10 +318,9 @@ interface StatusBarProps {
 function StatusBar({ labels, groupName, cacheDev }: StatusBarProps) {
   return (
     <div
-      className="rounded-lg border border-white/10 backdrop-blur-md px-3 py-1.5 sm:py-2"
+      className="rounded border border-[#333333] px-3 py-1.5 sm:py-2"
       style={{
         background: 'rgba(255,255,255,0.04)',
-        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
       }}
     >
       <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[8px] sm:text-[9px]">
