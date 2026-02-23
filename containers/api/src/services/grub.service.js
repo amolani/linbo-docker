@@ -274,10 +274,10 @@ async function generateConfigGrubConfig(configName, options = {}) {
     || process.env.LINBO_SERVER_IP
     || '$net_default_server';
 
-  // Build kernel options string (strip existing server=/group= to avoid duplicates)
-  const cleanKopts = kernelOptions.replace(/\bserver=\S+/g, '').replace(/\bgroup=\S+/g, '').replace(/\s+/g, ' ').trim();
+  // Build kernel options string (strip existing server=/group=/hostgroup= to avoid duplicates)
+  const cleanKopts = kernelOptions.replace(/\bserver=\S+/g, '').replace(/\bgroup=\S+/g, '').replace(/\bhostgroup=\S+/g, '').replace(/\s+/g, ' ').trim();
   const groupName = config?.name || options.groupName || '';
-  const kopts = `${cleanKopts} server=${server}${groupName ? ` group=${groupName}` : ''}`.trim();
+  const kopts = `${cleanKopts} server=${server}${groupName ? ` group=${groupName} hostgroup=${groupName}` : ''}`.trim();
 
   // Find cache partition
   const cachePartition = findCachePartition(partitions);
@@ -414,8 +414,8 @@ async function generateMainGrubConfig() {
       // Build kernel options from config
       const ls = host.config.linboSettings || {};
       let kernelOptions = getLinboSetting(ls, 'KernelOptions') || 'quiet splash';
-      const cleanKopts = kernelOptions.replace(/\bserver=\S+/g, '').replace(/\bgroup=\S+/g, '').replace(/\s+/g, ' ').trim();
-      const kopts = `${cleanKopts} server=${server} group=${groupName}`.trim();
+      const cleanKopts = kernelOptions.replace(/\bserver=\S+/g, '').replace(/\bgroup=\S+/g, '').replace(/\bhostgroup=\S+/g, '').replace(/\s+/g, ' ').trim();
+      const kopts = `${cleanKopts} server=${server} group=${groupName} hostgroup=${groupName}`.trim();
 
       lines.push(`  if [ "$net_default_mac" = "${macLower}" -o "$net_default_mac" = "${macUpper}" ]; then`);
       lines.push(`    insmod http`);
@@ -435,7 +435,7 @@ async function generateMainGrubConfig() {
     orderBy: { updatedAt: 'desc' },
   });
   const defaultConfig = configs.find(c => c._count.hosts > 0) || configs[0];
-  const defaultGroup = defaultConfig ? `group=${defaultConfig.name}` : '';
+  const defaultGroup = defaultConfig ? `group=${defaultConfig.name} hostgroup=${defaultConfig.name}` : '';
 
   const template = await loadTemplate('grub.cfg.pxe');
   const content = applyTemplate(template, {

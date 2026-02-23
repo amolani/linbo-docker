@@ -7,19 +7,6 @@ set default=0
 
 insmod all_video
 
-# Debug: dump GRUB variables to screen (remove after debugging)
-echo "=== GRUB Debug ==="
-echo "net_default_hostname: $net_default_hostname"
-echo "net_default_mac: $net_default_mac"
-echo "net_default_ip: $net_default_ip"
-echo "net_default_server: $net_default_server"
-echo "pxe_default_server: $pxe_default_server"
-echo "hostname: $hostname"
-echo "group: $group"
-echo "prefix: $prefix"
-echo "=== End Debug ==="
-sleep 5
-
 # Try host-specific config (hostname from DHCP)
 if [ -n "$net_default_hostname" ]; then
   if [ -f $prefix/hostcfg/$net_default_hostname.cfg ]; then

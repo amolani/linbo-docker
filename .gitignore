@@ -86,3 +86,8 @@ Desktop.ini
 
 # Session exports
 2026-*.txt
+
+# Working repo clones
+repo/
+docs/repo/
+docs/export/
