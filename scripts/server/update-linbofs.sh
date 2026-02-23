@@ -288,6 +288,42 @@ if [ -f "$LINBO_DIR/start.conf" ]; then
 fi
 
 # =============================================================================
+# Step 10.4: Patch init.sh for standalone Docker operation
+# =============================================================================
+#
+# Problem: init.sh unconditionally overwrites LINBOSERVER with SERVERID (from
+# DHCP) when HOSTGROUP is set. In standard linuxmuster, DHCP server = LINBO
+# server, so this is fine. In Docker standalone (separate server), the DHCP
+# response comes from the production server, overwriting our cmdline server=.
+#
+# Fix: If server= was explicitly passed on the kernel cmdline, skip the
+# LINBOSERVER override so the cmdline value is preserved.
+#
+
+if [ -f "$WORKDIR/init.sh" ]; then
+    echo "Patching init.sh for standalone operation..."
+
+    # Guard the LINBOSERVER="${SERVERID}" override with a cmdline check.
+    # Original: unconditionally overwrites LINBOSERVER when HOSTGROUP is set.
+    # Patched: only overwrite if server= was NOT on the kernel cmdline.
+    #
+    # For every line containing both LINBOSERVER and SERVERID (the override),
+    # prepend `grep -q "server=" /proc/cmdline ||` to skip it when server= is on cmdline.
+    # This is safe because:
+    # - In standard linuxmuster (no server= on cmdline): override still happens (unchanged behavior)
+    # - In Docker standalone (server= on cmdline): override is skipped (LINBOSERVER preserved)
+    sed -i '/LINBOSERVER.*SERVERID/{/grep -q/!s#^\([[:space:]]*\)#\1grep -q "server=" /proc/cmdline || #}' \
+        "$WORKDIR/init.sh"
+
+    if grep -q 'grep -q "server=" /proc/cmdline' "$WORKDIR/init.sh"; then
+        echo "  - init.sh patched: LINBOSERVER override guarded by cmdline check"
+    else
+        echo "  WARNING: init.sh patch did not apply (format may have changed)"
+        echo "  Continuing without patch — DHCP-based setups still work"
+    fi
+fi
+
+# =============================================================================
 # Step 10.5: Inject firmware files
 # =============================================================================
 

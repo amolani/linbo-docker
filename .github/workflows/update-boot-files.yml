@@ -120,6 +120,15 @@ jobs:
           fi
           cp -r extracted/srv/linbo/icons/* ../boot-files/icons/ 2>/dev/null || true
 
+          # LINBO GUI archive (required for client GUI)
+          if [ -f "extracted/srv/linbo/linbo_gui64_7.tar.lz" ]; then
+            cp "extracted/srv/linbo/linbo_gui64_7.tar.lz" ../boot-files/
+            echo "  - linbo_gui64_7.tar.lz copied"
+          fi
+          if [ -f "extracted/srv/linbo/linbo_gui64_7.tar.lz.md5" ]; then
+            cp "extracted/srv/linbo/linbo_gui64_7.tar.lz.md5" ../boot-files/
+          fi
+
           # Kernel variants (stable, longterm, legacy)
           echo "Extracting kernel variants..."
           mkdir -p ../boot-files/kernels
@@ -254,6 +263,7 @@ jobs:
             - `linbo64` - LINBO Linux kernel (from stable variant)
             - `linbofs64` - LINBO initramfs (built from template + stable modules)
             - `linbofs64.xz` - LINBO initramfs template (base without modules)
+            - `linbo_gui64_7.tar.lz` - LINBO Qt GUI binary archive
             - `boot/grub/` - GRUB bootloader files
             - `icons/` - OS icons for LINBO GUI
             - `kernels/` - Kernel variants (stable, longterm, legacy)
