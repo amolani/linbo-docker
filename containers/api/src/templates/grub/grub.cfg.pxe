@@ -5,12 +5,131 @@
 set timeout=0
 set default=0
 
+set prefix=/boot/grub
+set netroot="(tftp)"
+
 insmod all_video
+
+# === REBOOT CHECK: load grubenv from cache partition ===
+# When LINBO's "Start" writes reboot_grub/reboot_label to grubenv,
+# we must check it BEFORE loading any group config.
+
+# look for reboot grubenv pipe on server
+set remote_grubenv=$prefix/spool/${net_pxe_hostname}.reboot
+if [ -s "$remote_grubenv" ]; then
+  echo -n Loading remote grub environment ...
+  load_env -f "$remote_grubenv"
+fi
+
+# if reboot variable not set from server, try local cache partition
+if [ -z "$reboot_grub" ]; then
+  if search --set root --file /start.conf; then
+    set localroot="${root}"
+    if [ -s /boot/grub/grubenv ]; then
+      echo -n Loading local grub environment ...
+      load_env
+      set localboot=yes
+      echo
+    fi
+  else
+    clear
+  fi
+fi
+
+# if reboot is set, boot the OS on the given partition
+if [ -n "${reboot_label}" ]; then
+  search --label "$reboot_label" --set tmproot
+fi
+if [ -n "${reboot_grub}" -a -z "${tmproot}" ]; then
+  set tmproot="${reboot_grub}"
+fi
+
+if [ -n "${tmproot}" ]; then
+  terminal_output console
+  echo Booting operating system ...
+  echo
+
+  # clear reboot variables so next boot returns to LINBO
+  if [ "$localboot" ]; then
+    set reboot_grub=""
+    set reboot_label=""
+    save_env reboot_grub
+    save_env reboot_label
+  fi
+  set root="${tmproot}"
+  set win_efiloader="/EFI/Microsoft/Boot/bootmgfw.efi"
+
+  if [ -e "$reboot_kernel" -a -e "$reboot_initrd" ]; then
+    linux $reboot_kernel $reboot_append
+    initrd $reboot_initrd
+    boot
+  elif [ -e /boot/vmlinuz -a -e /boot/initrd.img ]; then
+    linux /boot/vmlinuz $reboot_append
+    initrd /boot/initrd.img
+    boot
+  elif [ -e /boot/vmlinuz -a -e /boot/initrd ]; then
+    linux /boot/vmlinuz $reboot_append
+    initrd /boot/initrd
+    boot
+  elif [ -e /vmlinuz -a -e /initrd.img ]; then
+    linux /vmlinuz $reboot_append
+    initrd /initrd.img
+    boot
+  elif [ -e /vmlinuz -a -e /initrd ]; then
+    linux /vmlinuz $reboot_append
+    initrd /initrd
+    boot
+  elif [ -s /boot/grub/grub.cfg ] ; then
+    configfile /boot/grub/grub.cfg
+  elif [ "$grub_platform" = "pc" ]; then
+    if [ -s /bootmgr ] ; then
+      ntldr /bootmgr
+      boot
+    elif [ -s /ntldr ] ; then
+      ntldr /ntldr
+      boot
+    elif [ -s /grldr ] ; then
+      ntldr /grldr
+      boot
+    else
+      chainloader +1
+      boot
+    fi
+  elif [ -e "$win_efiloader" ]; then
+    chainloader $win_efiloader
+    boot
+  fi
+fi
+
+# === NORMAL BOOT: load group/host config ===
+set root="${netroot}"
+
+# compute path to group specific config (EFI extensionspath from DHCP)
+if [ "$grub_platform" = "efi" ]; then
+  if [ -n "$net_efinet0_extensionspath" ]; then
+    set group="$net_efinet0_extensionspath"
+    set net_pxe_hostname="$net_efinet0_hostname"
+  elif [ -n "$net_efinet1_extensionspath" ]; then
+    set group="$net_efinet1_extensionspath"
+    set net_pxe_hostname="$net_efinet1_hostname"
+  elif [ -n "$net_efinet2_extensionspath" ]; then
+    set group="$net_efinet2_extensionspath"
+    set net_pxe_hostname="$net_efinet2_hostname"
+  fi
+else
+  set group="$net_pxe_extensionspath"
+fi
 
 # Try host-specific config (hostname from DHCP)
 if [ -n "$net_default_hostname" ]; then
   if [ -f $prefix/hostcfg/$net_default_hostname.cfg ]; then
     source $prefix/hostcfg/$net_default_hostname.cfg
+    set cfg_loaded=1
+  fi
+fi
+if [ -z "$cfg_loaded" -a -n "$net_pxe_hostname" ]; then
+  if [ -f $prefix/hostcfg/$net_pxe_hostname.cfg ]; then
+    source $prefix/hostcfg/$net_pxe_hostname.cfg
     set cfg_loaded=1
   fi
 fi
@@ -21,10 +140,11 @@ if [ -z "$cfg_loaded" -a -n "$hostname" ]; then
   fi
 fi
 
-# Try group config (group variable from DHCP)
+# Try group config (group variable from DHCP or extensionspath)
 if [ -z "$cfg_loaded" -a -n "$group" ]; then
-  if [ -f $prefix/$group.cfg ]; then
-    source $prefix/$group.cfg
+  set groupcfg="$prefix/${group}.cfg"
+  if [ -f "$groupcfg" ]; then
+    source "$groupcfg"
     set cfg_loaded=1
   fi
 fi
@@ -32,11 +152,28 @@ fi
 # MAC-based config lookup (for proxy DHCP without hostname)
 @@mac_mapping@@
 
+# Try local boot if we have a local root from cache
+if [ -z "$cfg_loaded" -a -n "$localroot" ]; then
+  set root="${localroot}"
+  set customcfg=$prefix/custom.cfg
+  if [ -s "$customcfg" ]; then
+    configfile $customcfg
+  fi
+fi
+
 # Fallback: boot LINBO with default config
 if [ -z "$cfg_loaded" ]; then
+  set root="${netroot}"
   insmod http
   set http_root="(http,@@server@@:@@httpport@@)"
-  linux ${http_root}/linbo64 quiet splash server=@@server@@ @@default_group@@
-  initrd ${http_root}/linbofs64
+  set gfxpayload=800x600x16
+  set linbo_kernel=/linbo64
+  set linbo_initrd=/linbofs64
+  echo "LINBO netboot (fallback)"
+  echo -n "Loading $linbo_kernel ..."
+  linux ${http_root}$linbo_kernel quiet splash server=@@server@@ @@default_group@@
+  echo
+  echo -n "Loading $linbo_initrd ..."
+  initrd ${http_root}$linbo_initrd
   boot
 fi

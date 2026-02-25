@@ -370,17 +370,20 @@ router.post(
       // Invalidate cache
       await redis.delPattern('hosts:*');
 
-      // Generate GRUB config and start.conf symlink for new host
+      // Generate GRUB config, start.conf, and symlinks for new host
       if (host.config) {
         try {
+          // Ensure config is deployed (start.conf file exists)
+          await configService.deployConfig(host.config.id);
+          // Create host GRUB symlink
           await grubService.generateHostGrubConfig(host.hostname, host.config.name);
-        } catch (error) {
-          console.error('[Hosts] Failed to generate GRUB config:', error.message);
-        }
-        try {
+          // Create IP-based start.conf symlinks
           await configService.createHostSymlinks(host.config.id);
+          // Regenerate main grub.cfg (MAC-based inline boot mapping)
+          await grubService.generateMainGrubConfig();
+          console.log(`[Hosts] Auto-deployed config ${host.config.name} for new host ${host.hostname}`);
         } catch (error) {
-          console.error('[Hosts] Failed to create start.conf symlinks:', error.message);
+          console.error('[Hosts] Failed to auto-deploy config:', error.message);
         }
       }
 
@@ -470,14 +473,17 @@ router.patch(
       // Regenerate GRUB config and start.conf symlinks for updated host
       if (host.config) {
         try {
+          // Ensure config is deployed (start.conf file exists)
+          await configService.deployConfig(host.config.id);
+          // Create/update host GRUB symlink
           await grubService.generateHostGrubConfig(host.hostname, host.config.name);
-        } catch (error) {
-          console.error('[Hosts] Failed to regenerate GRUB config:', error.message);
-        }
-        try {
+          // Create/update IP-based start.conf symlinks
           await configService.createHostSymlinks(host.config.id);
+          // Regenerate main grub.cfg (MAC-based inline boot mapping)
+          await grubService.generateMainGrubConfig();
+          console.log(`[Hosts] Auto-deployed config ${host.config.name} for host ${host.hostname}`);
         } catch (error) {
-          console.error('[Hosts] Failed to update start.conf symlinks:', error.message);
+          console.error('[Hosts] Failed to auto-deploy config:', error.message);
         }
       }
 
