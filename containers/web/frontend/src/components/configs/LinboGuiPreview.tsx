@@ -316,30 +316,32 @@ interface StatusBarProps {
 }
 
 function StatusBar({ labels, groupName, cacheDev }: StatusBarProps) {
+  const items = [
+    { label: labels.hostname, value: '---' },
+    { label: labels.group, value: groupName },
+    { label: labels.ip, value: '---' },
+    { label: labels.hdd, value: '---' },
+    { label: labels.cache, value: cacheDev },
+    { label: labels.ram, value: '---' },
+  ];
+
   return (
     <div
-      className="rounded border border-[#333333] px-3 py-1.5 sm:py-2"
+      className="px-3 py-1.5 sm:py-2"
       style={{
-        background: 'rgba(255,255,255,0.04)',
+        background: 'rgba(255,255,255,0.02)',
       }}
     >
-      <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[8px] sm:text-[9px]">
-        <StatusItem label={labels.hostname} value="---" />
-        <StatusItem label={labels.group} value={groupName} />
-        <StatusItem label={labels.ip} value="---" />
-        <StatusItem label={labels.hdd} value="---" />
-        <StatusItem label={labels.cache} value={cacheDev} />
-        <StatusItem label={labels.ram} value="---" />
+      <div className="flex flex-wrap gap-y-0.5 text-[8px] sm:text-[9px] items-center">
+        {items.map((item, i) => (
+          <span key={item.label} className="flex items-center">
+            {i > 0 && <span className="text-white/15 mx-2">&middot;</span>}
+            <span className="text-white/25">{item.label}: </span>
+            <span className="text-white/50 font-medium">{item.value}</span>
+          </span>
+        ))}
       </div>
     </div>
   );
 }
 
-function StatusItem({ label, value }: { label: string; value: string }) {
-  return (
-    <span>
-      <span className="text-white/30">{label}: </span>
-      <span className="text-white/60 font-medium">{value}</span>
-    </span>
-  );
-}

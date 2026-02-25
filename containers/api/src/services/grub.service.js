@@ -182,7 +182,7 @@ function getPartitionNumber(device) {
 function getOsPartitionIndex(partitions, rootDevice) {
   if (!partitions || !Array.isArray(partitions) || !rootDevice) return 1;
 
-  const index = partitions.findIndex(p => p.dev === rootDevice);
+  const index = partitions.findIndex(p => p.device === rootDevice);
   return index >= 0 ? index + 1 : 1;
 }
 
@@ -233,7 +233,7 @@ function applyTemplate(template, replacements) {
  */
 function getOsLabel(partitions, rootDevice) {
   if (!partitions || !rootDevice) return '';
-  const partition = partitions.find(p => p.dev === rootDevice);
+  const partition = partitions.find(p => p.device === rootDevice);
   return partition?.label || '';
 }
 
@@ -282,7 +282,7 @@ async function generateConfigGrubConfig(configName, options = {}) {
   // Find cache partition
   const cachePartition = findCachePartition(partitions);
   const cacheLabel = cachePartition?.label || '';
-  const cacheRoot = cachePartition ? getGrubPart(cachePartition.dev) : '(hd0,2)';
+  const cacheRoot = cachePartition ? getGrubPart(cachePartition.device) : '(hd0,2)';
 
   // Get theme config for background color
   let themeConfig;
@@ -415,11 +415,13 @@ async function generateMainGrubConfig() {
       const ls = host.config.linboSettings || {};
       let kernelOptions = getLinboSetting(ls, 'KernelOptions') || 'quiet splash';
       const cleanKopts = kernelOptions.replace(/\bserver=\S+/g, '').replace(/\bgroup=\S+/g, '').replace(/\bhostgroup=\S+/g, '').replace(/\s+/g, ' ').trim();
-      const kopts = `${cleanKopts} server=${server} group=${groupName} hostgroup=${groupName}`.trim();
+      // Prefer server from config linboSettings, then env, then default
+      const configServer = getLinboSetting(ls, 'Server') || server;
+      const kopts = `${cleanKopts} server=${configServer} group=${groupName} hostgroup=${groupName}`.trim();
 
       lines.push(`  if [ "$net_default_mac" = "${macLower}" -o "$net_default_mac" = "${macUpper}" ]; then`);
       lines.push(`    insmod http`);
-      lines.push(`    set http_root="(http,${server}:${httpport})"`);
+      lines.push(`    set http_root="(http,${configServer}:${httpport})"`);
       lines.push(`    linux \${http_root}/linbo64 ${kopts}`);
       lines.push(`    initrd \${http_root}/linbofs64`);
       lines.push(`    boot`);

@@ -45,6 +45,32 @@ async function regenerateGrubForConfig(configId, configName = null) {
 }
 
 /**
+ * Auto-deploy a config: generate start.conf + GRUB + host symlinks
+ * Called automatically on config create, update, and host assignment
+ * @param {string} configId - The config ID
+ * @param {string} [context] - Calling context for log messages
+ */
+async function autoDeployConfig(configId, context = 'auto') {
+  try {
+    // Deploy start.conf file
+    const result = await configService.deployConfig(configId);
+    console.log(`[Configs] ${context}: deployed start.conf → ${result.filepath}`);
+
+    // Create/update IP-based symlinks for assigned hosts
+    const symlinkCount = await configService.createHostSymlinks(configId);
+
+    // Regenerate GRUB configs (config-specific + main grub.cfg with MAC mapping)
+    const grubResult = await grubService.regenerateAllGrubConfigs();
+    console.log(`[Configs] ${context}: ${grubResult.configs} GRUB configs, ${grubResult.hosts} host symlinks, ${symlinkCount} IP symlinks`);
+
+    return { deployed: true, symlinkCount, grubResult };
+  } catch (error) {
+    console.error(`[Configs] ${context}: auto-deploy failed:`, error.message);
+    return { deployed: false, error: error.message };
+  }
+}
+
+/**
  * GET /configs
  * List all configurations
  */
@@ -210,6 +236,9 @@ router.post(
       // Invalidate cache
       await redis.delPattern('configs:*');
 
+      // Auto-deploy: generate start.conf + GRUB files immediately
+      await autoDeployConfig(config.id, 'config.create');
+
       // Broadcast WS event for reactive frontend
       ws.broadcast('config.created', { id: config.id, name: config.name });
 
@@ -303,8 +332,8 @@ router.patch(
         }
       }
 
-      // Regenerate GRUB configs for groups using this config
-      await regenerateGrubForConfig(req.params.id);
+      // Auto-deploy: regenerate start.conf + GRUB files
+      await autoDeployConfig(req.params.id, 'config.update');
 
       // Broadcast WS event for reactive frontend
       ws.broadcast('config.updated', { id: config.id, name: config.name });
