@@ -1,11 +1,21 @@
 /**
  * LINBO Docker - Auth Routes
  * POST /auth/login, /auth/logout, GET /auth/me
+ *
+ * Supports two modes:
+ *   1. Standalone (Prisma): full user management via database
+ *   2. Sync/env-login: ADMIN_PASSWORD env var for admin access (no DB needed)
  */
 
 const express = require('express');
 const router = express.Router();
-const { prisma } = require('../lib/prisma');
+
+// Prisma is optional — may not be available in sync mode
+let prisma = null;
+try {
+  prisma = require('../lib/prisma').prisma;
+} catch {}
+
 const {
   generateToken,
   comparePassword,
@@ -13,11 +23,19 @@ const {
   hashPassword,
 } = require('../middleware/auth');
 const { validateBody, loginSchema, createUserSchema } = require('../middleware/validate');
-const { auditAction } = require('../middleware/audit');
+
+// Audit middleware: optional (depends on Prisma)
+let auditAction;
+try {
+  auditAction = require('../middleware/audit').auditAction;
+} catch {
+  auditAction = () => (req, res, next) => next();
+}
 
 /**
  * POST /auth/login
- * Authenticate user and return JWT token
+ * Authenticate user and return JWT token.
+ * Checks env-based admin credentials first, then falls back to Prisma DB.
  */
 router.post(
   '/login',
@@ -32,10 +50,53 @@ router.post(
     try {
       const { username, password } = req.body;
 
-      // Find user by username
-      const user = await prisma.user.findUnique({
-        where: { username },
-      });
+      // --- Env-based admin login (works without DB) ---
+      const ADMIN_USER = process.env.ADMIN_USERNAME || 'admin';
+      const ADMIN_PASS = process.env.ADMIN_PASSWORD;
+
+      if (ADMIN_PASS && username === ADMIN_USER && password === ADMIN_PASS) {
+        const token = generateToken({
+          id: 'env-admin',
+          username: ADMIN_USER,
+          email: null,
+          role: 'admin',
+        });
+        return res.json({
+          data: {
+            token,
+            user: {
+              id: 'env-admin',
+              username: ADMIN_USER,
+              role: 'admin',
+            },
+          },
+        });
+      }
+
+      // --- Prisma DB user lookup ---
+      if (!prisma) {
+        return res.status(401).json({
+          error: {
+            code: 'INVALID_CREDENTIALS',
+            message: 'Invalid username or password',
+          },
+        });
+      }
+
+      let user;
+      try {
+        user = await prisma.user.findUnique({
+          where: { username },
+        });
+      } catch (err) {
+        console.error('[Auth] Prisma lookup failed:', err.message);
+        return res.status(503).json({
+          error: {
+            code: 'SERVICE_UNAVAILABLE',
+            message: 'Database not available',
+          },
+        });
+      }
 
       if (!user) {
         return res.status(401).json({
@@ -68,10 +129,14 @@ router.post(
       }
 
       // Update last login
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { lastLogin: new Date() },
-      });
+      try {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { lastLogin: new Date() },
+        });
+      } catch {
+        // Non-critical — don't fail login if update fails
+      }
 
       // Generate token
       const token = generateToken(user);
@@ -103,7 +168,6 @@ router.post(
   auditAction('auth.logout'),
   async (req, res) => {
     // In a stateless JWT setup, logout is handled client-side
-    // For enhanced security, you could add token to a blocklist in Redis
     res.json({
       data: {
         message: 'Logged out successfully',
@@ -118,18 +182,68 @@ router.post(
  */
 router.get('/me', authenticateToken, async (req, res, next) => {
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        role: true,
-        active: true,
-        lastLogin: true,
-        createdAt: true,
-      },
-    });
+    // Env-admin user: return static data (no DB lookup)
+    if (req.user.id === 'env-admin') {
+      return res.json({
+        data: {
+          id: 'env-admin',
+          username: req.user.username,
+          email: null,
+          role: 'admin',
+          active: true,
+          lastLogin: null,
+          createdAt: null,
+        },
+      });
+    }
+
+    // Internal service user: return static data
+    if (req.user.id === 'internal') {
+      return res.json({
+        data: {
+          id: 'internal',
+          username: 'internal-service',
+          email: null,
+          role: 'admin',
+          active: true,
+          lastLogin: null,
+          createdAt: null,
+        },
+      });
+    }
+
+    if (!prisma) {
+      return res.status(503).json({
+        error: {
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'Database not available',
+        },
+      });
+    }
+
+    let user;
+    try {
+      user = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          role: true,
+          active: true,
+          lastLogin: true,
+          createdAt: true,
+        },
+      });
+    } catch (err) {
+      console.error('[Auth] Prisma lookup failed:', err.message);
+      return res.status(503).json({
+        error: {
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'Database not available',
+        },
+      });
+    }
 
     if (!user) {
       return res.status(404).json({
@@ -171,12 +285,31 @@ router.post(
         });
       }
 
+      if (!prisma) {
+        return res.status(503).json({
+          error: {
+            code: 'SERVICE_UNAVAILABLE',
+            message: 'Database not available. User management requires a database.',
+          },
+        });
+      }
+
       const { username, email, password, role } = req.body;
 
-      // Check if username exists
-      const existing = await prisma.user.findUnique({
-        where: { username },
-      });
+      let existing;
+      try {
+        existing = await prisma.user.findUnique({
+          where: { username },
+        });
+      } catch (err) {
+        console.error('[Auth] Prisma lookup failed:', err.message);
+        return res.status(503).json({
+          error: {
+            code: 'SERVICE_UNAVAILABLE',
+            message: 'Database not available',
+          },
+        });
+      }
 
       if (existing) {
         return res.status(409).json({
@@ -242,10 +375,39 @@ router.put(
         });
       }
 
-      // Get user with password hash
-      const user = await prisma.user.findUnique({
-        where: { id: req.user.id },
-      });
+      // Env-admin users cannot change password via API
+      if (req.user.id === 'env-admin') {
+        return res.status(400).json({
+          error: {
+            code: 'NOT_SUPPORTED',
+            message: 'Env-admin password is set via ADMIN_PASSWORD environment variable',
+          },
+        });
+      }
+
+      if (!prisma) {
+        return res.status(503).json({
+          error: {
+            code: 'SERVICE_UNAVAILABLE',
+            message: 'Database not available',
+          },
+        });
+      }
+
+      let user;
+      try {
+        user = await prisma.user.findUnique({
+          where: { id: req.user.id },
+        });
+      } catch (err) {
+        console.error('[Auth] Prisma lookup failed:', err.message);
+        return res.status(503).json({
+          error: {
+            code: 'SERVICE_UNAVAILABLE',
+            message: 'Database not available',
+          },
+        });
+      }
 
       // Verify current password
       const isValid = await comparePassword(currentPassword, user.passwordHash);

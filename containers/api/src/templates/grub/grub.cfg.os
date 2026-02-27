@@ -43,9 +43,17 @@ menuentry '@@osname@@ (Start)' --class @@ostype@@_start {
   else
    chainloader +1
   fi
- elif [ -e "$win_efiloader" ]; then
-  chainloader $win_efiloader
-  boot
+ elif [ "$grub_platform" = "efi" ]; then
+  set efiroot=""
+  search --no-floppy --file "$win_efiloader" --set efiroot
+  if [ -n "$efiroot" ]; then
+   set root="$efiroot"
+   chainloader "$win_efiloader"
+   boot
+  elif [ -e "$win_efiloader" ]; then
+   chainloader "$win_efiloader"
+   boot
+  fi
  fi
  terminal_output gfxterm
 

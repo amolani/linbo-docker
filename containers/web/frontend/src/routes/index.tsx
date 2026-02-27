@@ -16,6 +16,7 @@ import { FirmwarePage } from '@/pages/FirmwarePage';
 import { DriversPage } from '@/pages/DriversPage';
 import { GrubThemePage } from '@/pages/GrubThemePage';
 import { LinboGuiPage } from '@/pages/LinboGuiPage';
+import { SyncPage } from '@/pages/SyncPage';
 
 export function AppRoutes() {
   return (
@@ -150,6 +151,17 @@ export function AppRoutes() {
           <ProtectedRoute>
             <AppLayout>
               <LinboGuiPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/sync"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <SyncPage />
             </AppLayout>
           </ProtectedRoute>
         }

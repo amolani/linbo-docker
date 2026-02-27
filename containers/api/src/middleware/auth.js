@@ -1,11 +1,18 @@
 /**
  * LINBO Docker - Authentication Middleware
- * JWT and API Key authentication with role-based access control
+ * JWT and API Key authentication with role-based access control.
+ *
+ * Prisma is optional — API key auth degrades gracefully when DB is unavailable.
  */
 
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const { prisma } = require('../lib/prisma');
+
+// Prisma is optional (not available in sync/DB-free mode)
+let prisma = null;
+try {
+  prisma = require('../lib/prisma').prisma;
+} catch {}
 
 const JWT_SECRET = process.env.JWT_SECRET || 'linbo-docker-secret-change-in-production';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
@@ -109,6 +116,15 @@ async function authenticateApiKey(req, res, next) {
       error: {
         code: 'UNAUTHORIZED',
         message: 'API key required',
+      },
+    });
+  }
+
+  if (!prisma) {
+    return res.status(503).json({
+      error: {
+        code: 'SERVICE_UNAVAILABLE',
+        message: 'API key authentication requires a database connection',
       },
     });
   }

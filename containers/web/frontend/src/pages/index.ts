@@ -5,3 +5,4 @@ export { RoomsPage } from './RoomsPage';
 export { ConfigsPage } from './ConfigsPage';
 export { ImagesPage } from './ImagesPage';
 export { OperationsPage } from './OperationsPage';
+export { SyncPage } from './SyncPage';

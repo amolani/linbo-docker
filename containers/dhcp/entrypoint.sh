@@ -80,6 +80,10 @@ EOF
 fi
 
 echo "[DHCP] Config written to ${CONFIG_FILE}"
-echo "[DHCP] Starting dnsmasq..."
 
+# Start inotify watcher for live config reloads from sync.service
+/watch-config.sh &
+echo "[DHCP] Config watcher started (PID $!)"
+
+echo "[DHCP] Starting dnsmasq..."
 exec dnsmasq --no-daemon --conf-dir=/etc/dnsmasq.d --log-facility=-
