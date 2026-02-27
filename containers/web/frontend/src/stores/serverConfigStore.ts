@@ -1,15 +1,23 @@
 import { create } from 'zustand';
 import axios from 'axios';
+import { syncApi } from '@/api/sync';
 
 interface ServerConfigState {
   serverIp: string;
   fetched: boolean;
+  mode: 'sync' | 'standalone' | 'offline';
+  isSyncMode: boolean;
+  modeFetched: boolean;
   fetchServerConfig: () => Promise<void>;
+  fetchMode: () => Promise<void>;
 }
 
 export const useServerConfigStore = create<ServerConfigState>()((set, get) => ({
   serverIp: '10.0.0.1',
   fetched: false,
+  mode: 'standalone',
+  isSyncMode: false,
+  modeFetched: false,
 
   fetchServerConfig: async () => {
     if (get().fetched) return;
@@ -21,6 +29,21 @@ export const useServerConfigStore = create<ServerConfigState>()((set, get) => ({
     } catch {
       // Fallback bleibt 10.0.0.1
       set({ fetched: true });
+    }
+  },
+
+  fetchMode: async () => {
+    if (get().modeFetched) return;
+    try {
+      const data = await syncApi.getMode();
+      set({
+        mode: data.mode,
+        isSyncMode: data.mode === 'sync',
+        modeFetched: true,
+      });
+    } catch {
+      // Default to standalone on error
+      set({ mode: 'standalone', isSyncMode: false, modeFetched: true });
     }
   },
 }));

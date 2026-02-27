@@ -49,6 +49,11 @@ build/
 *~
 .DS_Store
 
+# Python
+__pycache__/
+*.pyc
+.coverage
+
 # Test coverage
 coverage/
 .nyc_output/

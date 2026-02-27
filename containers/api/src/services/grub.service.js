@@ -138,9 +138,9 @@ function findCachePartition(partitions) {
 
   // Then look for ext4/btrfs partition that's not a boot/efi partition
   const byFstype = partitions.find(p =>
-    (p.fstype === 'ext4' || p.fstype === 'btrfs') &&
-    p.id !== 'ef00' && // Not EFI
-    p.id !== '0c01' && // Not MS reserved
+    (p.fsType === 'ext4' || p.fsType === 'btrfs') &&
+    p.partitionId !== 'ef00' && // Not EFI
+    p.partitionId !== '0c01' && // Not MS reserved
     !p.label?.toLowerCase().includes('windows') &&
     !p.label?.toLowerCase().includes('efi')
   );
@@ -316,9 +316,10 @@ async function generateConfigGrubConfig(configName, options = {}) {
   for (let i = 0; i < osEntries.length; i++) {
     const os = osEntries[i];
     const osnr = i + 1; // 1-based index for linbocmd
-    const osLabel = getOsLabel(partitions, os.root);
-    const osRoot = getGrubPart(os.root);
-    const partnr = getOsPartitionIndex(partitions, os.root);
+    const effectiveRoot = os.root || os.rootDevice;
+    const osLabel = getOsLabel(partitions, effectiveRoot);
+    const osRoot = getGrubPart(effectiveRoot);
+    const partnr = getOsPartitionIndex(partitions, effectiveRoot);
 
     const osContent = applyTemplate(osTemplate, {
       group: configName,
@@ -328,7 +329,7 @@ async function generateConfigGrubConfig(configName, options = {}) {
       osroot: osRoot,
       kernel: os.kernel || '/boot/vmlinuz',
       initrd: os.initrd || '/boot/initrd.img',
-      append: os.append || '',
+      append: Array.isArray(os.append) ? os.append.join(' ') : (os.append || ''),
       osnr: String(osnr),
       partnr: String(partnr),
       kopts: kopts,

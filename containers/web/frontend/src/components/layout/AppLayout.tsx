@@ -1,8 +1,9 @@
-import { useState, ReactNode } from 'react';
+import { useState, useEffect, ReactNode } from 'react';
 import { Sidebar, MobileSidebar } from './Sidebar';
 import { Header } from './Header';
 import { ToastContainer } from '@/components/ui';
 import { useWebSocket, useHostStatusUpdates, useNotificationEvents } from '@/hooks/useWebSocket';
+import { useServerConfigStore } from '@/stores/serverConfigStore';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -10,10 +11,15 @@ interface AppLayoutProps {
 
 export function AppLayout({ children }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const fetchMode = useServerConfigStore((s) => s.fetchMode);
 
   useWebSocket();
   useHostStatusUpdates();
   useNotificationEvents();
+
+  useEffect(() => {
+    fetchMode();
+  }, [fetchMode]);
 
   return (
     <div className="flex h-screen bg-background">

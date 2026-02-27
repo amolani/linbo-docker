@@ -3,7 +3,12 @@
  * Records all API actions for compliance and debugging
  */
 
-const { prisma } = require('../lib/prisma');
+// Prisma is optional — audit logging degrades silently when DB is unavailable
+let prisma = null;
+try {
+  prisma = require('../lib/prisma').prisma;
+} catch {}
+
 const { v4: uuidv4 } = require('uuid');
 
 /**
@@ -40,6 +45,8 @@ async function createAuditLog({
   userAgent,
   requestId,
 }) {
+  if (!prisma) return; // No DB — skip audit silently
+
   try {
     await prisma.auditLog.create({
       data: {
@@ -163,6 +170,10 @@ async function queryAuditLogs({
   page = 1,
   limit = 50,
 }) {
+  if (!prisma) {
+    return { data: [], pagination: { page, limit, total: 0, pages: 0 } };
+  }
+
   const where = {};
 
   if (actor) where.actor = actor;

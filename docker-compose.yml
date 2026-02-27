@@ -103,28 +103,6 @@ services:
       retries: 3
 
   # =============================================================================
-  # PostgreSQL Database
-  # =============================================================================
-  db:
-    image: postgres:15-alpine
-    container_name: linbo-db
-    volumes:
-      - linbo_postgres_data:/var/lib/postgresql/data
-      - ./config/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    environment:
-      - POSTGRES_DB=linbo
-      - POSTGRES_USER=linbo
-      - POSTGRES_PASSWORD=${DB_PASSWORD:-linbo_secret_password}
-    networks:
-      - linbo-net
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U linbo"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # =============================================================================
   # Redis Cache
   # =============================================================================
   cache:
@@ -166,7 +144,11 @@ services:
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=3000
       - HOST=0.0.0.0
-      # Database (Prisma)
+      # Sync (LMN Authority API)
+      - SYNC_ENABLED=${SYNC_ENABLED:-false}
+      - LMN_API_URL=${LMN_API_URL:-http://10.0.0.11:8000}
+      - LMN_API_KEY=${LMN_API_KEY:-}
+      # Database
       - DATABASE_URL=postgresql://linbo:${DB_PASSWORD:-linbo_secret_password}@linbo-db:5432/linbo?schema=public
       # Redis
       - REDIS_HOST=linbo-cache
@@ -176,6 +158,8 @@ services:
       # Authentication
       - JWT_SECRET=${JWT_SECRET:-your_jwt_secret_here_change_in_production}
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-24h}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
       # SSH (for remote commands)
       - SSH_HOST=linbo-ssh
       - SSH_PORT=22
@@ -216,8 +200,6 @@ services:
       # Driver management (Phase 17)
       - PATCHCLASS_BASE=${PATCHCLASS_BASE:-/var/lib/linbo/drivers}
     depends_on:
-      db:
-        condition: service_healthy
       cache:
         condition: service_healthy
       ssh:
@@ -296,8 +278,6 @@ volumes:
     name: linbo_config
   linbo_log:
     name: linbo_log
-  linbo_postgres_data:
-    name: linbo_postgres_data
   linbo_redis_data:
     name: linbo_redis_data
   linbo_kernel_data:

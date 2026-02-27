@@ -32,9 +32,9 @@ const grubService = require('../../src/services/grub.service');
 
 // Test fixtures
 const mockPartitions = [
-  { dev: '/dev/sda1', label: 'EFI', size: '512M', id: 'ef00', fstype: 'vfat', position: 1 },
-  { dev: '/dev/sda2', label: 'windows', size: '100G', id: '0700', fstype: 'ntfs', position: 2 },
-  { dev: '/dev/sda3', label: 'cache', size: '50G', id: '8300', fstype: 'ext4', position: 3 },
+  { device: '/dev/sda1', label: 'EFI', size: '512M', partitionId: 'ef00', fsType: 'vfat', position: 1 },
+  { device: '/dev/sda2', label: 'windows', size: '100G', partitionId: '0700', fsType: 'ntfs', position: 2 },
+  { device: '/dev/sda3', label: 'cache', size: '50G', partitionId: '8300', fsType: 'ext4', position: 3 },
 ];
 
 const mockOsEntries = [
@@ -153,17 +153,17 @@ describe('GRUB Service', () => {
     test('should find partition by label "cache"', () => {
       const result = grubService.findCachePartition(mockPartitions);
       expect(result.label).toBe('cache');
-      expect(result.dev).toBe('/dev/sda3');
+      expect(result.device).toBe('/dev/sda3');
     });
 
     test('should find ext4 partition as fallback', () => {
       const partitionsWithoutCacheLabel = [
-        { dev: '/dev/sda1', label: 'EFI', fstype: 'vfat', id: 'ef00' },
-        { dev: '/dev/sda2', label: 'windows', fstype: 'ntfs', id: '0700' },
-        { dev: '/dev/sda3', label: 'data', fstype: 'ext4', id: '8300' },
+        { device: '/dev/sda1', label: 'EFI', fsType: 'vfat', partitionId: 'ef00' },
+        { device: '/dev/sda2', label: 'windows', fsType: 'ntfs', partitionId: '0700' },
+        { device: '/dev/sda3', label: 'data', fsType: 'ext4', partitionId: '8300' },
       ];
       const result = grubService.findCachePartition(partitionsWithoutCacheLabel);
-      expect(result.dev).toBe('/dev/sda3');
+      expect(result.device).toBe('/dev/sda3');
     });
 
     test('should return null for empty array', () => {
@@ -271,7 +271,7 @@ describe('GRUB Service', () => {
       expect(result.content).toContain('# LINBO Docker - Group GRUB Configuration');
       expect(result.content).toContain('Group: win11_efi_sata');
       expect(result.content).toContain('insmod all_video');
-      expect(result.content).toContain('insmod gfxterm');
+      expect(result.content).toContain('insmod http');
     });
 
     test('should include kernel options from config', async () => {
@@ -421,19 +421,17 @@ describe('GRUB Service', () => {
       const result = await grubService.generateConfigGrubConfig('win11_efi_sata');
 
       expect(result.content).toContain('insmod all_video');
-      expect(result.content).toContain('insmod png');
-      expect(result.content).toContain('insmod gfxterm');
-      expect(result.content).toContain('insmod gfxmenu');
-      expect(result.content).toContain('insmod progress');
+      expect(result.content).toContain('insmod http');
     });
 
-    test('should include theme settings', async () => {
+    test('should include boot variables and cache settings', async () => {
       prisma.config.findFirst.mockResolvedValue(mockConfig);
 
       const result = await grubService.generateConfigGrubConfig('win11_efi_sata');
 
-      expect(result.content).toContain('set theme=/boot/grub/themes/linbo/theme.txt');
-      expect(result.content).toContain('background_color');
+      expect(result.content).toContain('set linbo_kernel=/linbo64');
+      expect(result.content).toContain('set linbo_initrd=/linbofs64');
+      expect(result.content).toContain('set cachelabel=');
     });
 
     test('should include OS type class for icons', async () => {
@@ -513,6 +511,11 @@ describe('GRUB Service', () => {
   });
 
   describe('generateMainGrubConfig', () => {
+    beforeEach(() => {
+      prisma.host.findMany.mockResolvedValue([]);
+      prisma.config.findMany.mockResolvedValue([]);
+    });
+
     test('should generate main grub.cfg', async () => {
       const result = await grubService.generateMainGrubConfig();
 
@@ -540,15 +543,15 @@ describe('GRUB Service', () => {
       const result = await grubService.generateMainGrubConfig();
 
       expect(result.content).toContain('[ -z "$cfg_loaded" -a -n "$group" ]');
-      expect(result.content).toContain('source $prefix/$group.cfg');
+      expect(result.content).toContain('source "$groupcfg"');
     });
 
     test('should set cfg_loaded=1 after each source', async () => {
       const result = await grubService.generateMainGrubConfig();
 
       const matches = result.content.match(/set cfg_loaded=1/g);
-      // 3 source blocks (net_default_hostname, hostname, group) = 3 cfg_loaded=1
-      expect(matches.length).toBe(3);
+      // 4 source blocks (net_default_hostname, net_pxe_hostname, hostname, group) = 4 cfg_loaded=1
+      expect(matches.length).toBe(4);
     });
 
     test('should include direct boot fallback with HTTP and server from env', async () => {
@@ -557,16 +560,19 @@ describe('GRUB Service', () => {
       expect(result.content).toContain('if [ -z "$cfg_loaded" ]');
       expect(result.content).toContain('insmod http');
       expect(result.content).toContain('set http_root="(http,10.0.0.1:8080)"');
-      expect(result.content).toContain('linux ${http_root}/linbo64 quiet splash server=10.0.0.1');
-      expect(result.content).toContain('initrd ${http_root}/linbofs64');
+      expect(result.content).toContain('linux ${http_root}$linbo_kernel quiet splash server=10.0.0.1');
+      expect(result.content).toContain('initrd ${http_root}$linbo_initrd');
     });
 
-    test('should use nested if instead of && in elif', async () => {
+    test('should use nested if instead of && in host/group config section', async () => {
       const result = await grubService.generateMainGrubConfig();
 
-      // Should NOT contain the old-style && in elif
-      expect(result.content).not.toContain('elif');
-      expect(result.content).not.toContain('] && [');
+      // Host/group config loading section should use nested if, not elif or &&
+      const configSection = result.content.split('# === NORMAL BOOT')[1]?.split('# MAC-based')[0] || '';
+      expect(configSection).not.toContain('] && [');
+      // Uses nested if [...]; then / if [ -f ... ]; then pattern
+      expect(configSection).toContain('if [ -n "$net_default_hostname" ]');
+      expect(configSection).toContain('if [ -z "$cfg_loaded" -a -n "$hostname" ]');
     });
 
     test('should write file to grub directory', async () => {
@@ -588,6 +594,7 @@ describe('GRUB Service', () => {
             { hostname: 'host1' },
             { hostname: 'host2' },
           ],
+          _count: { hosts: 2 },
           linboSettings: mockConfig.linboSettings,
           partitions: mockConfig.partitions,
           osEntries: mockConfig.osEntries,
@@ -595,6 +602,7 @@ describe('GRUB Service', () => {
         {
           name: 'config2',
           hosts: [],
+          _count: { hosts: 0 },
           linboSettings: {},
           partitions: [],
           osEntries: [],
@@ -616,6 +624,7 @@ describe('GRUB Service', () => {
         {
           name: 'testconfig',
           hosts: [{ hostname: 'symlink-host' }],
+          _count: { hosts: 1 },
           linboSettings: mockConfig.linboSettings,
           partitions: mockConfig.partitions,
           osEntries: mockConfig.osEntries,

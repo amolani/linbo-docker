@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -19,10 +19,15 @@ import {
   WifiOff,
   LogOut,
   X,
+  RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { useWsStore } from '@/stores/wsStore';
+import { useServerConfigStore } from '@/stores/serverConfigStore';
+import { syncApi } from '@/api/sync';
+import { notify } from '@/stores/notificationStore';
 
 const mainNavigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -37,6 +42,7 @@ const configNavigation = [
 ];
 
 const systemNavigation = [
+  { name: 'Sync', href: '/sync', icon: RefreshCw },
   { name: 'Operationen', href: '/operations', icon: ClipboardList },
   { name: 'Kernel', href: '/kernel', icon: Cpu },
   { name: 'Firmware', href: '/firmware', icon: Package },
@@ -47,8 +53,24 @@ const systemNavigation = [
 
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const { user, logout } = useAuth();
   const { isConnected } = useWsStore();
+  const { isSyncMode } = useServerConfigStore();
+
+  const handleQuickSync = useCallback(async () => {
+    setIsSyncing(true);
+    try {
+      const result = await syncApi.trigger();
+      const s = result.stats;
+      notify.success('Sync abgeschlossen', `${s.hosts} Hosts, ${s.configs} Configs, ${s.startConfs} start.confs`);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Sync fehlgeschlagen';
+      notify.error('Sync Fehler', msg);
+    } finally {
+      setIsSyncing(false);
+    }
+  }, []);
 
   return (
     <div className="hidden lg:flex lg:flex-shrink-0">
@@ -91,6 +113,31 @@ export function Sidebar() {
 
           {/* Footer */}
           <div className="flex-shrink-0 border-t border-border p-2 space-y-1">
+            {/* Quick Sync Button (sync mode only) */}
+            {isSyncMode && (
+              <button
+                onClick={handleQuickSync}
+                disabled={isSyncing}
+                className={cn(
+                  'flex items-center w-full px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                  isSyncing
+                    ? 'bg-primary/20 text-primary cursor-wait'
+                    : 'text-primary hover:bg-primary/10',
+                  collapsed ? 'justify-center' : ''
+                )}
+                title={collapsed ? 'Jetzt synchronisieren' : undefined}
+              >
+                {isSyncing ? (
+                  <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4 flex-shrink-0" />
+                )}
+                {!collapsed && (
+                  <span className="ml-3">{isSyncing ? 'Synchronisiere...' : 'Jetzt syncen'}</span>
+                )}
+              </button>
+            )}
+
             {/* WebSocket Status */}
             <div className={cn(
               'flex items-center px-3 py-2 text-xs rounded-md',

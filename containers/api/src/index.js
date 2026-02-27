@@ -15,8 +15,18 @@ require('dotenv').config();
 // BigInt JSON serialization support
 BigInt.prototype.toJSON = function () { return Number(this); };
 
-// Import libraries
-const { prisma, connectWithRetry, disconnect: disconnectPrisma } = require('./lib/prisma');
+// Import libraries — Prisma is optional (DB-free mode when SYNC_ENABLED)
+let prisma, connectWithRetry, disconnectPrisma;
+try {
+  const prismaLib = require('./lib/prisma');
+  prisma = prismaLib.prisma;
+  connectWithRetry = prismaLib.connectWithRetry;
+  disconnectPrisma = prismaLib.disconnect;
+} catch {
+  prisma = null;
+  connectWithRetry = async () => {};
+  disconnectPrisma = async () => {};
+}
 const redis = require('./lib/redis');
 const websocket = require('./lib/websocket');
 const WebSocket = require('ws');
@@ -71,13 +81,17 @@ app.get('/health', async (req, res) => {
     },
   };
 
-  // Check database connection
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    health.services.database = 'up';
-  } catch (err) {
-    health.services.database = 'down';
-    health.status = 'degraded';
+  // Check database connection (optional in DB-free mode)
+  if (prisma) {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      health.services.database = 'up';
+    } catch (err) {
+      health.services.database = 'down';
+      health.status = 'degraded';
+    }
+  } else {
+    health.services.database = 'disabled';
   }
 
   // Check Redis connection
@@ -110,13 +124,24 @@ app.get('/health', async (req, res) => {
 
 app.get('/ready', async (req, res) => {
   try {
-    // Check if database is ready
-    await prisma.$queryRaw`SELECT 1`;
+    // Check if Redis is ready (always needed)
+    const redisClient = redis.getClient();
+    if (redisClient && redisClient.status === 'ready') {
+      await redisClient.ping();
+    } else {
+      throw new Error('Redis not ready');
+    }
+
+    // Check DB if available (optional in DB-free mode)
+    if (prisma) {
+      await prisma.$queryRaw`SELECT 1`;
+    }
+
     res.json({ status: 'ready', timestamp: new Date().toISOString() });
   } catch (err) {
     res.status(503).json({
       status: 'not ready',
-      error: 'Database not available',
+      error: err.message || 'Service not available',
       timestamp: new Date().toISOString(),
     });
   }
@@ -200,14 +225,18 @@ const HOST = process.env.HOST || '0.0.0.0';
 async function startServer() {
   console.log('Starting LINBO Docker API Server...\n');
 
-  // Connect to database
-  console.log('Connecting to PostgreSQL...');
-  try {
-    await connectWithRetry(5, 3000);
-    console.log('  PostgreSQL connected');
-  } catch (err) {
-    console.error('  PostgreSQL connection failed:', err.message);
-    console.log('  Server will start, but database operations will fail');
+  // Connect to database (optional — skipped in DB-free/sync mode)
+  if (prisma) {
+    console.log('Connecting to PostgreSQL...');
+    try {
+      await connectWithRetry(5, 3000);
+      console.log('  PostgreSQL connected');
+    } catch (err) {
+      console.error('  PostgreSQL connection failed:', err.message);
+      console.log('  Server will start, but database operations will fail');
+    }
+  } else {
+    console.log('PostgreSQL: disabled (DB-free mode)');
   }
 
   // Connect to Redis
@@ -306,6 +335,18 @@ async function startServer() {
     console.log('  Host Status Worker disabled');
   }
 
+  // Image sync startup recovery (clean stale locks from crashed containers)
+  const isSyncMode = process.env.SYNC_ENABLED === 'true' || !!process.env.LMN_API_URL;
+  if (isSyncMode) {
+    try {
+      const imageSyncService = require('./services/image-sync.service');
+      await imageSyncService.recoverOnStartup();
+      console.log('  Image Sync recovery complete');
+    } catch (err) {
+      console.warn('  Image Sync recovery skipped:', err.message);
+    }
+  }
+
   // Startup sanity check: verify critical directories exist
   const sanityFs = require('fs');
   const { LINBO_DIR, IMAGES_DIR } = require('./lib/image-path');
@@ -374,12 +415,14 @@ async function shutdown(signal) {
       console.error('Redis disconnect error:', err.message);
     }
 
-    // Disconnect Prisma
-    try {
-      await disconnectPrisma();
-      console.log('PostgreSQL disconnected');
-    } catch (err) {
-      console.error('PostgreSQL disconnect error:', err.message);
+    // Disconnect Prisma (if available)
+    if (prisma) {
+      try {
+        await disconnectPrisma();
+        console.log('PostgreSQL disconnected');
+      } catch (err) {
+        console.error('PostgreSQL disconnect error:', err.message);
+      }
     }
 
     console.log('Graceful shutdown complete');

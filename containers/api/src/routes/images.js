@@ -3,20 +3,45 @@
  * CRUD operations for image management
  *
  * Production layout: /srv/linbo/images/<base>/<base>.qcow2
+ *
+ * Prisma-optional: when no database is available (sync mode),
+ * read endpoints fall back to filesystem scanning.
+ * Write endpoints (POST, PATCH, DELETE) return 503.
  */
 
 const express = require('express');
 const router = express.Router();
-const { prisma } = require('../lib/prisma');
+
+// Prisma is optional — not available in sync/DB-free mode
+let prisma = null;
+try {
+  prisma = require('../lib/prisma').prisma;
+} catch {}
+
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const {
   validateBody,
   createImageSchema,
   updateImageSchema,
 } = require('../middleware/validate');
-const { auditAction } = require('../middleware/audit');
-const redis = require('../lib/redis');
-const ws = require('../lib/websocket');
+
+// Audit middleware: optional (depends on Prisma)
+let auditAction;
+try {
+  auditAction = require('../middleware/audit').auditAction;
+} catch {
+  auditAction = () => (req, res, next) => next();
+}
+
+let redis, ws;
+try {
+  redis = require('../lib/redis');
+  ws = require('../lib/websocket');
+} catch {
+  redis = { delPattern: async () => {} };
+  ws = { broadcast: () => {} };
+}
+
 const fs = require('fs').promises;
 const path = require('path');
 const {
@@ -65,11 +90,113 @@ async function enhanceImage(image) {
 }
 
 /**
+ * Scan filesystem for images (used when Prisma is unavailable).
+ * Returns array of image objects built from filesystem metadata.
+ */
+async function scanFilesystemImages() {
+  const images = [];
+
+  // Scan canonical subdirectories in IMAGES_DIR
+  try {
+    const entries = await fs.readdir(IMAGES_DIR, { withFileTypes: true });
+    const dirs = entries.filter(e => e.isDirectory() && e.name !== 'tmp' && e.name !== 'backups');
+
+    for (const dir of dirs) {
+      try {
+        const files = await fs.readdir(path.join(IMAGES_DIR, dir.name));
+        const imageFiles = files.filter(f => IMAGE_EXTS.some(ext => f.endsWith(ext)));
+
+        for (const f of imageFiles) {
+          try {
+            parseMainFilename(f); // validate
+          } catch {
+            continue;
+          }
+
+          const filePath = path.join(IMAGES_DIR, dir.name, f);
+          let fileStats = null;
+          try {
+            fileStats = await fs.stat(filePath);
+          } catch { /* ignore */ }
+
+          images.push({
+            id: f, // use filename as ID in filesystem mode
+            filename: f,
+            type: f.includes('.qdiff') ? 'differential' : 'base',
+            path: `images/${dir.name}/${f}`,
+            absolutePath: filePath,
+            size: fileStats ? fileStats.size : null,
+            status: 'available',
+            fileExists: true,
+            modifiedAt: fileStats ? fileStats.mtime : null,
+            createdAt: fileStats ? fileStats.birthtime : null,
+          });
+        }
+      } catch (err) {
+        console.warn(`[Images] Failed to read subdir ${dir.name}:`, err.message);
+      }
+    }
+  } catch (err) {
+    console.error('[Images] Failed to scan images directory:', err.message);
+  }
+
+  // Scan legacy flat images in LINBO_DIR
+  try {
+    const flatFiles = await fs.readdir(LINBO_DIR);
+    const legacyImages = flatFiles.filter(f => IMAGE_EXTS.some(ext => f.endsWith(ext)));
+
+    for (const f of legacyImages) {
+      // Skip if already found in canonical location
+      if (images.some(i => i.filename === f)) continue;
+
+      const filePath = path.join(LINBO_DIR, f);
+      let fileStats = null;
+      try {
+        fileStats = await fs.stat(filePath);
+      } catch { /* ignore */ }
+
+      images.push({
+        id: f,
+        filename: f,
+        type: f.includes('.qdiff') ? 'differential' : 'base',
+        path: f,
+        absolutePath: filePath,
+        size: fileStats ? fileStats.size : null,
+        status: 'legacy',
+        fileExists: true,
+        modifiedAt: fileStats ? fileStats.mtime : null,
+        createdAt: fileStats ? fileStats.birthtime : null,
+      });
+    }
+  } catch { /* LINBO_DIR read error */ }
+
+  return images;
+}
+
+/**
  * GET /images
- * List all images (DB + filesystem scan)
+ * List all images (DB + filesystem scan, or filesystem-only if no Prisma)
  */
 router.get('/', authenticateToken, async (req, res, next) => {
   try {
+    // --- Filesystem-only mode (no Prisma) ---
+    if (!prisma) {
+      const images = await scanFilesystemImages();
+      const summary = {
+        total: images.length,
+        registered: 0,
+        unregistered: images.length,
+        imagesDir: IMAGES_DIR,
+        byType: {
+          base: images.filter(i => i.type === 'base').length,
+          differential: images.filter(i => i.type === 'differential').length,
+          torrent: 0,
+        },
+      };
+      return res.json({ data: images, summary });
+    }
+
+    // --- Prisma mode ---
     const { type, status } = req.query;
 
     // Get images from database
@@ -200,10 +327,53 @@ router.get('/', authenticateToken, async (req, res, next) => {
 
 /**
  * GET /images/:id
- * Get single image details
+ * Get single image details.
+ * In filesystem mode, :id is treated as the filename.
  */
 router.get('/:id', authenticateToken, async (req, res, next) => {
   try {
+    // --- Filesystem-only mode ---
+    if (!prisma) {
+      const filename = req.params.id;
+      let absPath;
+      try {
+        absPath = resolveImagePath(filename);
+      } catch {
+        return res.status(404).json({
+          error: { code: 'IMAGE_NOT_FOUND', message: 'Image not found' },
+        });
+      }
+
+      let stats;
+      try {
+        stats = await fs.stat(absPath);
+      } catch {
+        return res.status(404).json({
+          error: { code: 'IMAGE_NOT_FOUND', message: 'Image file not found on disk' },
+        });
+      }
+
+      const sidecars = await getFilesystemSidecarDetails(filename);
+
+      return res.json({
+        data: {
+          id: filename,
+          filename,
+          type: filename.includes('.qdiff') ? 'differential' : 'base',
+          path: toRelativePath(filename),
+          absolutePath: absPath,
+          fileExists: true,
+          size: stats.size,
+          fileSize: stats.size,
+          modifiedAt: stats.mtime,
+          createdAt: stats.birthtime,
+          sidecars,
+          usedBy: [],
+        },
+      });
+    }
+
+    // --- Prisma mode ---
     const image = await prisma.image.findUnique({
       where: { id: req.params.id },
     });
@@ -284,6 +454,15 @@ router.post(
     getTargetName: (req) => req.body.filename,
   }),
   async (req, res, next) => {
+    if (!prisma) {
+      return res.status(503).json({
+        error: {
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'Image registration requires a database connection',
+        },
+      });
+    }
+
     try {
       // Validate and compute paths from filename
       const relPath = toRelativePath(req.body.filename);
@@ -346,6 +525,15 @@ router.post(
   requireRole(['admin', 'operator']),
   auditAction('image.register'),
   async (req, res, next) => {
+    if (!prisma) {
+      return res.status(503).json({
+        error: {
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'Image registration requires a database connection',
+        },
+      });
+    }
+
     try {
       const { filename, description } = req.body;
 
@@ -428,6 +616,15 @@ router.patch(
     getTargetName: (req, data) => data?.data?.filename,
   }),
   async (req, res, next) => {
+    if (!prisma) {
+      return res.status(503).json({
+        error: {
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'Image updates require a database connection',
+        },
+      });
+    }
+
     try {
       const image = await prisma.image.update({
         where: { id: req.params.id },
@@ -465,6 +662,15 @@ router.delete(
   requireRole(['admin']),
   auditAction('image.delete'),
   async (req, res, next) => {
+    if (!prisma) {
+      return res.status(503).json({
+        error: {
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'Image deletion requires a database connection',
+        },
+      });
+    }
+
     try {
       const { deleteFile } = req.query;
 
@@ -538,7 +744,8 @@ router.delete(
 
 /**
  * POST /images/:id/verify
- * Verify image checksum
+ * Verify image checksum.
+ * In filesystem mode, :id is treated as filename.
  */
 router.post(
   '/:id/verify',
@@ -546,31 +753,54 @@ router.post(
   requireRole(['admin', 'operator']),
   async (req, res, next) => {
     try {
-      const image = await prisma.image.findUnique({
-        where: { id: req.params.id },
-      });
+      let filename, storedChecksum, verifyPath;
 
-      if (!image) {
-        return res.status(404).json({
-          error: {
-            code: 'IMAGE_NOT_FOUND',
-            message: 'Image not found',
-          },
-        });
-      }
+      if (!prisma) {
+        // Filesystem mode: id = filename, read .md5 file for stored checksum
+        filename = req.params.id;
+        try {
+          verifyPath = resolveImagePath(filename);
+        } catch {
+          return res.status(404).json({
+            error: { code: 'IMAGE_NOT_FOUND', message: 'Image not found' },
+          });
+        }
 
-      if (!image.checksum) {
-        return res.status(400).json({
-          error: {
-            code: 'NO_CHECKSUM',
-            message: 'No checksum stored for this image',
-          },
+        // Try to read .md5 sidecar
+        try {
+          const md5Path = resolveSidecarPath(filename, '.md5');
+          const md5Content = await fs.readFile(md5Path, 'utf8');
+          storedChecksum = md5Content.trim().split(/\s+/)[0];
+        } catch {
+          return res.status(400).json({
+            error: { code: 'NO_CHECKSUM', message: 'No .md5 checksum file found for this image' },
+          });
+        }
+      } else {
+        // Prisma mode
+        const image = await prisma.image.findUnique({
+          where: { id: req.params.id },
         });
+
+        if (!image) {
+          return res.status(404).json({
+            error: { code: 'IMAGE_NOT_FOUND', message: 'Image not found' },
+          });
+        }
+
+        if (!image.checksum) {
+          return res.status(400).json({
+            error: { code: 'NO_CHECKSUM', message: 'No checksum stored for this image' },
+          });
+        }
+
+        filename = image.filename;
+        storedChecksum = image.checksum;
+        verifyPath = resolveFromDbPath(image.path);
       }
 
       // Compute checksum
       const crypto = require('crypto');
-      const verifyPath = resolveFromDbPath(image.path);
       const stream = require('fs').createReadStream(verifyPath);
       const hash = crypto.createHash('sha256');
 
@@ -581,14 +811,14 @@ router.post(
       });
 
       const computedChecksum = hash.digest('hex');
-      const isValid = computedChecksum === image.checksum;
+      const isValid = computedChecksum === storedChecksum;
 
       res.json({
         data: {
           isValid,
-          storedChecksum: image.checksum,
+          storedChecksum,
           computedChecksum,
-          filename: image.filename,
+          filename,
         },
       });
     } catch (error) {
@@ -607,51 +837,67 @@ router.post(
 
 /**
  * GET /images/:id/info
- * Get detailed image info (qemu-img info for qcow2)
+ * Get detailed image info (qemu-img info for qcow2).
+ * In filesystem mode, :id is treated as filename.
  */
 router.get(
   '/:id/info',
   authenticateToken,
   async (req, res, next) => {
     try {
-      const image = await prisma.image.findUnique({
-        where: { id: req.params.id },
-      });
+      let filename, type, relPath, infoPath, backingImage;
 
-      if (!image) {
-        return res.status(404).json({
-          error: {
-            code: 'IMAGE_NOT_FOUND',
-            message: 'Image not found',
-          },
+      if (!prisma) {
+        // Filesystem mode: id = filename
+        filename = req.params.id;
+        try {
+          infoPath = resolveImagePath(filename);
+          relPath = toRelativePath(filename);
+        } catch {
+          return res.status(404).json({
+            error: { code: 'IMAGE_NOT_FOUND', message: 'Image not found' },
+          });
+        }
+        type = filename.includes('.qdiff') ? 'differential' : 'base';
+        backingImage = null;
+      } else {
+        const image = await prisma.image.findUnique({
+          where: { id: req.params.id },
         });
+
+        if (!image) {
+          return res.status(404).json({
+            error: { code: 'IMAGE_NOT_FOUND', message: 'Image not found' },
+          });
+        }
+
+        filename = image.filename;
+        type = image.type;
+        relPath = image.path;
+        infoPath = resolveFromDbPath(image.path);
+        backingImage = image.backingImage;
       }
 
-      // Check file exists
-      const infoPath = resolveFromDbPath(image.path);
       let stats;
       try {
         stats = await fs.stat(infoPath);
       } catch {
         return res.status(404).json({
-          error: {
-            code: 'FILE_NOT_FOUND',
-            message: 'Image file not found on disk',
-          },
+          error: { code: 'FILE_NOT_FOUND', message: 'Image file not found on disk' },
         });
       }
 
       res.json({
         data: {
-          filename: image.filename,
-          type: image.type,
-          path: image.path,
+          filename,
+          type,
+          path: relPath,
           absolutePath: infoPath,
           size: stats.size,
           sizeFormatted: formatBytes(stats.size),
           modifiedAt: stats.mtime,
           createdAt: stats.birthtime,
-          backingImage: image.backingImage,
+          backingImage: backingImage || null,
         },
       });
     } catch (error) {
@@ -732,6 +978,13 @@ async function getSidecarDetails(image) {
 }
 
 /**
+ * Get sidecar details for filesystem-only mode (no DB image record).
+ */
+async function getFilesystemSidecarDetails(filename) {
+  return getSidecarDetails({ filename });
+}
+
+/**
  * Resolve the filesystem path for a sidecar type.
  */
 function resolveSidecarTypePath(imageFilename, type) {
@@ -748,7 +1001,8 @@ function resolveSidecarTypePath(imageFilename, type) {
 
 /**
  * GET /images/:id/sidecars/:type
- * Read a sidecar file content
+ * Read a sidecar file content.
+ * In filesystem mode, :id is treated as filename.
  */
 router.get(
   '/:id/sidecars/:type',
@@ -763,12 +1017,25 @@ router.get(
         });
       }
 
-      const image = await prisma.image.findUnique({ where: { id: req.params.id } });
-      if (!image) {
-        return res.status(404).json({ error: { code: 'IMAGE_NOT_FOUND', message: 'Image not found' } });
+      let imageFilename;
+
+      if (!prisma) {
+        // Filesystem mode: id = filename
+        imageFilename = req.params.id;
+        try {
+          parseMainFilename(imageFilename);
+        } catch {
+          return res.status(404).json({ error: { code: 'IMAGE_NOT_FOUND', message: 'Image not found' } });
+        }
+      } else {
+        const image = await prisma.image.findUnique({ where: { id: req.params.id } });
+        if (!image) {
+          return res.status(404).json({ error: { code: 'IMAGE_NOT_FOUND', message: 'Image not found' } });
+        }
+        imageFilename = image.filename;
       }
 
-      const filePath = resolveSidecarTypePath(image.filename, type);
+      const filePath = resolveSidecarTypePath(imageFilename, type);
       if (!filePath) {
         return res.status(400).json({ error: { code: 'INVALID_TYPE', message: 'Unknown sidecar type' } });
       }
@@ -809,6 +1076,15 @@ router.put(
     getTargetName: (req) => `${req.params.type}`,
   }),
   async (req, res, next) => {
+    if (!prisma) {
+      return res.status(503).json({
+        error: {
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'Sidecar writes require a database connection',
+        },
+      });
+    }
+
     try {
       const { type } = req.params;
 

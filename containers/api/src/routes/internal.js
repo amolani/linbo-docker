@@ -5,10 +5,13 @@
 
 const express = require('express');
 const router = express.Router();
-const { prisma } = require('../lib/prisma');
+let prisma;
+try { prisma = require('../lib/prisma').prisma; } catch { prisma = null; }
 const ws = require('../lib/websocket');
-const macctService = require('../services/macct.service');
-const provisioningService = require('../services/provisioning.service');
+const redisLib = require('../lib/redis');
+let macctService, provisioningService;
+try { macctService = require('../services/macct.service'); } catch { macctService = null; }
+try { provisioningService = require('../services/provisioning.service'); } catch { provisioningService = null; }
 
 // Internal API key for service-to-service authentication
 const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || 'linbo-internal-secret';
@@ -41,15 +44,10 @@ router.post('/rsync-event', authenticateInternal, async (req, res, next) => {
 
     console.log(`[Internal] RSYNC event: ${event} from ${clientIp} (${module})`);
 
-    // Try to find the host by IP
+    // Try to find the host by IP — use Redis sync cache if available, fallback to Prisma
     let host = null;
     if (clientIp) {
-      host = await prisma.host.findFirst({
-        where: { ipAddress: clientIp },
-        include: {
-          config: { select: { id: true, name: true } },
-        },
-      });
+      host = await findHostByIp(clientIp);
     }
 
     // Broadcast event based on type
@@ -63,23 +61,9 @@ router.post('/rsync-event', authenticateInternal, async (req, res, next) => {
           timestamp: new Date(),
         });
 
-        // Update host last seen + mark online
+        // Update host last seen + mark online (Redis-based)
         if (host) {
-          const wasOffline = host.status !== 'online';
-          const now = new Date();
-          await prisma.host.update({
-            where: { id: host.id },
-            data: { lastSeen: now, lastOnlineAt: now, status: 'online' },
-          });
-          if (wasOffline) {
-            ws.broadcast('host.status.changed', {
-              hostId: host.id,
-              hostname: host.hostname,
-              status: 'online',
-              previousStatus: host.status,
-              timestamp: new Date(),
-            });
-          }
+          await updateHostStatus(clientIp, host, 'online');
         }
         break;
 
@@ -103,21 +87,9 @@ router.post('/rsync-event', authenticateInternal, async (req, res, next) => {
           timestamp: new Date(),
         });
 
-        // Update host status to 'uploading'
+        // Update host status to 'uploading' (Redis-based)
         if (host) {
-          await prisma.host.update({
-            where: { id: host.id },
-            data: {
-              status: 'uploading',
-              lastSeen: new Date(),
-            },
-          });
-
-          ws.broadcast('host.status.changed', {
-            hostId: host.id,
-            hostname: host.hostname,
-            status: 'uploading',
-          });
+          await updateHostStatus(clientIp, host, 'uploading');
         }
         break;
 
@@ -143,21 +115,9 @@ router.post('/rsync-event', authenticateInternal, async (req, res, next) => {
           }
         }
 
-        // Update host status back to 'online'
+        // Update host status back to 'online' (Redis-based)
         if (host) {
-          await prisma.host.update({
-            where: { id: host.id },
-            data: {
-              status: 'online',
-              lastSeen: new Date(),
-            },
-          });
-
-          ws.broadcast('host.status.changed', {
-            hostId: host.id,
-            hostname: host.hostname,
-            status: 'online',
-          });
+          await updateHostStatus(clientIp, host, 'online');
         }
         break;
 
@@ -568,45 +528,30 @@ router.post('/client-status', authenticateInternal, async (req, res, next) => {
       });
     }
 
-    // Find host by IP
-    const host = await prisma.host.findFirst({
-      where: { ipAddress: clientIp },
-    });
+    // Find host by IP (Redis-based)
+    const host = await findHostByIp(clientIp);
 
     if (!host) {
-      // Auto-register unknown host? For now just log
       console.log(`[Internal] Unknown client: ${clientIp}`);
       return res.json({ data: { registered: false, message: 'Unknown client' } });
     }
 
-    // Update host
-    const updateData = {
-      lastSeen: new Date(),
-    };
-
-    if (status) updateData.status = status;
-    if (cacheInfo) updateData.cacheInfo = cacheInfo;
-    if (hardware) updateData.hardware = hardware;
-    if (osRunning) updateData.metadata = { ...(host.metadata || {}), osRunning };
-
-    await prisma.host.update({
-      where: { id: host.id },
-      data: updateData,
-    });
+    // Update host status in Redis
+    const effectiveStatus = status || 'online';
+    await updateHostStatus(clientIp, host, effectiveStatus);
 
     // Broadcast status change
     ws.broadcast('host.status.changed', {
-      hostId: host.id,
       hostname: host.hostname,
-      status: status || host.status,
-      lastSeen: updateData.lastSeen,
+      status: effectiveStatus,
+      lastSeen: new Date(),
     });
 
     res.json({
       data: {
         registered: true,
         hostname: host.hostname,
-        config: host.configId,
+        hostgroup: host.hostgroup,
       },
     });
   } catch (error) {
@@ -785,14 +730,86 @@ router.post('/register-host', authenticateInternal, async (req, res, next) => {
 });
 
 // =============================================================================
+// Redis-based host status helpers
+// =============================================================================
+
+const HOST_OFFLINE_TIMEOUT_SEC = parseInt(process.env.HOST_OFFLINE_TIMEOUT_SEC, 10) || 600;
+
+/**
+ * Find host by IP from Redis sync cache.
+ * Scans sync:host:index → sync:host:{mac} entries.
+ * Falls back to Prisma if available and Redis has no data.
+ */
+async function findHostByIp(clientIp) {
+  try {
+    const client = redisLib.getClient();
+    const macs = await client.smembers('sync:host:index');
+    for (const mac of macs) {
+      const json = await client.get(`sync:host:${mac}`);
+      if (json) {
+        const host = JSON.parse(json);
+        if (host.ip === clientIp) return host;
+      }
+    }
+  } catch {}
+
+  // Fallback to Prisma if available
+  if (prisma) {
+    try {
+      const host = await prisma.host.findFirst({
+        where: { ipAddress: clientIp },
+        include: { config: { select: { id: true, name: true } } },
+      });
+      if (host) {
+        return {
+          mac: host.macAddress,
+          hostname: host.hostname,
+          ip: host.ipAddress,
+          hostgroup: host.config?.name,
+        };
+      }
+    } catch {}
+  }
+
+  return null;
+}
+
+/**
+ * Update host runtime status in Redis (TTL-based, not persisted to DB).
+ */
+async function updateHostStatus(clientIp, host, status) {
+  try {
+    const client = redisLib.getClient();
+    const now = Date.now();
+    await client.hset(`host:status:${clientIp}`, {
+      status,
+      lastSeen: String(now),
+      hostname: host.hostname || '',
+      mac: host.mac || host.macAddress || '',
+    });
+    await client.expire(`host:status:${clientIp}`, HOST_OFFLINE_TIMEOUT_SEC);
+
+    ws.broadcast('host.status.changed', {
+      hostname: host.hostname,
+      status,
+      lastSeen: new Date(now),
+    });
+  } catch (err) {
+    console.error('[Internal] Failed to update host status:', err.message);
+  }
+}
+
+// =============================================================================
 // Machine Account (macct) Routes - For DC Worker
 // =============================================================================
 
 /**
  * POST /internal/macct-job
  * Create a macct repair job (triggered by rsync hook or manually)
+ * Requires Prisma (DB mode)
  */
 router.post('/macct-job', authenticateInternal, async (req, res, next) => {
+  if (!macctService) return res.status(503).json({ error: { code: 'NOT_AVAILABLE', message: 'macct service not available (DB-free mode)' } });
   try {
     const { host, school, hwclass } = req.body;
 
