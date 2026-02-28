@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from lmn_authority.adapters.startconf import StartConfAdapter
+from lmn_authority.adapters.startconf import StartConfAdapter, _parse_startconf
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
 
@@ -204,6 +204,79 @@ class TestGetAllIds:
         assert "bios_sata" in ids
         assert "dual_boot" in ids
         assert len(ids) == 3
+
+
+class TestInlineComments:
+    """Regression: start.conf files often have inline comments on section headers."""
+
+    CONF_WITH_COMMENTS = """\
+[LINBO]
+Server = 10.0.0.13
+Group = inline_test
+Cache = /dev/sda4
+SystemType = efi64
+
+[Partition]          # efi system partition
+Dev = /dev/sda1      # device name of the partition
+Label = efi          # partition label
+Size = 200M          # partition size 200M
+Id = ef              # partition id (ef = efi)
+FSType = vfat        # filesystem vfat
+Bootable = yes       # set bootable flag yes
+
+[Partition]          # microsoft reserved partition
+Dev = /dev/sda2      # device name
+Label = msr          # partition label
+Size = 128M          # partition size 128M
+Id = 0c01            # partition id (0c01 = msr)
+FSType =             # no filesystem
+Bootable = no        # set bootable flag no
+
+[Partition]          # partition section (operating system)
+Dev = /dev/sda3      # device name
+Label = windows      # partition label
+Size = 70G           # partition size
+Id = 7               # partition id (7 = ntfs)
+FSType = ntfs        # filesystem ntfs
+Bootable = no        # set bootable flag no
+
+[OS]
+Name = Windows 10
+BaseImage = win11.qcow2
+Boot = /dev/sda3
+Root = /dev/sda3
+Kernel = auto
+StartEnabled = yes
+SyncEnabled = no
+NewEnabled = yes
+"""
+
+    def test_partitions_parsed_with_inline_comments(self):
+        linbo, partitions, os_entries = _parse_startconf(self.CONF_WITH_COMMENTS)
+        assert len(partitions) == 3, f"Expected 3 partitions, got {len(partitions)}"
+
+    def test_partition_values_stripped(self):
+        _, partitions, _ = _parse_startconf(self.CONF_WITH_COMMENTS)
+        assert partitions[0]["device"] == "/dev/sda1"
+        assert partitions[0]["label"] == "efi"
+        assert partitions[0]["size"] == "200M"
+        assert partitions[0]["fsType"] == "vfat"
+        assert partitions[0]["bootable"] is True
+
+    def test_partition_empty_fstype(self):
+        _, partitions, _ = _parse_startconf(self.CONF_WITH_COMMENTS)
+        # FSType =             # no filesystem → empty string
+        assert partitions[1]["fsType"] == ""
+
+    def test_os_entry_parsed(self):
+        _, _, os_entries = _parse_startconf(self.CONF_WITH_COMMENTS)
+        assert len(os_entries) == 1
+        assert os_entries[0]["name"] == "Windows 10"
+
+    def test_linbo_section_parsed(self):
+        linbo, _, _ = _parse_startconf(self.CONF_WITH_COMMENTS)
+        assert linbo["group"] == "inline_test"
+        assert linbo["systemType"] == "efi64"
 
 
 class TestLastModified:
