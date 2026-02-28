@@ -18,6 +18,11 @@ export interface DirectCommandRequest {
   hostIds?: string[];
   roomId?: string;
   configId?: string;
+  // Sync-mode filters
+  macs?: string[];
+  hostnames?: string[];
+  hostgroup?: string;
+  room?: string;
   commands: string;
   options?: {
     wakeOnLan?: boolean;
@@ -30,6 +35,11 @@ export interface ScheduleCommandRequest {
   hostIds?: string[];
   roomId?: string;
   configId?: string;
+  // Sync-mode filters
+  macs?: string[];
+  hostnames?: string[];
+  hostgroup?: string;
+  room?: string;
   commands: string;
   options?: {
     wakeOnLan?: boolean;
