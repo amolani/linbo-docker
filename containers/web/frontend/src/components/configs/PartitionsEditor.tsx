@@ -13,7 +13,7 @@ interface PartitionsEditorProps {
 
 const defaultPartition: PartitionData = {
   position: 0,
-  device: '/dev/sda1',
+  device: '/dev/disk0p1',
   label: '',
   size: '',
   partitionId: '',
@@ -66,7 +66,7 @@ export function PartitionsEditor({ partitions, onChange }: PartitionsEditorProps
       const newData = {
         ...defaultPartition,
         position: nextPosition,
-        device: `/dev/sda${nextPartNum}`,
+        device: `/dev/disk0p${nextPartNum}`,
       };
       setFormData(newData);
       setAutoSuggestedId('');
@@ -227,8 +227,8 @@ export function PartitionsEditor({ partitions, onChange }: PartitionsEditorProps
               label="Device"
               value={formData.device}
               onChange={(e) => setFormData({ ...formData, device: e.target.value })}
-              placeholder="/dev/sda1"
-              helperText="z.B. /dev/sda1, /dev/nvme0n1p1"
+              placeholder="/dev/disk0p1"
+              helperText="z.B. /dev/disk0p1 (universal für SATA + NVMe)"
             />
             <Input
               label="Label"
