@@ -116,6 +116,26 @@ describe('GRUB Service', () => {
       expect(grubService.getGrubPart(undefined)).toBe('(hd0,1)');
       expect(grubService.getGrubPart('')).toBe('(hd0,1)');
     });
+
+    // Uniform block device names (LINBO 4.3.5+)
+    test('should convert uniform device disk0p1', () => {
+      expect(grubService.getGrubPart('/dev/disk0p1')).toBe('(hd0,1)');
+    });
+    test('should convert uniform device disk0p3', () => {
+      expect(grubService.getGrubPart('/dev/disk0p3')).toBe('(hd0,3)');
+    });
+    test('should convert uniform second disk', () => {
+      expect(grubService.getGrubPart('/dev/disk1p2')).toBe('(hd1,2)');
+    });
+    test('should convert uniform double-digit partition', () => {
+      expect(grubService.getGrubPart('/dev/disk0p10')).toBe('(hd0,10)');
+    });
+    test('should reject disk0p0 (invalid)', () => {
+      expect(grubService.getGrubPart('/dev/disk0p0')).toBe('(hd0,1)'); // fallback
+    });
+    test('should reject bare disk0 (no partition)', () => {
+      expect(grubService.getGrubPart('/dev/disk0')).toBe('(hd0,1)'); // fallback
+    });
   });
 
   describe('getGrubOstype', () => {

@@ -59,9 +59,9 @@ export function LinboSettingsForm({ settings, onChange, serverIp = '10.0.0.1' }:
         />
         <Input
           label="Cache-Partition"
-          value={settings.cache || '/dev/sda4'}
+          value={settings.cache || '/dev/disk0p4'}
           onChange={(e) => handleChange('cache', e.target.value)}
-          helperText="z.B. /dev/sda4 oder /dev/nvme0n1p4"
+          helperText="z.B. /dev/disk0p4 — disk0 = erste interne Platte (NVMe > SATA > USB)"
         />
       </div>
 

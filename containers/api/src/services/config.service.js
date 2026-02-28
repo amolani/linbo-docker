@@ -82,7 +82,7 @@ async function generateStartConf(configId) {
   lines.push('[LINBO]');
   lines.push(`Server = ${getLinboSetting(ls, 'Server') || process.env.LINBO_SERVER || '10.0.0.1'}`);
   lines.push(`Group = ${getLinboSetting(ls, 'Group') || config.name}`);
-  lines.push(`Cache = ${getLinboSetting(ls, 'Cache') || '/dev/sda4'}`);
+  lines.push(`Cache = ${getLinboSetting(ls, 'Cache') || '/dev/disk0p4'}`);
   lines.push(`RootTimeout = ${getLinboSetting(ls, 'RootTimeout') || 600}`);
   lines.push(`AutoPartition = ${toYesNo(getLinboSetting(ls, 'AutoPartition') || false)}`);
   lines.push(`AutoFormat = ${toYesNo(getLinboSetting(ls, 'AutoFormat') || false)}`);

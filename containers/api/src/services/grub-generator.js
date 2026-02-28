@@ -57,6 +57,13 @@ function getGrubPart(device) {
     return `(hd${diskNum},${sdMatch[3]})`;
   }
 
+  // Uniform block device: /dev/disk0p2 → (hd0,2)
+  const diskMatch = dev.match(/^disk(\d+)p(\d+)$/);
+  if (diskMatch) {
+    const part = parseInt(diskMatch[2], 10);
+    if (part >= 1) return `(hd${diskMatch[1]},${diskMatch[2]})`;
+  }
+
   return '(hd0,1)';
 }
 

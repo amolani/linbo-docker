@@ -94,6 +94,14 @@ describe('getGrubPart', () => {
   it('converts virtio device', () => expect(getGrubPart('/dev/vda3')).toBe('(hd0,3)'));
   it('handles second disk', () => expect(getGrubPart('/dev/sdb2')).toBe('(hd1,2)'));
   it('returns default for null', () => expect(getGrubPart(null)).toBe('(hd0,1)'));
+
+  // Uniform block device names (LINBO 4.3.5+)
+  it('converts uniform device disk0p1', () => expect(getGrubPart('/dev/disk0p1')).toBe('(hd0,1)'));
+  it('converts uniform device disk0p3', () => expect(getGrubPart('/dev/disk0p3')).toBe('(hd0,3)'));
+  it('converts uniform second disk', () => expect(getGrubPart('/dev/disk1p2')).toBe('(hd1,2)'));
+  it('converts uniform double-digit partition', () => expect(getGrubPart('/dev/disk0p10')).toBe('(hd0,10)'));
+  it('rejects disk0p0 (invalid)', () => expect(getGrubPart('/dev/disk0p0')).toBe('(hd0,1)')); // fallback
+  it('rejects bare disk0 (no partition)', () => expect(getGrubPart('/dev/disk0')).toBe('(hd0,1)')); // fallback
 });
 
 describe('getGrubOstype', () => {

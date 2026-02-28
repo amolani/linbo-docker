@@ -19,7 +19,7 @@ type TabId = 'basic' | 'linbo' | 'partitions' | 'os';
 
 const defaultLinboSettings: LinboSettings = {
   server: '10.0.0.1',
-  cache: '/dev/sda4',
+  cache: '/dev/disk0p4',
   downloadType: 'rsync',
   roottimeout: 600,
   autopartition: false,
@@ -51,7 +51,7 @@ const configTemplates: ConfigTemplate[] = [
     name: 'win_efi',
     linboSettings: {
       server: '10.0.0.1',
-      cache: '/dev/sda4',
+      cache: '/dev/disk0p4',
       roottimeout: 600,
       autopartition: false,
       autoformat: false,
@@ -64,17 +64,17 @@ const configTemplates: ConfigTemplate[] = [
       consolefontcolorstderr: 'orange',
     },
     partitions: [
-      { position: 1, device: '/dev/sda1', label: 'efi', size: '200M', partitionId: 'ef', fsType: 'vfat', bootable: true },
-      { position: 2, device: '/dev/sda2', label: 'msr', size: '128M', partitionId: '0c01', fsType: '', bootable: false },
-      { position: 3, device: '/dev/sda3', label: 'windows', size: '50G', partitionId: '7', fsType: 'ntfs', bootable: false },
-      { position: 4, device: '/dev/sda4', label: 'cache', size: '50G', partitionId: '83', fsType: 'ext4', bootable: false },
-      { position: 5, device: '/dev/sda5', label: 'data', size: '', partitionId: '7', fsType: 'ntfs', bootable: false },
+      { position: 1, device: '/dev/disk0p1', label: 'efi', size: '200M', partitionId: 'ef', fsType: 'vfat', bootable: true },
+      { position: 2, device: '/dev/disk0p2', label: 'msr', size: '128M', partitionId: '0c01', fsType: '', bootable: false },
+      { position: 3, device: '/dev/disk0p3', label: 'windows', size: '50G', partitionId: '7', fsType: 'ntfs', bootable: false },
+      { position: 4, device: '/dev/disk0p4', label: 'cache', size: '50G', partitionId: '83', fsType: 'ext4', bootable: false },
+      { position: 5, device: '/dev/disk0p5', label: 'data', size: '', partitionId: '7', fsType: 'ntfs', bootable: false },
     ],
     osEntries: [
       {
         position: 1, name: 'Windows 10', version: '', description: 'Windows 10',
         osType: 'windows', iconName: 'win10', image: '', baseImage: 'win10.qcow2',
-        differentialImage: '', rootDevice: '/dev/sda3', root: '/dev/sda3',
+        differentialImage: '', rootDevice: '/dev/disk0p3', root: '/dev/disk0p3',
         kernel: 'auto', initrd: '', append: [],
         startEnabled: true, syncEnabled: true, newEnabled: true,
         autostart: false, autostartTimeout: 5, defaultAction: 'sync',
@@ -90,7 +90,7 @@ const configTemplates: ConfigTemplate[] = [
     name: 'ubuntu_efi',
     linboSettings: {
       server: '10.0.0.1',
-      cache: '/dev/sda3',
+      cache: '/dev/disk0p3',
       roottimeout: 600,
       autopartition: false,
       autoformat: false,
@@ -103,17 +103,17 @@ const configTemplates: ConfigTemplate[] = [
       consolefontcolorstderr: 'orange',
     },
     partitions: [
-      { position: 1, device: '/dev/sda1', label: 'efi', size: '200M', partitionId: 'ef', fsType: 'vfat', bootable: true },
-      { position: 2, device: '/dev/sda2', label: 'ubuntu', size: '30G', partitionId: '83', fsType: 'ext4', bootable: false },
-      { position: 3, device: '/dev/sda3', label: 'cache', size: '30G', partitionId: '83', fsType: 'ext4', bootable: false },
-      { position: 4, device: '/dev/sda4', label: 'swap', size: '8G', partitionId: '82', fsType: 'swap', bootable: false },
-      { position: 5, device: '/dev/sda5', label: 'data', size: '', partitionId: '83', fsType: 'ext4', bootable: false },
+      { position: 1, device: '/dev/disk0p1', label: 'efi', size: '200M', partitionId: 'ef', fsType: 'vfat', bootable: true },
+      { position: 2, device: '/dev/disk0p2', label: 'ubuntu', size: '30G', partitionId: '83', fsType: 'ext4', bootable: false },
+      { position: 3, device: '/dev/disk0p3', label: 'cache', size: '30G', partitionId: '83', fsType: 'ext4', bootable: false },
+      { position: 4, device: '/dev/disk0p4', label: 'swap', size: '8G', partitionId: '82', fsType: 'swap', bootable: false },
+      { position: 5, device: '/dev/disk0p5', label: 'data', size: '', partitionId: '83', fsType: 'ext4', bootable: false },
     ],
     osEntries: [
       {
         position: 1, name: 'Ubuntu', version: '', description: 'Ubuntu',
         osType: 'linux', iconName: 'ubuntu', image: '', baseImage: 'ubuntu.qcow2',
-        differentialImage: '', rootDevice: '/dev/sda2', root: '/dev/sda2',
+        differentialImage: '', rootDevice: '/dev/disk0p2', root: '/dev/disk0p2',
         kernel: 'boot/vmlinuz', initrd: 'boot/initrd.img', append: ['ro', 'splash'],
         startEnabled: true, syncEnabled: true, newEnabled: true,
         autostart: false, autostartTimeout: 5, defaultAction: 'sync',
@@ -129,7 +129,7 @@ const configTemplates: ConfigTemplate[] = [
     name: 'dual_efi',
     linboSettings: {
       server: '10.0.0.1',
-      cache: '/dev/sda5',
+      cache: '/dev/disk0p5',
       roottimeout: 600,
       autopartition: false,
       autoformat: false,
@@ -142,18 +142,18 @@ const configTemplates: ConfigTemplate[] = [
       consolefontcolorstderr: 'orange',
     },
     partitions: [
-      { position: 1, device: '/dev/sda1', label: 'efi', size: '200M', partitionId: 'ef', fsType: 'vfat', bootable: true },
-      { position: 2, device: '/dev/sda2', label: 'msr', size: '128M', partitionId: '0c01', fsType: '', bootable: false },
-      { position: 3, device: '/dev/sda3', label: 'windows', size: '50G', partitionId: '7', fsType: 'ntfs', bootable: false },
-      { position: 4, device: '/dev/sda4', label: 'ubuntu', size: '30G', partitionId: '83', fsType: 'ext4', bootable: false },
-      { position: 5, device: '/dev/sda5', label: 'cache', size: '50G', partitionId: '83', fsType: 'ext4', bootable: false },
-      { position: 6, device: '/dev/sda6', label: 'data', size: '', partitionId: '7', fsType: 'ntfs', bootable: false },
+      { position: 1, device: '/dev/disk0p1', label: 'efi', size: '200M', partitionId: 'ef', fsType: 'vfat', bootable: true },
+      { position: 2, device: '/dev/disk0p2', label: 'msr', size: '128M', partitionId: '0c01', fsType: '', bootable: false },
+      { position: 3, device: '/dev/disk0p3', label: 'windows', size: '50G', partitionId: '7', fsType: 'ntfs', bootable: false },
+      { position: 4, device: '/dev/disk0p4', label: 'ubuntu', size: '30G', partitionId: '83', fsType: 'ext4', bootable: false },
+      { position: 5, device: '/dev/disk0p5', label: 'cache', size: '50G', partitionId: '83', fsType: 'ext4', bootable: false },
+      { position: 6, device: '/dev/disk0p6', label: 'data', size: '', partitionId: '7', fsType: 'ntfs', bootable: false },
     ],
     osEntries: [
       {
         position: 1, name: 'Windows 10', version: '', description: 'Windows 10',
         osType: 'windows', iconName: 'win10', image: '', baseImage: 'win10.qcow2',
-        differentialImage: '', rootDevice: '/dev/sda3', root: '/dev/sda3',
+        differentialImage: '', rootDevice: '/dev/disk0p3', root: '/dev/disk0p3',
         kernel: 'auto', initrd: '', append: [],
         startEnabled: true, syncEnabled: true, newEnabled: true,
         autostart: false, autostartTimeout: 5, defaultAction: 'sync',
@@ -162,7 +162,7 @@ const configTemplates: ConfigTemplate[] = [
       {
         position: 2, name: 'Ubuntu', version: '', description: 'Ubuntu',
         osType: 'linux', iconName: 'ubuntu', image: '', baseImage: 'ubuntu.qcow2',
-        differentialImage: '', rootDevice: '/dev/sda4', root: '/dev/sda4',
+        differentialImage: '', rootDevice: '/dev/disk0p4', root: '/dev/disk0p4',
         kernel: 'boot/vmlinuz', initrd: 'boot/initrd.img', append: ['ro', 'splash'],
         startEnabled: true, syncEnabled: true, newEnabled: true,
         autostart: false, autostartTimeout: 5, defaultAction: 'sync',
