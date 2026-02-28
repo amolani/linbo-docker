@@ -24,12 +24,14 @@ const syncRoutes = require('./sync');
 const internalRoutes = require('./internal');
 const systemRoutes = require('./system');
 const patchclassRoutes = require('./patchclass');
+const settingsRoutes = require('./settings');
 
 router.use('/auth', authRoutes);
 router.use('/sync', syncRoutes);
 router.use('/internal', internalRoutes);
 router.use('/system', systemRoutes);
 router.use('/patchclass', patchclassRoutes);
+router.use('/settings', settingsRoutes);
 
 // ---------------------------------------------------------------------------
 // Images: always mounted (has Prisma-optional filesystem fallback)
@@ -54,11 +56,11 @@ if (isSyncMode) {
   router.use('/hosts', syncModeHandler);
   router.use('/rooms', syncModeHandler);
   router.use('/configs', syncModeHandler);
-  router.use('/operations', syncModeHandler);
+  router.use('/operations', require('./sync-operations'));
   router.use('/stats', syncModeHandler);
   router.use('/dhcp', syncModeHandler);
 
-  console.log('[Routes] Sync mode: Prisma-dependent routes disabled (hosts, rooms, configs, operations, stats, dhcp)');
+  console.log('[Routes] Sync mode: Prisma-dependent routes disabled (hosts, rooms, configs, stats, dhcp); operations use Redis');
 } else {
   // Standalone mode: mount all Prisma-dependent routes
   const hostRoutes = require('./hosts');
@@ -117,6 +119,12 @@ router.get('/', (req, res) => {
       'POST /system/generate-ssh-key': 'Generate specific SSH key',
       'POST /system/generate-dropbear-key': 'Generate Dropbear key',
       'POST /system/regenerate-grub-configs': 'Regenerate GRUB configs',
+    },
+    settings: {
+      'GET /settings': 'Get all settings (secrets masked)',
+      'PUT /settings/:key': 'Update setting (admin)',
+      'DELETE /settings/:key': 'Reset setting to default (admin)',
+      'POST /settings/test-connection': 'Test authority API connection (admin)',
     },
     patchclass: {
       'GET /patchclass': 'List all patchclasses',
@@ -202,7 +210,23 @@ router.get('/', (req, res) => {
     },
   };
 
-  const endpoints = isSyncMode ? baseEndpoints : { ...baseEndpoints, ...standaloneEndpoints };
+  const syncModeEndpoints = {
+    operations: {
+      'GET /operations': 'List operations (Redis-based)',
+      'GET /operations/:id': 'Get operation with sessions',
+      'GET /operations/scheduled': 'List scheduled onboot commands',
+      'POST /operations/validate-commands': 'Validate command string',
+      'POST /operations/direct': 'Execute commands via SSH (admin)',
+      'POST /operations/schedule': 'Schedule onboot commands (admin)',
+      'DELETE /operations/scheduled/:hostname': 'Cancel scheduled command (admin)',
+      'POST /operations/wake': 'Wake hosts via WoL (admin)',
+      'POST /operations/:id/cancel': 'Cancel operation (admin)',
+    },
+  };
+
+  const endpoints = isSyncMode
+    ? { ...baseEndpoints, ...syncModeEndpoints }
+    : { ...baseEndpoints, ...standaloneEndpoints };
 
   res.json({
     message: 'LINBO Docker API',

@@ -21,6 +21,7 @@ import {
   X,
   RefreshCw,
   Loader2,
+  Server,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
@@ -42,6 +43,7 @@ const configNavigation = [
 ];
 
 const systemNavigation = [
+  { name: 'Server', href: '/server', icon: Server },
   { name: 'Sync', href: '/sync', icon: RefreshCw },
   { name: 'Operationen', href: '/operations', icon: ClipboardList },
   { name: 'Kernel', href: '/kernel', icon: Cpu },
