@@ -78,7 +78,8 @@ async function syncOnce() {
       grub: false,
     };
 
-    const serverIp = process.env.LINBO_SERVER_IP || '10.0.0.1';
+    const settingsService = require('./settings.service');
+    const serverIp = await settingsService.get('linbo_server_ip');
 
     // Check if server IP changed → force full rewrite of start.confs
     const lastServerIp = await client.get(KEY.SERVER_IP);

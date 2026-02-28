@@ -15,8 +15,7 @@ const { Transform } = require('stream');
 const redis = require('../lib/redis');
 const ws = require('../lib/websocket');
 
-const LMN_API_URL = process.env.LMN_API_URL || 'http://10.0.0.11:8000';
-const LMN_API_KEY = process.env.LMN_API_KEY || '';
+const settings = require('./settings.service');
 const IMAGES_DIR = path.join(process.env.LINBO_DIR || '/srv/linbo', 'images');
 const INCOMING_DIR = path.join(IMAGES_DIR, '.incoming');
 const MANIFEST_CACHE_TTL = 60; // seconds
@@ -38,11 +37,15 @@ let activeStream = null;  // fs.WriteStream
 
 /**
  * Make an authenticated request to the LMN Authority API.
+ * @param {string} urlPath - API path
+ * @param {object} options - fetch options
+ * @param {object} config - optional override for url/key (from snapshot)
  */
-async function lmnFetch(urlPath, options = {}) {
-  const url = `${LMN_API_URL}${urlPath}`;
+async function lmnFetch(urlPath, options = {}, config = {}) {
+  const url = `${config.lmnApiUrl || await settings.get('lmn_api_url')}${urlPath}`;
+  const key = config.lmnApiKey || await settings.get('lmn_api_key');
   const headers = {
-    'Authorization': `Bearer ${LMN_API_KEY}`,
+    'Authorization': `Bearer ${key}`,
     ...options.headers,
   };
   return fetch(url, { ...options, headers });
@@ -300,6 +303,12 @@ async function _runDownload(jobId, imageName) {
   const client = redis.getClient();
   let downloadStartTime = Date.now();
 
+  // Snapshot settings at job start — use fixed values throughout
+  const config = {
+    lmnApiUrl: await settings.get('lmn_api_url'),
+    lmnApiKey: await settings.get('lmn_api_key'),
+  };
+
   try {
     await updateJobStatus(jobId, 'downloading', { startedAt: new Date().toISOString() });
     ws.broadcast('image.sync.started', { jobId, imageName, totalBytes: 0 });
@@ -317,13 +326,13 @@ async function _runDownload(jobId, imageName) {
 
     // Download qcow2 first (largest file, with resume support)
     const qcow2File = imageEntry.filename;
-    await _downloadFileWithResume(jobId, imageName, qcow2File, stagingDir);
+    await _downloadFileWithResume(jobId, imageName, qcow2File, stagingDir, config);
 
     // Download sidecars
     const sidecars = imageEntry.files.filter(f => f.name !== qcow2File);
     for (const sidecar of sidecars) {
       try {
-        await _downloadSidecar(imageName, sidecar.name, stagingDir);
+        await _downloadSidecar(imageName, sidecar.name, stagingDir, config);
       } catch (err) {
         console.warn(`[ImageSync] Sidecar download failed: ${sidecar.name}:`, err.message);
         // Non-fatal — continue with other sidecars
@@ -392,12 +401,12 @@ async function _runDownload(jobId, imageName) {
 /**
  * Download a single file with HTTP Range resume support.
  */
-async function _downloadFileWithResume(jobId, imageName, filename, stagingDir) {
+async function _downloadFileWithResume(jobId, imageName, filename, stagingDir, config = {}) {
   const partPath = path.join(stagingDir, `${filename}.part`);
   const downloadUrl = `/api/v1/linbo/images/download/${imageName}/${filename}`;
 
   // HEAD request to get total size + ETag
-  const headRes = await lmnFetch(downloadUrl, { method: 'HEAD' });
+  const headRes = await lmnFetch(downloadUrl, { method: 'HEAD' }, config);
   if (!headRes.ok) {
     throw new Error(`HEAD ${downloadUrl} failed: ${headRes.status}`);
   }
@@ -433,7 +442,7 @@ async function _downloadFileWithResume(jobId, imageName, filename, stagingDir) {
   const response = await lmnFetch(downloadUrl, {
     headers,
     signal: abortController.signal,
-  });
+  }, config);
 
   // Handle resume scenarios
   if (response.status === 200 && offset > 0) {
@@ -528,9 +537,9 @@ async function _downloadFileWithResume(jobId, imageName, filename, stagingDir) {
 /**
  * Download a sidecar file (small, no resume needed).
  */
-async function _downloadSidecar(imageName, filename, stagingDir) {
+async function _downloadSidecar(imageName, filename, stagingDir, config = {}) {
   const downloadUrl = `/api/v1/linbo/images/download/${imageName}/${filename}`;
-  const res = await lmnFetch(downloadUrl);
+  const res = await lmnFetch(downloadUrl, {}, config);
   if (!res.ok) {
     throw new Error(`Sidecar download failed: ${res.status}`);
   }

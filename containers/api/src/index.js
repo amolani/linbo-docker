@@ -345,6 +345,15 @@ async function startServer() {
     } catch (err) {
       console.warn('  Image Sync recovery skipped:', err.message);
     }
+
+    // Auto-Sync Timer
+    try {
+      const settingsService = require('./services/settings.service');
+      await settingsService.applySyncInterval();
+      console.log('  Auto-Sync Timer initialized');
+    } catch (err) {
+      console.warn('  Auto-Sync Timer init skipped:', err.message);
+    }
   }
 
   // Startup sanity check: verify critical directories exist

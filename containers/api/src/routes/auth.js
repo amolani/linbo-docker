@@ -50,27 +50,30 @@ router.post(
     try {
       const { username, password } = req.body;
 
-      // --- Env-based admin login (works without DB) ---
+      // --- Admin login (bcrypt hash in Redis, then env fallback) ---
       const ADMIN_USER = process.env.ADMIN_USERNAME || 'admin';
-      const ADMIN_PASS = process.env.ADMIN_PASSWORD;
+      const settingsService = require('../services/settings.service');
 
-      if (ADMIN_PASS && username === ADMIN_USER && password === ADMIN_PASS) {
-        const token = generateToken({
-          id: 'env-admin',
-          username: ADMIN_USER,
-          email: null,
-          role: 'admin',
-        });
-        return res.json({
-          data: {
-            token,
-            user: {
-              id: 'env-admin',
-              username: ADMIN_USER,
-              role: 'admin',
+      if (username === ADMIN_USER) {
+        const passwordOk = await settingsService.checkAdminPassword(password);
+        if (passwordOk) {
+          const token = generateToken({
+            id: 'env-admin',
+            username: ADMIN_USER,
+            email: null,
+            role: 'admin',
+          });
+          return res.json({
+            data: {
+              token,
+              user: {
+                id: 'env-admin',
+                username: ADMIN_USER,
+                role: 'admin',
+              },
             },
-          },
-        });
+          });
+        }
       }
 
       // --- Prisma DB user lookup ---

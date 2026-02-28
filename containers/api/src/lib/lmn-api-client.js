@@ -3,11 +3,15 @@
  * HTTP client for fetching data from the linuxmuster.net Authority API
  */
 
-const LMN_API_URL = process.env.LMN_API_URL || 'http://10.0.0.11:8000';
-const LMN_API_KEY = process.env.LMN_API_KEY || '';
 const REQUEST_TIMEOUT = 10_000;
 const MAX_RETRIES = 3;
 const BASE_DELAY = 500;
+
+let _settings;
+function getSettings() {
+  if (!_settings) _settings = require('../services/settings.service');
+  return _settings;
+}
 
 /**
  * Make an authenticated request to the LMN Authority API with retries
@@ -16,9 +20,11 @@ const BASE_DELAY = 500;
  * @returns {Promise<Response>}
  */
 async function request(path, options = {}) {
-  const url = `${LMN_API_URL}${path}`;
+  const lmnApiUrl = await getSettings().get('lmn_api_url');
+  const lmnApiKey = await getSettings().get('lmn_api_key');
+  const url = `${lmnApiUrl}${path}`;
   const headers = {
-    'Authorization': `Bearer ${LMN_API_KEY}`,
+    'Authorization': `Bearer ${lmnApiKey}`,
     'Accept': 'application/json',
     ...options.headers,
   };
