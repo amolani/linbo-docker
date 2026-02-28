@@ -4,6 +4,7 @@ import { operationsApi } from '@/api/operations';
 import { Table, Pagination, OperationStatusBadge, Modal, Button, Select } from '@/components/ui';
 import { RemoteCommandModal, ScheduledCommandsSection } from '@/components/operations';
 import { notify } from '@/stores/notificationStore';
+import { useServerConfigStore } from '@/stores/serverConfigStore';
 import { useWsEventHandler, getEventData } from '@/hooks/useWebSocket';
 import { useDataInvalidation } from '@/hooks/useDataInvalidation';
 import type { Operation, Session, Column, WsOperationProgressEvent } from '@/types';
@@ -47,6 +48,7 @@ export function OperationsPage() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isRemoteModalOpen, setIsRemoteModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'operations' | 'scheduled'>('operations');
+  const { isSyncMode } = useServerConfigStore();
 
   const fetchOperations = useCallback(async () => {
     try {
@@ -187,7 +189,14 @@ export function OperationsPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Operationen</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-foreground">Operationen</h1>
+            {isSyncMode && (
+              <span className="px-2 py-0.5 text-xs font-medium rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+                Sync-Modus
+              </span>
+            )}
+          </div>
           <p className="text-muted-foreground">Remote-Befehle und Operationsübersicht</p>
         </div>
         <Button onClick={() => setIsRemoteModalOpen(true)}>

@@ -13,6 +13,8 @@ import { operationsApi, LINBO_COMMANDS, DirectCommandRequest, ScheduleCommandReq
 import { hostsApi } from '@/api/hosts';
 import { roomsApi } from '@/api/rooms';
 import { configsApi } from '@/api/configs';
+import { syncApi, SyncHost } from '@/api/sync';
+import { useServerConfigStore } from '@/stores/serverConfigStore';
 import { notify } from '@/stores/notificationStore';
 import type { Host, Room, Config } from '@/types';
 
@@ -23,7 +25,7 @@ interface RemoteCommandModalProps {
   preselectedHostIds?: string[];
 }
 
-type TargetType = 'hosts' | 'room' | 'config';
+type TargetType = 'hosts' | 'room' | 'config' | 'hostgroup';
 type ExecutionType = 'direct' | 'scheduled';
 
 interface CommandItem {
@@ -41,31 +43,45 @@ export function RemoteCommandModal({
   const [targetType, setTargetType] = useState<TargetType>('hosts');
   const [executionType, setExecutionType] = useState<ExecutionType>('direct');
   const [selectedHostIds, setSelectedHostIds] = useState<string[]>(preselectedHostIds);
+  const [selectedMacs, setSelectedMacs] = useState<string[]>([]);
   const [selectedRoomId, setSelectedRoomId] = useState<string>('');
   const [selectedConfigId, setSelectedConfigId] = useState<string>('');
+  const [selectedHostgroup, setSelectedHostgroup] = useState<string>('');
   const [commands, setCommands] = useState<CommandItem[]>([]);
   const [wakeOnLan, setWakeOnLan] = useState(false);
   const [wolDelay, setWolDelay] = useState(30);
   const [isLoading, setIsLoading] = useState(false);
 
   const [hosts, setHosts] = useState<Host[]>([]);
+  const [syncHosts, setSyncHosts] = useState<SyncHost[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [configs, setConfigs] = useState<Config[]>([]);
+  const [hostgroups, setHostgroups] = useState<string[]>([]);
   const [hostsLoading, setHostsLoading] = useState(true);
 
-  // Load options on mount
+  const { isSyncMode } = useServerConfigStore();
+
+  // Load options on mount — different data sources for sync vs standalone
   useEffect(() => {
     const loadOptions = async () => {
       setHostsLoading(true);
       try {
-        const [hostsData, roomsData, configsData] = await Promise.all([
-          hostsApi.list({ limit: 500 }),
-          roomsApi.list(),
-          configsApi.list(),
-        ]);
-        setHosts(hostsData.data);
-        setRooms(roomsData);
-        setConfigs(configsData);
+        if (isSyncMode) {
+          const syncHostsData = await syncApi.getHosts();
+          setSyncHosts(syncHostsData);
+          // Extract unique hostgroups
+          const groups = [...new Set(syncHostsData.map(h => h.hostgroup).filter(Boolean))];
+          setHostgroups(groups.sort());
+        } else {
+          const [hostsData, roomsData, configsData] = await Promise.all([
+            hostsApi.list({ limit: 500 }),
+            roomsApi.list(),
+            configsApi.list(),
+          ]);
+          setHosts(hostsData.data);
+          setRooms(roomsData);
+          setConfigs(configsData);
+        }
       } catch {
         notify.error('Fehler beim Laden der Optionen');
       } finally {
@@ -75,7 +91,7 @@ export function RemoteCommandModal({
     if (isOpen) {
       loadOptions();
     }
-  }, [isOpen]);
+  }, [isOpen, isSyncMode]);
 
   // Reset on open with preselected hosts
   useEffect(() => {
@@ -87,8 +103,10 @@ export function RemoteCommandModal({
 
   const handleClose = useCallback(() => {
     setSelectedHostIds([]);
+    setSelectedMacs([]);
     setSelectedRoomId('');
     setSelectedConfigId('');
+    setSelectedHostgroup('');
     setCommands([]);
     setWakeOnLan(false);
     setWolDelay(30);
@@ -127,6 +145,18 @@ export function RemoteCommandModal({
   }, [commands]);
 
   const targetCount = useMemo(() => {
+    if (isSyncMode) {
+      switch (targetType) {
+        case 'hosts':
+          return selectedMacs.length;
+        case 'hostgroup':
+          return selectedHostgroup
+            ? syncHosts.filter((h) => h.hostgroup === selectedHostgroup).length
+            : 0;
+        default:
+          return 0;
+      }
+    }
     switch (targetType) {
       case 'hosts':
         return selectedHostIds.length;
@@ -141,7 +171,7 @@ export function RemoteCommandModal({
       default:
         return 0;
     }
-  }, [targetType, selectedHostIds, selectedRoomId, selectedConfigId, hosts]);
+  }, [targetType, selectedHostIds, selectedMacs, selectedRoomId, selectedConfigId, selectedHostgroup, hosts, syncHosts, isSyncMode]);
 
   const isValid = useMemo(() => {
     if (commands.length === 0) return false;
@@ -165,16 +195,28 @@ export function RemoteCommandModal({
 
       let requestData: DirectCommandRequest | ScheduleCommandRequest;
 
-      switch (targetType) {
-        case 'hosts':
-          requestData = { ...baseData, hostIds: selectedHostIds };
-          break;
-        case 'room':
-          requestData = { ...baseData, roomId: selectedRoomId };
-          break;
-        case 'config':
-          requestData = { ...baseData, configId: selectedConfigId };
-          break;
+      if (isSyncMode) {
+        switch (targetType) {
+          case 'hosts':
+            requestData = { ...baseData, macs: selectedMacs };
+            break;
+          case 'hostgroup':
+            requestData = { ...baseData, hostgroup: selectedHostgroup };
+            break;
+          default:
+            requestData = { ...baseData, macs: selectedMacs };
+        }
+      } else {
+        switch (targetType) {
+          case 'room':
+            requestData = { ...baseData, roomId: selectedRoomId };
+            break;
+          case 'config':
+            requestData = { ...baseData, configId: selectedConfigId };
+            break;
+          default:
+            requestData = { ...baseData, hostIds: selectedHostIds };
+        }
       }
 
       if (executionType === 'direct') {
@@ -204,6 +246,12 @@ export function RemoteCommandModal({
   const toggleHostSelection = useCallback((hostId: string) => {
     setSelectedHostIds((prev) =>
       prev.includes(hostId) ? prev.filter((id) => id !== hostId) : [...prev, hostId]
+    );
+  }, []);
+
+  const toggleMacSelection = useCallback((mac: string) => {
+    setSelectedMacs((prev) =>
+      prev.includes(mac) ? prev.filter((m) => m !== mac) : [...prev, mac]
     );
   }, []);
 
@@ -256,34 +304,83 @@ export function RemoteCommandModal({
               <Monitor className="h-4 w-4" />
               Hosts
             </button>
-            <button
-              type="button"
-              onClick={() => setTargetType('room')}
-              className={`flex-1 py-2 px-3 text-sm flex items-center justify-center gap-2 ${
-                targetType === 'room'
-                  ? 'bg-secondary font-medium'
-                  : 'bg-card text-muted-foreground hover:bg-muted/50'
-              }`}
-            >
-              <Building2 className="h-4 w-4" />
-              Raum
-            </button>
-            <button
-              type="button"
-              onClick={() => setTargetType('config')}
-              className={`flex-1 py-2 px-3 text-sm flex items-center justify-center gap-2 ${
-                targetType === 'config'
-                  ? 'bg-secondary font-medium'
-                  : 'bg-card text-muted-foreground hover:bg-muted/50'
-              }`}
-            >
-              <Settings className="h-4 w-4" />
-              Konfiguration
-            </button>
+            {isSyncMode ? (
+              <button
+                type="button"
+                onClick={() => setTargetType('hostgroup')}
+                className={`flex-1 py-2 px-3 text-sm flex items-center justify-center gap-2 ${
+                  targetType === 'hostgroup'
+                    ? 'bg-secondary font-medium'
+                    : 'bg-card text-muted-foreground hover:bg-muted/50'
+                }`}
+              >
+                <Building2 className="h-4 w-4" />
+                Hostgruppe
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setTargetType('room')}
+                  className={`flex-1 py-2 px-3 text-sm flex items-center justify-center gap-2 ${
+                    targetType === 'room'
+                      ? 'bg-secondary font-medium'
+                      : 'bg-card text-muted-foreground hover:bg-muted/50'
+                  }`}
+                >
+                  <Building2 className="h-4 w-4" />
+                  Raum
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTargetType('config')}
+                  className={`flex-1 py-2 px-3 text-sm flex items-center justify-center gap-2 ${
+                    targetType === 'config'
+                      ? 'bg-secondary font-medium'
+                      : 'bg-card text-muted-foreground hover:bg-muted/50'
+                  }`}
+                >
+                  <Settings className="h-4 w-4" />
+                  Konfiguration
+                </button>
+              </>
+            )}
           </div>
 
           {/* Target Selection Content */}
-          {targetType === 'hosts' && (
+          {targetType === 'hosts' && isSyncMode && (
+            <div className="border border-border rounded-lg max-h-48 overflow-y-auto">
+              {hostsLoading ? (
+                <div className="p-4 text-center text-muted-foreground">Laden...</div>
+              ) : syncHosts.length === 0 ? (
+                <div className="p-4 text-center text-muted-foreground">Keine Hosts vorhanden</div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {syncHosts.map((host) => (
+                    <label
+                      key={host.mac}
+                      className="flex items-center px-4 py-2 hover:bg-muted/50 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedMacs.includes(host.mac)}
+                        onChange={() => toggleMacSelection(host.mac)}
+                        className="rounded border-border text-primary focus:ring-ring"
+                      />
+                      <span className="ml-3 text-sm">
+                        <span className="font-medium">{host.hostname}</span>
+                        <span className="text-muted-foreground ml-2">
+                          {host.ip || host.mac}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {targetType === 'hosts' && !isSyncMode && (
             <div className="border border-border rounded-lg max-h-48 overflow-y-auto">
               {hostsLoading ? (
                 <div className="p-4 text-center text-muted-foreground">Laden...</div>
@@ -313,6 +410,20 @@ export function RemoteCommandModal({
                 </div>
               )}
             </div>
+          )}
+
+          {targetType === 'hostgroup' && (
+            <Select
+              value={selectedHostgroup}
+              onChange={(e) => setSelectedHostgroup(e.target.value)}
+              options={[
+                { value: '', label: 'Hostgruppe auswählen...' },
+                ...hostgroups.map((g) => ({
+                  value: g,
+                  label: `${g} (${syncHosts.filter((h) => h.hostgroup === g).length} Hosts)`,
+                })),
+              ]}
+            />
           )}
 
           {targetType === 'room' && (
