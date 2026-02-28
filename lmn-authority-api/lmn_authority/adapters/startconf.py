@@ -120,7 +120,9 @@ def _parse_startconf(text: str) -> tuple[LinboData, list[PartitionData], list[Os
         if not line or line.startswith("#"):
             continue
 
-        # Section header
+        # Section header — strip inline comments: [Partition]  # comment
+        if "#" in line and line.startswith("["):
+            line = line[:line.index("#")].strip()
         if line.startswith("[") and line.endswith("]"):
             # Commit any pending partition or OS
             if current_partition is not None:
@@ -164,12 +166,18 @@ def _parse_startconf(text: str) -> tuple[LinboData, list[PartitionData], list[Os
                 )
             continue
 
-        # Key = Value
+        # Key = Value — strip inline comments: Dev = /dev/sda1  # comment
         if "=" not in line:
             continue
-        key, _, value = line.partition("=")
+        key, _, raw_value = line.partition("=")
         key = key.strip().lower()
-        value = value.strip()
+        # Strip inline comment from raw value (before stripping whitespace)
+        # e.g. "  /dev/sda1      # device name" → "  /dev/sda1"
+        # e.g. "             # no filesystem"   → ""
+        hash_idx = raw_value.find(" #")
+        if hash_idx >= 0:
+            raw_value = raw_value[:hash_idx]
+        value = raw_value.strip()
 
         if current_section == "LINBO":
             if key == "server":
