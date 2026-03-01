@@ -356,6 +356,30 @@ async function startServer() {
     }
   }
 
+  // Ensure gui/ symlinks exist (needed for new LINBO client versions)
+  try {
+    const sanityFs = require('fs');
+    const LINBO_DIR_STARTUP = process.env.LINBO_DIR || '/srv/linbo';
+    const guiDir = `${LINBO_DIR_STARTUP}/gui`;
+    if (!sanityFs.existsSync(guiDir)) sanityFs.mkdirSync(guiDir, { recursive: true });
+    const guiArchive = `${LINBO_DIR_STARTUP}/linbo_gui64_7.tar.lz`;
+    if (sanityFs.existsSync(guiArchive)) {
+      const guiLink = `${guiDir}/linbo_gui64_7.tar.lz`;
+      if (!sanityFs.existsSync(guiLink)) sanityFs.symlinkSync(guiArchive, guiLink);
+      const md5 = `${guiArchive}.md5`;
+      const md5Link = `${guiDir}/linbo_gui64_7.tar.lz.md5`;
+      if (sanityFs.existsSync(md5) && !sanityFs.existsSync(md5Link)) sanityFs.symlinkSync(md5, md5Link);
+    }
+    const iconsDir = `${LINBO_DIR_STARTUP}/icons`;
+    const iconsLink = `${guiDir}/icons`;
+    if (sanityFs.existsSync(iconsDir) && !sanityFs.existsSync(iconsLink)) {
+      sanityFs.symlinkSync(iconsDir, iconsLink);
+    }
+    console.log('  GUI symlinks: verified');
+  } catch (err) {
+    console.warn('  GUI symlinks check failed:', err.message);
+  }
+
   // Startup sanity check: verify critical directories exist
   const sanityFs = require('fs');
   const { LINBO_DIR, IMAGES_DIR } = require('./lib/image-path');

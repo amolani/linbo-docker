@@ -119,6 +119,10 @@ router.get('/', (req, res) => {
       'POST /system/generate-ssh-key': 'Generate specific SSH key',
       'POST /system/generate-dropbear-key': 'Generate Dropbear key',
       'POST /system/regenerate-grub-configs': 'Regenerate GRUB configs',
+      'GET /system/linbo-version': 'Check installed and available LINBO version',
+      'POST /system/linbo-update': 'Start LINBO update (admin)',
+      'GET /system/linbo-update/status': 'Get update progress',
+      'POST /system/linbo-update/cancel': 'Cancel running update (admin)',
     },
     settings: {
       'GET /settings': 'Get all settings (secrets masked)',

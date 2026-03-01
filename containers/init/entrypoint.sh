@@ -148,11 +148,20 @@ print(t.get('sha256',''))
     echo "  Checksums OK"
 
     # Atomic rename: temp -> final set directory
+    # Remove target if it already exists (from a previous run)
+    if [ -d "${NEW_SET_DIR}" ]; then
+        rm -rf "${NEW_SET_DIR}"
+    fi
     mv "${TEMP_SET_DIR}" "${NEW_SET_DIR}"
 
     # Atomic symlink swap
+    # If current is a real directory (not a symlink), remove it first
+    if [ -d "${KERNEL_DIR}/current" ] && [ ! -L "${KERNEL_DIR}/current" ]; then
+        rm -rf "${KERNEL_DIR}/current"
+    fi
     ln -sfn "sets/${MANIFEST_HASH}" "${KERNEL_DIR}/current.new"
-    mv -T "${KERNEL_DIR}/current.new" "${KERNEL_DIR}/current"
+    mv -f "${KERNEL_DIR}/current.new" "${KERNEL_DIR}/current" 2>/dev/null \
+        || { rm -f "${KERNEL_DIR}/current" 2>/dev/null; mv "${KERNEL_DIR}/current.new" "${KERNEL_DIR}/current"; }
 
     # Write provisioned marker (crash-safe: write temp + rename)
     MARKER_TMP="${PROVISION_MARKER}.tmp"
@@ -217,11 +226,81 @@ echo "Target directory: ${LINBO_DIR}"
 echo "Kernel directory: ${KERNEL_DIR}"
 echo "Download URL: ${BOOT_FILES_URL}"
 
+# =============================================================================
+# Host Kernel Auto-Restore
+# =============================================================================
+# The Docker host kernel is needed for hardware compatibility.
+# If linbo64 was replaced by a small linbo7 package kernel (e.g. after update),
+# clients lose network after GRUB handoff. This function auto-restores.
+
+restore_host_kernel() {
+    HOST_KVER=$(uname -r)
+    HOST_KERNEL="/boot/vmlinuz-${HOST_KVER}"
+    LINBO64="${LINBO_DIR}/linbo64"
+    KVER_MARKER="${LINBO_DIR}/.host-kernel-version"
+
+    if [ ! -f "${HOST_KERNEL}" ]; then
+        echo "INFO: Host kernel not available at ${HOST_KERNEL}"
+        echo "(This is normal if /boot is not bind-mounted)"
+        return 0
+    fi
+
+    NEED_RESTORE=false
+
+    # Check 1: No marker file — first run or marker was lost, always restore
+    if [ ! -f "${KVER_MARKER}" ]; then
+        echo "INFO: No host kernel marker found, will provision host kernel"
+        NEED_RESTORE=true
+    fi
+
+    # Check 2: Kernel drift — host kernel version changed since last provision
+    if [ -f "${KVER_MARKER}" ]; then
+        STORED_KVER=$(cat "${KVER_MARKER}")
+        if [ "${STORED_KVER}" != "${HOST_KVER}" ]; then
+            echo "WARNING: Host kernel changed (${STORED_KVER} -> ${HOST_KVER})"
+            NEED_RESTORE=true
+        fi
+    fi
+
+    # Check 3: Size comparison — if linbo64 is <8MB, it's likely the package kernel
+    if [ -f "${LINBO64}" ]; then
+        LINBO64_SIZE=$(stat -c%s "${LINBO64}" 2>/dev/null || echo 0)
+        HOST_SIZE=$(stat -c%s "${HOST_KERNEL}" 2>/dev/null || echo 0)
+
+        if [ "${LINBO64_SIZE}" -lt 8000000 ] && [ "${HOST_SIZE}" -gt 8000000 ]; then
+            echo "WARNING: linbo64 is suspiciously small (${LINBO64_SIZE} bytes vs host kernel ${HOST_SIZE} bytes)"
+            NEED_RESTORE=true
+        fi
+    else
+        # linbo64 doesn't exist yet — will be created by extraction
+        NEED_RESTORE=true
+    fi
+
+    # Check 4: Version mismatch — linbo64 kernel version differs from host
+    if [ "${NEED_RESTORE}" = "false" ] && [ -f "${LINBO64}" ]; then
+        LINBO64_KVER=$(file "${LINBO64}" 2>/dev/null | grep -o 'version [0-9][^ ]*' | awk '{print $2}')
+        if [ -n "${LINBO64_KVER}" ] && [ "${LINBO64_KVER}" != "${HOST_KVER}" ]; then
+            echo "WARNING: linbo64 kernel version mismatch (${LINBO64_KVER} != host ${HOST_KVER})"
+            NEED_RESTORE=true
+        fi
+    fi
+
+    if [ "${NEED_RESTORE}" = "true" ]; then
+        echo "Restoring host kernel as linbo64..."
+        cp "${HOST_KERNEL}" "${LINBO64}"
+        md5sum "${LINBO64}" | awk '{print $1}' > "${LINBO64}.md5"
+        echo "${HOST_KVER}" > "${KVER_MARKER}"
+        chown 1001:1001 "${LINBO64}" "${LINBO64}.md5" "${KVER_MARKER}"
+        echo "  Host kernel ${HOST_KVER} restored ($(stat -c%s "${LINBO64}") bytes)"
+    fi
+}
+
 # Check if boot files already exist
 if [ -f "${MARKER_FILE}" ] && [ "${FORCE_UPDATE}" != "true" ]; then
     INSTALLED_VERSION=$(cat "${MARKER_FILE}")
     echo "Boot files already installed (version: ${INSTALLED_VERSION})"
     echo "Set FORCE_UPDATE=true to force re-download"
+    restore_host_kernel
     provision_kernels
     provision_themes
     exit 0
@@ -231,6 +310,7 @@ fi
 if [ -f "${LINBO_DIR}/linbo64" ] && [ "${FORCE_UPDATE}" != "true" ]; then
     echo "Boot files found (linbo64 exists), skipping download"
     echo "Set FORCE_UPDATE=true to force re-download"
+    restore_host_kernel
     provision_kernels
     provision_themes
     exit 0
@@ -281,6 +361,9 @@ if [ ! -f "${LINBO_DIR}/linbofs64" ]; then
     echo "WARNING: linbofs64 not found — will be built by update-linbofs.sh on first API start"
 fi
 
+# Replace extracted package kernel with host kernel (if available)
+restore_host_kernel
+
 # Write marker file with version info
 VERSION=$(date +%Y%m%d-%H%M%S)
 if [ -f "${LINBO_DIR}/VERSION" ]; then
@@ -312,5 +395,18 @@ fi
 
 # Provision GUI themes
 provision_themes
+
+# Create gui/ symlinks (new LINBO versions look for gui/linbo_gui64_7.tar.lz and gui/icons/)
+if [ -f "${LINBO_DIR}/linbo_gui64_7.tar.lz" ]; then
+    mkdir -p "${LINBO_DIR}/gui"
+    ln -sf "${LINBO_DIR}/linbo_gui64_7.tar.lz" "${LINBO_DIR}/gui/linbo_gui64_7.tar.lz"
+    ln -sf "${LINBO_DIR}/linbo_gui64_7.tar.lz.md5" "${LINBO_DIR}/gui/linbo_gui64_7.tar.lz.md5" 2>/dev/null
+    # Icons symlink (gui/icons/ → icons/)
+    if [ -d "${LINBO_DIR}/icons" ]; then
+        ln -sfn "${LINBO_DIR}/icons" "${LINBO_DIR}/gui/icons"
+    fi
+    chown -h 1001:1001 "${LINBO_DIR}/gui"/* 2>/dev/null
+    echo "GUI symlinks created in ${LINBO_DIR}/gui/"
+fi
 
 exit 0

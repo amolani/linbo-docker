@@ -96,3 +96,6 @@ Desktop.ini
 repo/
 docs/repo/
 docs/export/
+
+# LINBO kernel binary (provisioned at runtime, not in repo)
+linbo64
