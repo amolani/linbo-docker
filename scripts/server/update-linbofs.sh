@@ -18,6 +18,11 @@ CONFIG_DIR="${CONFIG_DIR:-/etc/linuxmuster/linbo}"
 CACHE_DIR="/var/cache/linbo"
 KERNEL_VAR_DIR="${KERNEL_VAR_DIR:-/var/lib/linuxmuster/linbo/current}"
 
+# Host kernel support (set by linbo-update.service.js)
+USE_HOST_KERNEL="${USE_HOST_KERNEL:-false}"
+HOST_MODULES_PATH_OVERRIDE="${HOST_MODULES_PATH:-}"
+SKIP_KERNEL_COPY="${SKIP_KERNEL_COPY:-false}"
+
 # Files
 LINBOFS="$LINBO_DIR/linbofs64"
 RSYNC_SECRETS="${RSYNC_SECRETS:-$CONFIG_DIR/rsyncd.secrets}"
@@ -219,6 +224,53 @@ if [ "$HAS_KERNEL_VARIANT" = "true" ]; then
     if command -v depmod &>/dev/null; then
         depmod -a -b . "$MOD_KVER"
         echo "  - depmod completed"
+    fi
+fi
+
+# =============================================================================
+# Step 7b: Inject host kernel modules (if USE_HOST_KERNEL=true)
+# =============================================================================
+# When running in Docker with the host kernel, the linbo7 package modules
+# won't match. We inject the host's /lib/modules/<kver> instead, so the
+# initrd boots with full hardware support on the host kernel.
+
+if [ "$USE_HOST_KERNEL" = "true" ]; then
+    HOST_KVER=$(uname -r)
+    HOST_MOD_SRC="${HOST_MODULES_PATH_OVERRIDE:-/lib/modules/$HOST_KVER}"
+
+    if [ -d "$HOST_MOD_SRC" ]; then
+        echo "Injecting HOST kernel modules ($HOST_KVER)..."
+
+        # Clean previous modules
+        mkdir -p lib/modules
+        rm -rf lib/modules/*
+
+        # Copy host modules: use rsync to follow symlinks but skip broken ones
+        # build/ and source/ are symlinks to /usr/src/* which don't exist in container
+        if command -v rsync &>/dev/null; then
+            rsync -a --copy-links --safe-links \
+                --exclude='build' --exclude='source' \
+                "$HOST_MOD_SRC/" "lib/modules/$HOST_KVER/"
+        else
+            # Fallback: copy without following symlinks, then clean up
+            cp -r "$HOST_MOD_SRC" "lib/modules/$HOST_KVER"
+            rm -rf "lib/modules/$HOST_KVER/build" "lib/modules/$HOST_KVER/source"
+        fi
+
+        # Run depmod for host kernel version
+        if command -v depmod &>/dev/null; then
+            depmod -a -b . "$HOST_KVER"
+            echo "  - depmod completed for $HOST_KVER"
+        fi
+
+        MOD_COUNT=$(find "lib/modules/$HOST_KVER" -name '*.ko' -o -name '*.ko.xz' -o -name '*.ko.zst' | wc -l)
+        echo "  - Host modules injected: $MOD_COUNT files"
+
+        # Disable package variant module injection (host modules take priority)
+        HAS_KERNEL_VARIANT=false
+    else
+        echo "WARNING: Host modules not found at $HOST_MOD_SRC"
+        echo "Falling back to package kernel modules (if available)"
     fi
 fi
 
@@ -521,7 +573,9 @@ echo "  - MD5: $(cat ${LINBOFS}.md5)"
 # Step 15: Copy kernel from variant (if available)
 # =============================================================================
 
-if [ "$HAS_KERNEL_VARIANT" = "true" ]; then
+if [ "$SKIP_KERNEL_COPY" = "true" ]; then
+    echo "Skipping kernel copy (SKIP_KERNEL_COPY=true, host kernel preserved)"
+elif [ "$HAS_KERNEL_VARIANT" = "true" ]; then
     echo "Copying kernel from variant '$KTYPE'..."
     cp "$VARIANT_DIR/linbo64" "$LINBO_DIR/linbo64"
     md5sum "$LINBO_DIR/linbo64" | awk '{print $1}' > "$LINBO_DIR/linbo64.md5"

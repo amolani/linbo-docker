@@ -19,6 +19,8 @@ const grubThemeService = require('../services/grub-theme.service');
 const kernelService = require('../services/kernel.service');
 const firmwareService = require('../services/firmware.service');
 const operationWorker = require('../workers/operation.worker');
+const linboUpdateService = require('../services/linbo-update.service');
+const fs = require('fs').promises;
 
 // Multer for theme file uploads (logo + icons)
 const themeUpload = multer({
@@ -43,7 +45,9 @@ const kernelRepairSchema = z.object({
 
 /**
  * POST /system/update-linbofs
- * Update linbofs64 with current SSH keys and password hash
+ * Update linbofs64 with current SSH keys and password hash.
+ * Auto-detects host kernel and passes env vars so update-linbofs.sh
+ * uses host modules (not the undersized linbo7 package modules).
  */
 router.post(
   '/update-linbofs',
@@ -57,7 +61,34 @@ router.post(
         timestamp: new Date(),
       });
 
-      const result = await linbofsService.updateLinbofs();
+      // Auto-detect host kernel for module injection
+      const hostKernel = await linboUpdateService._testing.isHostKernelAvailable();
+      const opts = {};
+      if (hostKernel.available) {
+        opts.env = {
+          USE_HOST_KERNEL: 'true',
+          HOST_MODULES_PATH: hostKernel.modulesPath,
+          SKIP_KERNEL_COPY: 'true',
+        };
+      }
+
+      const result = await linbofsService.updateLinbofs(opts);
+
+      // Post-rebuild: preserve host kernel as linbo64
+      if (result.success && hostKernel.available) {
+        try {
+          const LINBO_DIR = process.env.LINBO_DIR || '/srv/linbo';
+          await fs.copyFile(hostKernel.kernelPath, path.join(LINBO_DIR, 'linbo64'));
+          const { exec: execCb } = require('child_process');
+          const { promisify } = require('util');
+          const execAsync = promisify(execCb);
+          const { stdout } = await execAsync(`md5sum "${path.join(LINBO_DIR, 'linbo64')}" | awk '{print $1}'`);
+          await fs.writeFile(path.join(LINBO_DIR, 'linbo64.md5'), stdout.trim());
+          await fs.writeFile(path.join(LINBO_DIR, '.host-kernel-version'), hostKernel.kver);
+        } catch (err) {
+          console.error('[update-linbofs] WARNING: Failed to preserve host kernel:', err.message);
+        }
+      }
 
       // Broadcast completion event
       ws.broadcast('system.linbofs_updated', {
@@ -73,6 +104,7 @@ router.post(
             message: 'linbofs64 updated successfully',
             output: result.output,
             duration: result.duration,
+            hostKernel: hostKernel.available ? hostKernel.kver : null,
           },
         });
       } else {
@@ -1324,6 +1356,93 @@ router.post(
     } catch (error) {
       next(error);
     }
+  }
+);
+
+// =============================================================================
+// LINBO Version & Update Management
+// =============================================================================
+
+/**
+ * GET /system/linbo-version
+ * Check installed and available LINBO version
+ */
+router.get(
+  '/linbo-version',
+  authenticateToken,
+  async (req, res, next) => {
+    try {
+      const info = await linboUpdateService.checkVersion();
+      res.json({ data: info });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /system/linbo-update
+ * Start LINBO update (downloads, extracts, provisions, rebuilds)
+ */
+router.post(
+  '/linbo-update',
+  authenticateToken,
+  requireRole(['admin']),
+  auditAction('system.linbo_update'),
+  async (req, res, next) => {
+    try {
+      // Start update in background
+      linboUpdateService.startUpdate().catch((err) => {
+        if (err.message !== 'Update cancelled') {
+          console.error('[LinboUpdate] Update failed:', err.message);
+        }
+      });
+
+      res.json({ data: { started: true } });
+    } catch (error) {
+      if (error.statusCode === 409) {
+        return res.status(409).json({
+          error: { code: 'UPDATE_IN_PROGRESS', message: error.message },
+        });
+      }
+      if (error.statusCode === 400) {
+        return res.status(400).json({
+          error: { code: 'NO_UPDATE', message: error.message },
+        });
+      }
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /system/linbo-update/status
+ * Get current update progress
+ */
+router.get(
+  '/linbo-update/status',
+  authenticateToken,
+  async (req, res, next) => {
+    try {
+      const status = await linboUpdateService.getStatus();
+      res.json({ data: status });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /system/linbo-update/cancel
+ * Cancel a running update
+ */
+router.post(
+  '/linbo-update/cancel',
+  authenticateToken,
+  requireRole(['admin']),
+  async (req, res) => {
+    linboUpdateService.cancelUpdate();
+    res.json({ data: { cancelled: true } });
   }
 );
 

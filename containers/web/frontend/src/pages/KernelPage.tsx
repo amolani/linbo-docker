@@ -1,4 +1,5 @@
 import { KernelSwitcher } from '@/components/system/KernelSwitcher';
+import { LinboUpdater } from '@/components/system/LinboUpdater';
 
 export function KernelPage() {
   return (
@@ -10,6 +11,7 @@ export function KernelPage() {
         </p>
       </div>
 
+      <LinboUpdater />
       <KernelSwitcher />
     </div>
   );

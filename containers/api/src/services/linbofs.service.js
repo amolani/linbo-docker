@@ -26,6 +26,7 @@ async function updateLinbofs(options = {}) {
     LINBO_DIR: options.linboDir || LINBO_DIR,
     CONFIG_DIR: options.configDir || CONFIG_DIR,
     RSYNC_SECRETS: options.rsyncSecrets || '/etc/rsyncd.secrets',
+    ...(options.env || {}),
   };
 
   try {
@@ -78,6 +79,7 @@ function updateLinbofsStream(onData, onError, options = {}) {
       LINBO_DIR: options.linboDir || LINBO_DIR,
       CONFIG_DIR: options.configDir || CONFIG_DIR,
       RSYNC_SECRETS: options.rsyncSecrets || '/etc/rsyncd.secrets',
+      ...(options.env || {}),
     };
 
     const child = spawn('bash', [UPDATE_SCRIPT], { env });

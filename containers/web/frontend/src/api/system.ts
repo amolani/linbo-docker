@@ -5,6 +5,25 @@ interface ApiResponse<T> {
   data: T;
 }
 
+export interface LinboVersionInfo {
+  installed: string;
+  installedFull: string;
+  available: string | null;
+  updateAvailable: boolean;
+  packageSize?: number;
+  sha256?: string;
+  filename?: string;
+}
+
+export interface LinboUpdateStatus {
+  status: 'idle' | 'checking' | 'downloading' | 'verifying' | 'extracting' | 'provisioning' | 'rebuilding' | 'done' | 'error' | 'cancelled';
+  progress: number;
+  message: string;
+  version?: string;
+  startedAt?: string;
+  error?: string;
+}
+
 export const systemApi = {
   getKernelVariants: async (): Promise<KernelVariant[]> => {
     const response = await apiClient.get<ApiResponse<KernelVariant[]>>('/system/kernel-variants');
@@ -136,5 +155,26 @@ export const systemApi = {
 
   resetGrubThemeLogo: async (): Promise<void> => {
     await apiClient.post('/system/grub-theme/logo/reset');
+  },
+
+  // LINBO Version & Update
+  checkLinboVersion: async (): Promise<LinboVersionInfo> => {
+    const response = await apiClient.get<ApiResponse<LinboVersionInfo>>('/system/linbo-version');
+    return response.data.data;
+  },
+
+  startLinboUpdate: async (): Promise<{ started: boolean }> => {
+    const response = await apiClient.post<ApiResponse<{ started: boolean }>>('/system/linbo-update');
+    return response.data.data;
+  },
+
+  getLinboUpdateStatus: async (): Promise<LinboUpdateStatus> => {
+    const response = await apiClient.get<ApiResponse<LinboUpdateStatus>>('/system/linbo-update/status');
+    return response.data.data;
+  },
+
+  cancelLinboUpdate: async (): Promise<{ cancelled: boolean }> => {
+    const response = await apiClient.post<ApiResponse<{ cancelled: boolean }>>('/system/linbo-update/cancel');
+    return response.data.data;
   },
 };

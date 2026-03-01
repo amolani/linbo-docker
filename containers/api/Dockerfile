@@ -39,6 +39,7 @@ RUN apk add --no-cache \
     argon2 \
     bash \
     curl \
+    dpkg \
     openssh-client \
     openssl \
     rsync \
