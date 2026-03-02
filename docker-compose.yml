@@ -32,12 +32,9 @@ services:
       context: ./containers/tftp
       dockerfile: Dockerfile
     container_name: linbo-tftp
-    ports:
-      - "69:69/udp"
+    network_mode: host
     volumes:
       - linbo_srv_data:/srv/linbo:ro
-    networks:
-      - linbo-net
     restart: unless-stopped
     depends_on:
       init:
@@ -141,6 +138,9 @@ services:
       - linbo_driver_data:/var/lib/linbo/drivers
       - ./scripts/server:/usr/share/linuxmuster/linbo
       - ./config/rsyncd.secrets:/etc/rsyncd.secrets:ro
+      - ./config/server_id_rsa.pub:/etc/linuxmuster/linbo/server_id_rsa.pub:ro
+      - ./config/dropbear_dss_host_key:/etc/linuxmuster/linbo/dropbear_dss_host_key:ro
+      - ./config/dropbear_rsa_host_key:/etc/linuxmuster/linbo/dropbear_rsa_host_key:ro
       - /lib/firmware:/lib/firmware:ro
       - /boot:/boot:ro
       - /lib/modules:/lib/modules:ro
@@ -164,10 +164,10 @@ services:
       - JWT_SECRET=${JWT_SECRET:-your_jwt_secret_here_change_in_production}
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-24h}
       - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-Muster!}
       # SSH (for remote commands)
       - SSH_HOST=linbo-ssh
-      - SSH_PORT=22
+      - SSH_PORT=2222
       - SSH_USER=root
       - SSH_PRIVATE_KEY=/etc/linuxmuster/linbo/ssh_host_rsa_key
       - SSH_TIMEOUT=${SSH_TIMEOUT:-10000}

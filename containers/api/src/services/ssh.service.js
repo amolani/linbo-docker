@@ -4,16 +4,30 @@
  */
 
 const { Client } = require('ssh2');
+const fs = require('fs');
+
+/**
+ * Load SSH private key from file path (ssh2 requires key content, not path)
+ */
+let loadedPrivateKey = null;
+const keyPath = process.env.SSH_PRIVATE_KEY;
+if (keyPath) {
+  try {
+    loadedPrivateKey = fs.readFileSync(keyPath);
+  } catch (err) {
+    console.error(`[SSH] Failed to read private key from ${keyPath}:`, err.message);
+  }
+}
 
 /**
  * Default SSH configuration
  */
 const defaultConfig = {
-  port: 22,
+  port: parseInt(process.env.SSH_PORT, 10) || 2222,
   username: process.env.SSH_USERNAME || 'root',
-  privateKey: process.env.SSH_PRIVATE_KEY,
+  privateKey: loadedPrivateKey,
   passphrase: process.env.SSH_PASSPHRASE,
-  readyTimeout: 10000,
+  readyTimeout: parseInt(process.env.SSH_TIMEOUT, 10) || 10000,
   keepaliveInterval: 5000,
 };
 

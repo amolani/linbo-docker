@@ -682,6 +682,7 @@ async function rebuildLinbofs(version) {
   if (hostKernel.available) {
     try {
       await fs.copyFile(hostKernel.kernelPath, path.join(LINBO_DIR, 'linbo64'));
+      await fs.chmod(path.join(LINBO_DIR, 'linbo64'), 0o644);
       const { stdout } = await execAsync(`md5sum "${path.join(LINBO_DIR, 'linbo64')}" | awk '{print $1}'`);
       await fs.writeFile(path.join(LINBO_DIR, 'linbo64.md5'), stdout.trim());
       // Write host kernel version marker for drift detection
@@ -832,6 +833,7 @@ module.exports = {
   startUpdate,
   getStatus,
   cancelUpdate,
+  isHostKernelAvailable,
   // Exported for testing
   _testing: {
     parseDebianStanza,
@@ -846,7 +848,6 @@ module.exports = {
     cleanup,
     provisionKernelSets,
     buildManifest,
-    isHostKernelAvailable,
     mergeGrubFiles,
     provisionKernels,
   },

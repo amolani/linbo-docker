@@ -238,10 +238,44 @@ restore_host_kernel() {
     HOST_KERNEL="/boot/vmlinuz-${HOST_KVER}"
     LINBO64="${LINBO_DIR}/linbo64"
     KVER_MARKER="${LINBO_DIR}/.host-kernel-version"
+    KVER_PIN="${LINBO_DIR}/.kernel-pinned"
 
     if [ ! -f "${HOST_KERNEL}" ]; then
         echo "INFO: Host kernel not available at ${HOST_KERNEL}"
         echo "(This is normal if /boot is not bind-mounted)"
+        return 0
+    fi
+
+    # Pinning: If a specific kernel version is pinned, skip all auto-restore.
+    # This is needed when the running host kernel has bugs (e.g. broken virtio-net)
+    # and a different kernel version must be used for PXE boot clients.
+    # Pin with: echo "6.8.0-94-generic" > /srv/linbo/.kernel-pinned
+    # Unpin with: rm /srv/linbo/.kernel-pinned
+    if [ -f "${KVER_PIN}" ]; then
+        PINNED_KVER=$(cat "${KVER_PIN}")
+        echo "INFO: Kernel pinned to ${PINNED_KVER} (skipping auto-restore)"
+        echo "  To unpin: rm ${KVER_PIN}"
+        # Still check if linbo64 exists and is readable
+        if [ -f "${LINBO64}" ]; then
+            LINBO64_SIZE=$(stat -c%s "${LINBO64}" 2>/dev/null || echo 0)
+            if [ "${LINBO64_SIZE}" -gt 8000000 ]; then
+                return 0
+            fi
+            echo "WARNING: linbo64 is suspiciously small despite pin, restoring pinned kernel"
+        fi
+        # Restore from pinned version if available
+        PINNED_KERNEL="/boot/vmlinuz-${PINNED_KVER}"
+        if [ -f "${PINNED_KERNEL}" ]; then
+            echo "Restoring pinned kernel ${PINNED_KVER} as linbo64..."
+            cp "${PINNED_KERNEL}" "${LINBO64}"
+            chmod 644 "${LINBO64}"
+            md5sum "${LINBO64}" | awk '{print $1}' > "${LINBO64}.md5"
+            echo "${PINNED_KVER}" > "${KVER_MARKER}"
+            chown 1001:1001 "${LINBO64}" "${LINBO64}.md5" "${KVER_MARKER}"
+            echo "  Pinned kernel ${PINNED_KVER} restored ($(stat -c%s "${LINBO64}") bytes)"
+        else
+            echo "WARNING: Pinned kernel ${PINNED_KERNEL} not found on host!"
+        fi
         return 0
     fi
 
@@ -288,6 +322,7 @@ restore_host_kernel() {
     if [ "${NEED_RESTORE}" = "true" ]; then
         echo "Restoring host kernel as linbo64..."
         cp "${HOST_KERNEL}" "${LINBO64}"
+        chmod 644 "${LINBO64}"
         md5sum "${LINBO64}" | awk '{print $1}' > "${LINBO64}.md5"
         echo "${HOST_KVER}" > "${KVER_MARKER}"
         chown 1001:1001 "${LINBO64}" "${LINBO64}.md5" "${KVER_MARKER}"
@@ -363,6 +398,12 @@ fi
 
 # Replace extracted package kernel with host kernel (if available)
 restore_host_kernel
+
+# Signal that API needs to rebuild linbofs64 (fresh download replaced patched version)
+echo "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "${LINBO_DIR}/.needs-rebuild"
+chmod 664 "${LINBO_DIR}/.needs-rebuild"
+chown 1001:1001 "${LINBO_DIR}/.needs-rebuild"
+echo "Rebuild marker set — API will rebuild linbofs64 on startup"
 
 # Write marker file with version info
 VERSION=$(date +%Y%m%d-%H%M%S)

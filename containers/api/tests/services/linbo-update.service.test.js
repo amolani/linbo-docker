@@ -638,7 +638,7 @@ describe('WS events', () => {
 // ---------------------------------------------------------------------------
 
 describe('isHostKernelAvailable()', () => {
-  const { isHostKernelAvailable } = require('../../src/services/linbo-update.service')._testing;
+  const { isHostKernelAvailable } = require('../../src/services/linbo-update.service');
 
   test('returns correct structure', async () => {
     const result = await isHostKernelAvailable();

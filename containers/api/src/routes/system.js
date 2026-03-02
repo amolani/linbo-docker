@@ -62,7 +62,7 @@ router.post(
       });
 
       // Auto-detect host kernel for module injection
-      const hostKernel = await linboUpdateService._testing.isHostKernelAvailable();
+      const hostKernel = await linboUpdateService.isHostKernelAvailable();
       const opts = {};
       if (hostKernel.available) {
         opts.env = {
@@ -132,10 +132,11 @@ router.get(
   authenticateToken,
   async (req, res, next) => {
     try {
-      const [fileInfo, verification, keyFiles] = await Promise.all([
+      const [fileInfo, verification, keyFiles, patchStatus] = await Promise.all([
         linbofsService.getLinbofsInfo(),
         linbofsService.verifyLinbofs(),
         linbofsService.checkKeyFiles(),
+        linbofsService.getPatchStatus(),
       ]);
 
       // Determine overall status
@@ -166,6 +167,7 @@ router.get(
           file: fileInfo,
           contents: verification,
           availableKeys: keyFiles,
+          patchHealth: patchStatus,
         },
       });
     } catch (error) {
@@ -185,6 +187,23 @@ router.get(
     try {
       const info = await linbofsService.getLinbofsInfo();
       res.json({ data: info });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /system/patch-status
+ * Get Docker patch application status from last linbofs64 build
+ */
+router.get(
+  '/patch-status',
+  authenticateToken,
+  async (req, res, next) => {
+    try {
+      const status = await linbofsService.getPatchStatus();
+      res.json({ data: status });
     } catch (error) {
       next(error);
     }

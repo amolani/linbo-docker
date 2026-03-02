@@ -3,13 +3,14 @@ import { configsApi } from '@/api/configs';
 import { useIconCache } from '@/hooks/useIconCache';
 import { LinboGuiPreview, LinboGuiAdminPreview } from '@/components/configs';
 import { notify } from '@/stores/notificationStore';
+import { useServerConfigStore } from '@/stores/serverConfigStore';
 import type { Config, LinboSettings, ConfigOs } from '@/types';
 
 type OsEntryData = Omit<ConfigOs, 'id' | 'configId'>;
 type ViewMode = 'client' | 'admin';
 
 const defaultLinboSettings: LinboSettings = {
-  server: '10.0.0.1',
+  server: useServerConfigStore.getState().serverIp || '10.0.0.1',
   cache: '/dev/sda4',
   downloadType: 'rsync',
 };

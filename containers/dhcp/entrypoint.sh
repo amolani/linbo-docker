@@ -44,6 +44,11 @@ SHARED_CONFIG="/srv/linbo/dhcp/dnsmasq-proxy.conf"
 if [ -f "${SHARED_CONFIG}" ]; then
   echo "[DHCP] Using pre-generated config from ${SHARED_CONFIG}"
   cp "${SHARED_CONFIG}" "${CONFIG_FILE}"
+  # Ensure interface matches DHCP_INTERFACE env var (config may have been
+  # generated with a different interface name, e.g. eth0 vs enp6s18)
+  if grep -q "^interface=" "${CONFIG_FILE}"; then
+    sed -i "s/^interface=.*/interface=${DHCP_INTERFACE}/" "${CONFIG_FILE}"
+  fi
 else
   # Fetch config from API using internal API key for authentication
   echo "[DHCP] Fetching proxy config from API..."

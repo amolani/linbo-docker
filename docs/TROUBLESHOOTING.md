@@ -1,6 +1,6 @@
 # LINBO Docker - Troubleshooting & Fehlerdokumentation
 
-**Stand:** 2026-02-06
+**Stand:** 2026-03-02
 
 ---
 
@@ -466,7 +466,144 @@ case 'pre-download':
 
 ---
 
-## Aktueller Stand (2026-02-06)
+## 16. SSH zu LINBO-Clients: Connection Refused (Port + Key)
+
+### Problem
+SSH vom API-Container zu LINBO-Clients schlägt fehl:
+```
+Error: connect ECONNREFUSED 10.0.150.2:22
+```
+Remote-Befehle (sync, start, reboot) über API funktionieren nicht.
+
+### Ursache
+Zwei Fehler in `containers/api/src/services/ssh.service.js`:
+1. **Port 22 statt 2222**: LINBO-Clients (Dropbear) lauschen auf Port 2222
+2. **Key-Pfad statt Key-Inhalt**: `ssh2` benötigt den SSH-Key als Buffer, nicht als Dateipfad
+
+### Lösung
+```javascript
+// ssh.service.js: Key als Datei lesen
+const fs = require('fs');
+let loadedPrivateKey = null;
+if (keyPath) {
+  loadedPrivateKey = fs.readFileSync(keyPath);
+}
+
+const defaultConfig = {
+  port: parseInt(process.env.SSH_PORT, 10) || 2222,  // war: 22
+  privateKey: loadedPrivateKey,  // war: process.env.SSH_PRIVATE_KEY (Pfad!)
+};
+```
+
+In `docker-compose.yml`:
+```yaml
+- SSH_PORT=2222   # war: SSH_PORT=22
+```
+
+### Verifikation
+```bash
+docker exec linbo-api node -e "
+  const ssh = require('./src/services/ssh.service');
+  ssh.testConnection('10.0.150.2').then(console.log);
+"
+# { success: true, connected: true }
+```
+
+---
+
+## 17. Qt-GUI Buttons nicht klickbar (udevd/libinput)
+
+### Problem
+LINBO-GUI zeigt Buttons an, aber Maus-Klicks werden ignoriert. Cursor bewegt sich nicht.
+
+### Ursache
+`init.sh` startet udevd in `hwsetup()`, aber udevd stirbt bevor `linbo.sh` die GUI startet. Ohne udevd fehlt die `/run/udev/` Datenbank. Qt/libinput braucht `ID_INPUT=1` Properties um Input-Geräte zu erkennen.
+
+### Lösung
+Patch 7 (DOCKER_UDEV_INPUT) in `scripts/server/update-linbofs.sh` fügt vor dem GUI-Start ein:
+```bash
+if ! pidof udevd >/dev/null 2>&1; then
+  mkdir -p /run/udev
+  udevd --daemon 2>/dev/null
+  udevadm trigger --type=all --action=add 2>/dev/null
+  udevadm settle --timeout=5 2>/dev/null
+fi
+```
+
+Nach Fix: `update-linbofs.sh` ausführen → TFTP restart → Client PXE-Reboot.
+
+### Debug
+```bash
+# Auf dem Client via SSH:
+pidof udevd                    # Muss PID zeigen
+ls /run/udev/data/             # Muss Dateien enthalten
+udevadm info --query=property --name=/dev/input/event3  # Muss ID_INPUT=1 zeigen
+```
+
+**Detaillierte Analyse:** `docs/debug/linbo/10-standard-funktionen.md`
+
+---
+
+## 18. PTY Allocation Failed (SSH ohne Kommando)
+
+### Problem
+```
+ssh -p 2222 root@10.0.150.2
+# PTY allocation request failed on channel 0
+```
+
+### Ursache
+LINBO-Clients haben kein `/dev/pts` → interaktive SSH-Sessions (ohne Kommando) scheitern.
+
+### Lösung
+Immer explizites Kommando mitgeben:
+```bash
+ssh -p 2222 root@10.0.150.2 "echo connected"     # OK
+ssh -p 2222 root@10.0.150.2                        # FEHLER
+```
+
+---
+
+## 19. Deploy: "no configuration file provided"
+
+### Problem
+```bash
+ssh root@10.0.0.13 "docker compose up -d --build api web"
+# no configuration file provided: not found
+```
+
+### Ursache
+SSH-Session startet in `/root/`, nicht in `/root/linbo-docker/`.
+
+### Lösung
+```bash
+ssh root@10.0.0.13 "COMPOSE_FILE=/root/linbo-docker/docker-compose.yml \
+  docker compose up -d --build api web"
+```
+
+Oder `scripts/deploy.sh` verwenden, das dies automatisch handhabt.
+
+---
+
+## 20. Web-Container Build: 401 Unauthorized (npm)
+
+### Problem
+```
+npm ci: 401 Unauthorized - GET https://npm.pkg.github.com/download/@edulution-io/ui-kit/...
+```
+
+### Ursache
+`@edulution-io/ui-kit` ist ein privates npm-Paket auf GitHub Packages.
+
+### Lösung
+GitHub-Token beim Build übergeben:
+```bash
+GITHUB_TOKEN=ghp_xxx docker compose up -d --build web
+```
+
+---
+
+## Aktueller Stand (2026-03-02)
 
 ### Hauptserver (10.0.0.11 - Produktion)
 | Service | Status | Port | Notizen |

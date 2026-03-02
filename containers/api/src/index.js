@@ -396,6 +396,58 @@ async function startServer() {
     }
   }
 
+  // Auto-rebuild linbofs64 if init container downloaded fresh boot files
+  try {
+    const LINBO_DIR_REBUILD = process.env.LINBO_DIR || '/srv/linbo';
+    const rebuildMarker = `${LINBO_DIR_REBUILD}/.needs-rebuild`;
+    const runningMarker = `${LINBO_DIR_REBUILD}/.needs-rebuild.running`;
+
+    if (sanityFs.existsSync(rebuildMarker)) {
+      console.log('  Rebuild marker found — triggering linbofs64 rebuild...');
+      // Rename to .running (atomic) — prevents loop but preserves intent on crash
+      sanityFs.renameSync(rebuildMarker, runningMarker);
+
+      const linbofsService = require('./services/linbofs.service');
+      const { isHostKernelAvailable } = require('./services/linbo-update.service');
+
+      isHostKernelAvailable().then(async (hk) => {
+        const opts = {};
+        if (hk.available) {
+          opts.env = {
+            USE_HOST_KERNEL: 'true',
+            HOST_MODULES_PATH: hk.modulesPath,
+            SKIP_KERNEL_COPY: 'true',
+          };
+        }
+        const result = await linbofsService.updateLinbofs(opts);
+        if (result.success) {
+          console.log('[AutoRebuild] linbofs64 rebuilt successfully');
+          // Preserve host kernel
+          if (hk.available) {
+            sanityFs.copyFileSync(hk.kernelPath, `${LINBO_DIR_REBUILD}/linbo64`);
+            sanityFs.writeFileSync(`${LINBO_DIR_REBUILD}/.host-kernel-version`, hk.kver);
+          }
+          // Success — remove running marker
+          try { sanityFs.unlinkSync(runningMarker); } catch {}
+        } else {
+          console.error('[AutoRebuild] FAILED:', result.errors);
+          // Rename back so next restart retries
+          try { sanityFs.renameSync(runningMarker, rebuildMarker); } catch {}
+        }
+      }).catch(err => {
+        console.error('[AutoRebuild] Error:', err.message);
+        try { sanityFs.renameSync(runningMarker, rebuildMarker); } catch {}
+      });
+    } else if (sanityFs.existsSync(runningMarker)) {
+      // Previous rebuild was interrupted — retry
+      console.log('  Previous rebuild was interrupted — retrying...');
+      sanityFs.renameSync(runningMarker, rebuildMarker);
+      // Will be picked up on next restart
+    }
+  } catch (err) {
+    console.warn('  Auto-rebuild check failed:', err.message);
+  }
+
   // Start HTTP server
   server.listen(PORT, HOST, () => {
     console.log(`

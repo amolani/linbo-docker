@@ -1,6 +1,6 @@
 # LINBO PXE Boot - Debug-Handbuch
 
-**Stand:** 2026-03-01 | **Testserver:** 10.0.0.13 | **Produktion:** 10.0.0.11
+**Stand:** 2026-03-02 | **Testserver:** 10.0.0.13 | **Produktion:** 10.0.0.11
 
 Dieses Handbuch dokumentiert alle Erkenntnisse aus dem Debugging von LINBO PXE Boot
 in der Docker-Umgebung. Ziel: Beim naechsten Problem nicht von vorne anfangen.
@@ -18,6 +18,26 @@ in der Docker-Umgebung. Ziel: Beim naechsten Problem nicht von vorne anfangen.
 7. [Haeufige Fehlerbilder](./07-fehlerbilder.md) — "Remote Control Mode" und Co.
 8. [Dreischicht-Kernelschutz](./08-kernel-schutz.md) — Update-sichere Architektur
 9. [Kernel-Version-Bug](./09-kernel-version-bug.md) — 6.8.0-64 virtio-net Bug (2 Tage Debug)
+10. [Standard-Funktionen](./10-standard-funktionen.md) — SSH-Port, udevd/libinput Input-Fix, Deploy
+
+---
+
+## Schnelldiagnose: "Buttons nicht klickbar"
+
+Wenn ein Client die GUI anzeigt aber Maus/Tastatur nicht reagieren:
+
+```
+1. SSH zum Client:  ssh -p 2222 root@<client-ip> "echo test"
+2. udevd laeuft?:  pidof udevd
+3. udev-DB voll?:  ls /run/udev/data/ | wc -l   (muss > 0 sein)
+4. Input-Props?:   udevadm info --query=property --name=/dev/input/event3
+                   → ID_INPUT=1 muss vorhanden sein
+5. Manueller Fix:  udevd --daemon && udevadm trigger && udevadm settle
+                   → GUI-Prozess killen (BusyBox respawnt ihn)
+```
+
+Permanent: Patch 7 (DOCKER_UDEV_INPUT) in update-linbofs.sh
+Siehe [10-standard-funktionen.md](./10-standard-funktionen.md) Abschnitt 10.2
 
 ---
 

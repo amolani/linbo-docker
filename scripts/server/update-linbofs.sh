@@ -23,6 +23,67 @@ USE_HOST_KERNEL="${USE_HOST_KERNEL:-false}"
 HOST_MODULES_PATH_OVERRIDE="${HOST_MODULES_PATH:-}"
 SKIP_KERNEL_COPY="${SKIP_KERNEL_COPY:-false}"
 
+# Fallback network settings (used in Docker patches for DHCP failure fallback)
+FALLBACK_IP="${LINBO_FALLBACK_IP:-10.0.150.254}"
+FALLBACK_GW="${LINBO_GATEWAY:-10.0.0.254}"
+FALLBACK_MASK="${LINBO_FALLBACK_MASK:-16}"
+
+# =============================================================================
+# Patch Framework
+# =============================================================================
+PATCH_RESULTS=()
+
+record_patch() {
+    local name="$1" level="$2" status="$3"
+    PATCH_RESULTS+=("${name}|${level}|${status}")
+    if [[ "$status" == "FAILED" && "$level" == "CRITICAL" ]]; then
+        echo "  FATAL: Critical patch '$name' failed to apply!"
+    fi
+}
+
+# try_patch NAME LEVEL FILE MARKER CMD1 [CMD2] [CMD3]
+# Tries each CMD until MARKER appears in FILE, records result.
+try_patch() {
+    local name="$1" level="$2" file="$3" marker="$4"
+    shift 4
+
+    # Already applied?
+    if grep -q "$marker" "$file" 2>/dev/null; then
+        echo "  - $name already present"
+        record_patch "$name" "$level" "OK"
+        return 0
+    fi
+
+    # Try each command in order
+    local cmd
+    for cmd in "$@"; do
+        eval "$cmd"
+        if grep -q "$marker" "$file" 2>/dev/null; then
+            echo "  - $name applied successfully"
+            record_patch "$name" "$level" "OK"
+            return 0
+        fi
+    done
+
+    record_patch "$name" "$level" "FAILED"
+    return 1
+}
+
+# =============================================================================
+# Auto-detect Docker host kernel
+# =============================================================================
+# When /boot/vmlinuz-<kver> and /lib/modules/<kver> are bind-mounted from the
+# Docker host, automatically use them. This makes the script safe to call
+# directly (docker exec) without requiring USE_HOST_KERNEL to be passed.
+if [ "$USE_HOST_KERNEL" = "false" ]; then
+    _auto_kver=$(uname -r)
+    if [ -f "/boot/vmlinuz-${_auto_kver}" ] && [ -d "/lib/modules/${_auto_kver}" ]; then
+        echo "AUTO-DETECT: Host kernel ${_auto_kver} found, enabling host kernel mode"
+        USE_HOST_KERNEL=true
+        SKIP_KERNEL_COPY=true
+    fi
+fi
+
 # Files
 LINBOFS="$LINBO_DIR/linbofs64"
 RSYNC_SECRETS="${RSYNC_SECRETS:-$CONFIG_DIR/rsyncd.secrets}"
@@ -180,7 +241,7 @@ echo "Extract OK ($(find "$WORKDIR" -type f | wc -l) files)"
 # Step 7: Inject kernel modules (if variant available)
 # =============================================================================
 
-if [ "$HAS_KERNEL_VARIANT" = "true" ]; then
+if [ "$HAS_KERNEL_VARIANT" = "true" ] && [ "$USE_HOST_KERNEL" != "true" ]; then
     echo "Injecting kernel modules from variant '$KTYPE'..."
 
     # Ensure lib/modules exists
@@ -225,6 +286,8 @@ if [ "$HAS_KERNEL_VARIANT" = "true" ]; then
         depmod -a -b . "$MOD_KVER"
         echo "  - depmod completed"
     fi
+elif [ "$HAS_KERNEL_VARIANT" = "true" ] && [ "$USE_HOST_KERNEL" = "true" ]; then
+    echo "Skipping variant module extraction (host kernel takes priority)"
 fi
 
 # =============================================================================
@@ -235,8 +298,14 @@ fi
 # initrd boots with full hardware support on the host kernel.
 
 if [ "$USE_HOST_KERNEL" = "true" ]; then
-    HOST_KVER=$(uname -r)
-    HOST_MOD_SRC="${HOST_MODULES_PATH_OVERRIDE:-/lib/modules/$HOST_KVER}"
+    if [ -n "$HOST_MODULES_PATH_OVERRIDE" ]; then
+        # Extract kernel version from the explicit module path
+        HOST_KVER=$(basename "$HOST_MODULES_PATH_OVERRIDE")
+        HOST_MOD_SRC="$HOST_MODULES_PATH_OVERRIDE"
+    else
+        HOST_KVER=$(uname -r)
+        HOST_MOD_SRC="/lib/modules/$HOST_KVER"
+    fi
 
     if [ -d "$HOST_MOD_SRC" ]; then
         echo "Injecting HOST kernel modules ($HOST_KVER)..."
@@ -299,7 +368,7 @@ touch var/log/lastlog
 DROPBEAR_KEYS=0
 if ls "$CONFIG_DIR"/dropbear_*_host_key 1>/dev/null 2>&1; then
     cp "$CONFIG_DIR"/dropbear_*_host_key etc/dropbear/
-    DROPBEAR_KEYS=$(ls etc/dropbear/*.host_key 2>/dev/null | wc -l)
+    DROPBEAR_KEYS=$(ls etc/dropbear/*_host_key 2>/dev/null | wc -l)
     echo "  - Dropbear keys injected: $DROPBEAR_KEYS"
 fi
 
@@ -339,42 +408,472 @@ if [ -f "$LINBO_DIR/start.conf" ]; then
     echo "  - Default start.conf copied"
 fi
 
+
 # =============================================================================
-# Step 10.4: Patch init.sh for standalone Docker operation
+# Step 10.4: Docker patch helper functions
+# =============================================================================
+# These functions define multi-line patch insertions used by try_patch() below.
+# Defining them as functions avoids escaping issues with eval'd strings.
+
+_apply_iface_wait_primary() {
+    sed -i '/for dev in.*proc\/net\/dev/i\
+  # --- DOCKER_IFACE_WAIT: wait for NICs after udev + force UP ---\
+  local _iface_wait=0\
+  while [ $_iface_wait -lt 10 ]; do\
+    _found_if=$(ls /sys/class/net/ 2>/dev/null | grep -v ^lo | head -1)\
+    [ -n "$_found_if" ] && break\
+    _iface_wait=$((_iface_wait + 1))\
+    sleep 1\
+  done\
+  [ -n "$_found_if" ] && echo "Network interface $_found_if found after ${_iface_wait}s"\
+  # Force bring UP all non-lo interfaces immediately\
+  for _fif in $(ls /sys/class/net/ 2>/dev/null | grep -v ^lo); do\
+    ip link set dev "$_fif" up 2>/dev/null\
+  done\
+  sleep 2' "$WORKDIR/init.sh"
+}
+
+_apply_iface_wait_fallback() {
+    sed -i '/for[[:space:]].*in.*sys\/class\/net/i\
+  # --- DOCKER_IFACE_WAIT: wait for NICs after udev + force UP ---\
+  local _iface_wait=0\
+  while [ $_iface_wait -lt 10 ]; do\
+    _found_if=$(ls /sys/class/net/ 2>/dev/null | grep -v ^lo | head -1)\
+    [ -n "$_found_if" ] && break\
+    _iface_wait=$((_iface_wait + 1))\
+    sleep 1\
+  done\
+  [ -n "$_found_if" ] && echo "Network interface $_found_if found after ${_iface_wait}s"\
+  # Force bring UP all non-lo interfaces immediately\
+  for _fif in $(ls /sys/class/net/ 2>/dev/null | grep -v ^lo); do\
+    ip link set dev "$_fif" up 2>/dev/null\
+  done\
+  sleep 2' "$WORKDIR/init.sh"
+}
+
+_apply_storage_modules_primary() {
+    sed -i '1,/^#!/{/^#!/a\
+# --- DOCKER_STORAGE_MODULES: load disk drivers early ---\
+for _mod in ahci sd_mod sr_mod nvme ata_piix ata_generic virtio_blk virtio_scsi evdev hid hid_generic usbhid virtio_input psmouse xhci_hcd ehci_hcd uhci_hcd; do\
+    modprobe "$_mod" 2>/dev/null\
+done
+}' "$WORKDIR/init.sh"
+}
+
+_apply_storage_modules_fallback() {
+    sed -i '/^set -e/a\
+# --- DOCKER_STORAGE_MODULES: load disk drivers early ---\
+for _mod in ahci sd_mod sr_mod nvme ata_piix ata_generic virtio_blk virtio_scsi evdev hid hid_generic usbhid virtio_input psmouse xhci_hcd ehci_hcd uhci_hcd; do\
+    modprobe "$_mod" 2>/dev/null\
+done' "$WORKDIR/init.sh"
+}
+
+_apply_dhcp_fallback_primary() {
+    sed -i '/^[[:space:]]*# create environment/i\  # Fix RC when no interface was found (loop never executed)\n  [ -z "$ipaddr" ] && RC=1\n  # --- DOCKER_DHCP_FALLBACK ---\n  /docker_net_fallback.sh "$RC"\n  [ $? -eq 0 ] && RC=0' \
+        "$WORKDIR/init.sh"
+}
+
+_apply_dhcp_fallback_fallback() {
+    sed -i '/do_env/i\  # Fix RC when no interface was found (loop never executed)\n  [ -z "$ipaddr" ] && RC=1\n  # --- DOCKER_DHCP_FALLBACK ---\n  /docker_net_fallback.sh "$RC"\n  [ $? -eq 0 ] && RC=0' \
+        "$WORKDIR/init.sh"
+}
+
+_apply_net_recovery_primary() {
+    sed -i '/^# update & extract linbo_gui/i\# --- DOCKER_NET_RECOVERY ---\nsource /docker_net_recovery.sh' \
+        "$WORKDIR/linbo.sh"
+}
+
+_apply_net_recovery_fallback() {
+    sed -i '/linbo_update_gui/i\# --- DOCKER_NET_RECOVERY ---\nsource /docker_net_recovery.sh' \
+        "$WORKDIR/linbo.sh"
+}
+
+_apply_udev_input_primary() {
+    sed -i '/linbo_gui.*-platform.*linuxfb/i\
+    # --- DOCKER_UDEV_INPUT: ensure udev database exists for libinput ---\
+    if ! pidof udevd >/dev/null 2>&1; then\
+      mkdir -p /run/udev\
+      udevd --daemon 2>/dev/null\
+      udevadm trigger --type=all --action=add 2>/dev/null\
+      udevadm settle --timeout=5 2>/dev/null\
+    fi' "$WORKDIR/linbo.sh"
+}
+
+_apply_udev_input_fb1() {
+    sed -i '/linbo_gui.*-platform/i\
+    # --- DOCKER_UDEV_INPUT: ensure udev database exists for libinput ---\
+    if ! pidof udevd >/dev/null 2>&1; then\
+      mkdir -p /run/udev\
+      udevd --daemon 2>/dev/null\
+      udevadm trigger --type=all --action=add 2>/dev/null\
+      udevadm settle --timeout=5 2>/dev/null\
+    fi' "$WORKDIR/linbo.sh"
+}
+
+_apply_udev_input_fb2() {
+    sed -i '/[[:space:]]linbo_gui\b/i\
+    # --- DOCKER_UDEV_INPUT: ensure udev database exists for libinput ---\
+    if ! pidof udevd >/dev/null 2>&1; then\
+      mkdir -p /run/udev\
+      udevd --daemon 2>/dev/null\
+      udevadm trigger --type=all --action=add 2>/dev/null\
+      udevadm settle --timeout=5 2>/dev/null\
+    fi' "$WORKDIR/linbo.sh"
+}
+
+_apply_net_diag() {
+    cat > /tmp/diag_block.txt << 'DIAGEOF'
+    echo " This LINBO client is in remote control mode."
+    echo ""
+    echo " --- DOCKER_NET_DIAG v2 ---"
+    echo " BEFORE fix: $(ip link show dev eth0 2>&1 | head -1)"
+    ip link set dev eth0 up 2>/dev/null
+    _fixrc=$?
+    sleep 1
+    echo " ip link set eth0 up: exit=$_fixrc"
+    echo " AFTER fix: $(ip link show dev eth0 2>&1 | head -1)"
+    echo " carrier: $(cat /sys/class/net/eth0/carrier 2>/dev/null || echo none)"
+    echo " operstate: $(cat /sys/class/net/eth0/operstate 2>/dev/null)"
+    echo ""
+    echo " IP: $(ip addr show dev eth0 2>/dev/null | grep 'inet ' || echo 'none')"
+    echo " Kernel: $(uname -r)"
+    echo " LINBOSERVER=$LINBOSERVER SERVERID=$SERVERID"
+    echo " cmdline: $(cat /proc/cmdline)"
+    echo ""
+    echo " init.sh log (last 20 lines):"
+    tail -20 /tmp/linbo.log 2>/dev/null || tail -20 /tmp/init.log 2>/dev/null || echo "  (no log)"
+    echo " ---"
+DIAGEOF
+    awk '
+    /echo " This LINBO client is in remote control mode."/ {
+        while ((getline line < "/tmp/diag_block.txt") > 0) print line
+        next
+    }
+    { print }
+    ' "$WORKDIR/linbo.sh" > "$WORKDIR/linbo.sh.tmp" && \
+        mv "$WORKDIR/linbo.sh.tmp" "$WORKDIR/linbo.sh" && \
+        chmod +x "$WORKDIR/linbo.sh"
+    rm -f /tmp/diag_block.txt
+}
+
+# =============================================================================
+# Step 10.4b: Apply Docker patches for standalone operation
 # =============================================================================
 #
-# Problem: init.sh unconditionally overwrites LINBOSERVER with SERVERID (from
-# DHCP) when HOSTGROUP is set. In standard linuxmuster, DHCP server = LINBO
-# server, so this is fine. In Docker standalone (separate server), the DHCP
-# response comes from the production server, overwriting our cmdline server=.
-#
-# Fix: If server= was explicitly passed on the kernel cmdline, skip the
-# LINBOSERVER override so the cmdline value is preserved.
-#
+# All patches use try_patch() for consistent tracking and failure handling.
+# CRITICAL patches abort the build if they fail. OPTIONAL patches warn only.
 
 if [ -f "$WORKDIR/init.sh" ]; then
-    echo "Patching init.sh for standalone operation..."
+    echo "Applying Docker patches..."
 
+    # -------------------------------------------------------------------------
+    # Patch 1: SERVERID Guard (CRITICAL)
     # Guard the LINBOSERVER="${SERVERID}" override with a cmdline check.
-    # Original: unconditionally overwrites LINBOSERVER when HOSTGROUP is set.
-    # Patched: only overwrite if server= was NOT on the kernel cmdline.
-    #
-    # For every line containing both LINBOSERVER and SERVERID (the override),
-    # prepend `grep -q "server=" /proc/cmdline ||` to skip it when server= is on cmdline.
-    # This is safe because:
-    # - In standard linuxmuster (no server= on cmdline): override still happens (unchanged behavior)
-    # - In Docker standalone (server= on cmdline): override is skipped (LINBOSERVER preserved)
-    sed -i '/LINBOSERVER.*SERVERID/{/grep -q/!s#^\([[:space:]]*\)#\1grep -q "server=" /proc/cmdline || #}' \
-        "$WORKDIR/init.sh"
+    # In Docker standalone (server= on cmdline): override is skipped.
+    # In standard linuxmuster (no server= on cmdline): unchanged behavior.
+    # -------------------------------------------------------------------------
+    try_patch "SERVERID_GUARD" "CRITICAL" "$WORKDIR/init.sh" \
+        'grep -q "server=" /proc/cmdline' \
+        "sed -i '/LINBOSERVER.*SERVERID/{/grep -q/!s#^\\([[:space:]]*\\)#\\1grep -q \"server=\" /proc/cmdline || #}' \"$WORKDIR/init.sh\""
 
-    if grep -q 'grep -q "server=" /proc/cmdline' "$WORKDIR/init.sh"; then
-        echo "  - init.sh patched: LINBOSERVER override guarded by cmdline check"
+    # -------------------------------------------------------------------------
+    # Patch 4: Wait for network interfaces (CRITICAL)
+    # udevadm settle may return before virtio_net creates eth0.
+    # Wait loop + force UP before the interface iteration loop.
+    # Primary: match "for dev in ... /proc/net/dev"
+    # Fallback: match "for ... in ... /sys/class/net"
+    # -------------------------------------------------------------------------
+    try_patch "IFACE_WAIT" "CRITICAL" "$WORKDIR/init.sh" \
+        "DOCKER_IFACE_WAIT" \
+        "_apply_iface_wait_primary" "_apply_iface_wait_fallback"
+
+    # -------------------------------------------------------------------------
+    # Patch 6: Load storage modules early (CRITICAL)
+    # Host kernel has AHCI as module (not built-in like production kernel).
+    # Primary: insert after shebang
+    # Fallback: insert after "set -e"
+    # -------------------------------------------------------------------------
+    try_patch "STORAGE_MODULES" "CRITICAL" "$WORKDIR/init.sh" \
+        "DOCKER_STORAGE_MODULES" \
+        "_apply_storage_modules_primary" "_apply_storage_modules_fallback"
+
+    # -------------------------------------------------------------------------
+    # Patch 2: DHCP fallback — static IP when udhcpc fails (OPTIONAL)
+    # Write helper script first (embedded into linbofs), then insert call.
+    # Primary: match "# create environment" comment
+    # Fallback: match "do_env" function call
+    # -------------------------------------------------------------------------
+    cat > "$WORKDIR/docker_net_fallback.sh" << 'FALLBACK_SCRIPT'
+#!/bin/sh
+# DOCKER_DHCP_FALLBACK: Static IP fallback when udhcpc fails
+# This runs after the udhcpc loop in network()
+
+echo "=== Docker Network Fallback ==="
+echo "udhcpc exit code: $1"
+echo "Interfaces in /proc/net/dev:"
+cat /proc/net/dev | grep -v "Inter\|face"
+echo "Link states:"
+ip link show 2>/dev/null
+echo "==="
+
+# Only activate if udhcpc failed and server= is on cmdline
+[ "$1" = "0" ] && echo "DHCP succeeded, skipping fallback" && exit 0
+grep -q "server=" /proc/cmdline || exit 0
+
+# Get server IP from cmdline
+FALLBACK_SERVER=$(cat /proc/cmdline | tr ' ' '\n' | grep "^server=" | cut -d= -f2)
+[ -z "$FALLBACK_SERVER" ] && exit 1
+
+# Find first non-loopback interface
+for IF in $(ls /sys/class/net/ 2>/dev/null | grep -v ^lo); do
+    echo "Trying interface: $IF"
+    ip link set dev "$IF" up 2>/dev/null
+    # Wait for link to come up
+    sleep 2
+    # Check link state
+    CARRIER=$(cat /sys/class/net/$IF/carrier 2>/dev/null)
+    OPERSTATE=$(cat /sys/class/net/$IF/operstate 2>/dev/null)
+    echo "  carrier=$CARRIER operstate=$OPERSTATE"
+
+    # Assign static IP regardless of carrier state
+    ip addr add 10.0.150.254/16 dev "$IF" 2>/dev/null
+    ip route add default via 10.0.0.1 2>/dev/null
+    echo "ip='10.0.150.254'" > /tmp/dhcp.log
+    echo "serverid='$FALLBACK_SERVER'" >> /tmp/dhcp.log
+    echo "  Static IP 10.0.150.254 assigned to $IF"
+    # Test connectivity
+    ping -c 1 -W 2 "$FALLBACK_SERVER" >/dev/null 2>&1
+    if [ $? -eq 0 ]; then
+        echo "  Ping to $FALLBACK_SERVER successful!"
+        exit 0
     else
-        echo "  WARNING: init.sh patch did not apply (format may have changed)"
-        echo "  Continuing without patch — DHCP-based setups still work"
+        echo "  Ping to $FALLBACK_SERVER FAILED"
+        # Try to bring up with ethtool
+        ethtool -s "$IF" speed 1000 duplex full autoneg on 2>/dev/null
+        sleep 1
+        ping -c 1 -W 2 "$FALLBACK_SERVER" >/dev/null 2>&1
+        if [ $? -eq 0 ]; then
+            echo "  Ping to $FALLBACK_SERVER successful after ethtool!"
+            exit 0
+        fi
+        echo "  Interface $IF not functional, trying next..."
+        ip addr del 10.0.150.254/16 dev "$IF" 2>/dev/null
+    fi
+done
+
+echo "WARNING: No functional network interface found!"
+# Still write dhcp.log so do_env can at least parse server from cmdline
+echo "ip='10.0.150.254'" > /tmp/dhcp.log
+echo "serverid='$FALLBACK_SERVER'" >> /tmp/dhcp.log
+exit 1
+FALLBACK_SCRIPT
+    chmod +x "$WORKDIR/docker_net_fallback.sh"
+
+    # Substitute fallback IPs (heredoc is single-quoted, no expansion)
+    sed -i \
+        -e "s|10\.0\.150\.254/16|${FALLBACK_IP}/${FALLBACK_MASK}|g" \
+        -e "s|ip='10\.0\.150\.254'|ip='${FALLBACK_IP}'|g" \
+        -e "s|via 10\.0\.0\.1 |via ${FALLBACK_GW} |g" \
+        "$WORKDIR/docker_net_fallback.sh"
+
+    try_patch "DHCP_FALLBACK" "OPTIONAL" "$WORKDIR/init.sh" \
+        "DOCKER_DHCP_FALLBACK" \
+        "_apply_dhcp_fallback_primary" "_apply_dhcp_fallback_fallback"
+
+    # -------------------------------------------------------------------------
+    # Patches in linbo.sh (5, 7, 3)
+    # -------------------------------------------------------------------------
+    if [ -f "$WORKDIR/linbo.sh" ]; then
+
+        # ---------------------------------------------------------------------
+        # Patch 5: Network recovery before GUI download (OPTIONAL)
+        # Bring up network if init.sh failed due to udev timing.
+        # Primary: match "# update & extract linbo_gui"
+        # Fallback: match "linbo_update_gui"
+        # ---------------------------------------------------------------------
+        cat > "$WORKDIR/docker_net_recovery.sh" << 'RECOVERY_SCRIPT'
+#!/bin/sh
+# DOCKER_NET_RECOVERY: Bring up network if init.sh failed
+# Called from linbo.sh before linbo_update_gui
+#
+# This is the definitive fix for the udev timing issue where init.sh's
+# network() function fails because eth0 doesn't exist yet when it runs.
+# By the time linbo.sh starts, eth0 exists but is DOWN.
+
+# Skip if network is already working
+if [ -n "$LINBOSERVER" ] && [ -s /start.conf ] && grep -qi '^\[os\]' /start.conf 2>/dev/null; then
+    echo "DOCKER_NET_RECOVERY: Network already OK, skipping"
+    return 0
+fi
+
+echo "=== DOCKER_NET_RECOVERY ==="
+
+# Step 1: Bring up network interfaces
+NET_IF=""
+for IF in $(ls /sys/class/net/ 2>/dev/null | grep -v ^lo); do
+    STATE=$(cat /sys/class/net/$IF/operstate 2>/dev/null)
+    if [ "$STATE" != "up" ]; then
+        echo "  $IF is $STATE, bringing up..."
+        ip link set dev "$IF" up
+        sleep 2
+    fi
+    NET_IF="$IF"
+    break
+done
+
+if [ -z "$NET_IF" ]; then
+    echo "  ERROR: No network interface found"
+    return 1
+fi
+
+# Step 2: Get IP via DHCP
+CUR_IP=$(ip addr show dev "$NET_IF" 2>/dev/null | grep 'inet ' | awk '{print $2}' | cut -d/ -f1)
+if [ -z "$CUR_IP" ]; then
+    echo "  Running udhcpc on $NET_IF..."
+    udhcpc -n -i "$NET_IF" -t 5
+    DHCP_RC=$?
+    echo "  udhcpc exit=$DHCP_RC"
+
+    if [ $DHCP_RC -ne 0 ]; then
+        # Static IP fallback
+        SRV=$(cat /proc/cmdline | tr ' ' '\n' | grep '^server=' | cut -d= -f2)
+        if [ -n "$SRV" ]; then
+            echo "  DHCP failed, using static IP fallback"
+            ip addr add 10.0.150.254/16 dev "$NET_IF" 2>/dev/null
+            ip route add default via 10.0.0.1 2>/dev/null
+        fi
+    fi
+    CUR_IP=$(ip addr show dev "$NET_IF" 2>/dev/null | grep 'inet ' | awk '{print $2}' | cut -d/ -f1)
+fi
+echo "  $NET_IF IP: $CUR_IP"
+
+# Step 3: Parse environment from cmdline + dhcp.log (like do_env)
+SRV=$(cat /proc/cmdline | tr ' ' '\n' | grep '^server=' | cut -d= -f2)
+GRP=$(cat /proc/cmdline | tr ' ' '\n' | grep '^group=' | cut -d= -f2)
+HGRP=$(cat /proc/cmdline | tr ' ' '\n' | grep '^hostgroup=' | cut -d= -f2)
+
+# Get SERVERID from DHCP if available
+if [ -s /tmp/dhcp.log ]; then
+    DHCP_SID=$(grep '^serverid=' /tmp/dhcp.log | tail -1 | cut -d"'" -f2)
+    DHCP_HOST=$(grep '^hostname=' /tmp/dhcp.log | tail -1 | cut -d"'" -f2)
+    DHCP_DOMAIN=$(grep '^domain=' /tmp/dhcp.log | tail -1 | cut -d"'" -f2)
+    DHCP_NIS=$(grep '^nisdomain=' /tmp/dhcp.log | tail -1 | cut -d"'" -f2)
+fi
+
+# Set LINBOSERVER: cmdline server= takes priority, fallback to DHCP serverid
+[ -n "$SRV" ] && export LINBOSERVER="$SRV" || export LINBOSERVER="$DHCP_SID"
+export SERVERID="${DHCP_SID:-$SRV}"
+
+# Set HOSTGROUP: cmdline hostgroup= or group=, fallback to DHCP nisdomain
+[ -n "$HGRP" ] && export HOSTGROUP="$HGRP"
+[ -z "$HOSTGROUP" ] && [ -n "$GRP" ] && export HOSTGROUP="$GRP"
+[ -z "$HOSTGROUP" ] && [ -n "$DHCP_NIS" ] && export HOSTGROUP="$DHCP_NIS"
+
+# Set HOSTNAME
+[ -n "$DHCP_HOST" ] && export HOSTNAME="$DHCP_HOST"
+[ -z "$HOSTNAME" ] && export HOSTNAME="linbo"
+echo "$HOSTNAME" > /etc/hostname
+hostname "$HOSTNAME" 2>/dev/null
+
+# Set IP and MAC
+export IP="$CUR_IP"
+export MACADDR=$(ip link show dev "$NET_IF" 2>/dev/null | grep 'link/ether' | awk '{print $2}')
+
+# Write everything to /.env
+{
+    echo "export LINBOSERVER='$LINBOSERVER'"
+    echo "export SERVERID='$SERVERID'"
+    echo "export HOSTGROUP='$HOSTGROUP'"
+    echo "export HOSTNAME='$HOSTNAME'"
+    echo "export IP='$IP'"
+    echo "export MACADDR='$MACADDR'"
+} >> /.env
+source /.env
+
+echo "  LINBOSERVER=$LINBOSERVER HOSTGROUP=$HOSTGROUP"
+echo "  IP=$IP MAC=$MACADDR HOST=$HOSTNAME"
+
+# Step 4: Download start.conf from server
+if [ -n "$LINBOSERVER" ] && [ -n "$HOSTGROUP" ]; then
+    echo "  Downloading start.conf.$HOSTGROUP from $LINBOSERVER..."
+    rsync -L "$LINBOSERVER::linbo/start.conf.$HOSTGROUP" "/start.conf" 2>&1
+    if [ -s /start.conf ]; then
+        echo "  start.conf downloaded OK ($(wc -c < /start.conf) bytes)"
+        # Split start.conf into sections (if function available)
+        type linbo_split_startconf >/dev/null 2>&1 && linbo_split_startconf
+    else
+        echo "  WARNING: start.conf download failed or empty"
     fi
 fi
 
+# Step 5: Start dropbear SSH if not running
+if ! pidof dropbear >/dev/null 2>&1; then
+    echo "  Starting SSH (dropbear)..."
+    /sbin/dropbear -r /etc/dropbear/dropbear_dss_host_key -r /etc/dropbear/dropbear_rsa_host_key -s -g -p 2222 2>/dev/null
+fi
+
+echo "=== DOCKER_NET_RECOVERY done ==="
+RECOVERY_SCRIPT
+        chmod +x "$WORKDIR/docker_net_recovery.sh"
+
+        # Substitute fallback IPs (heredoc is single-quoted, no expansion)
+        sed -i \
+            -e "s|10\.0\.150\.254/16|${FALLBACK_IP}/${FALLBACK_MASK}|g" \
+            -e "s|via 10\.0\.0\.1 |via ${FALLBACK_GW} |g" \
+            "$WORKDIR/docker_net_recovery.sh"
+
+        try_patch "NET_RECOVERY" "OPTIONAL" "$WORKDIR/linbo.sh" \
+            "DOCKER_NET_RECOVERY" \
+            "_apply_net_recovery_primary" "_apply_net_recovery_fallback"
+
+        # ---------------------------------------------------------------------
+        # Patch 7: Ensure udevd runs before GUI starts (CRITICAL)
+        # Without udevd, libinput can't identify input devices → buttons
+        # not clickable. Restart udevd + trigger before GUI launch.
+        # Primary: match "linbo_gui.*-platform.*linuxfb"
+        # Fallback 1: match "linbo_gui.*-platform"
+        # Fallback 2: match whitespace + "linbo_gui" word boundary
+        # ---------------------------------------------------------------------
+        try_patch "UDEV_INPUT" "CRITICAL" "$WORKDIR/linbo.sh" \
+            "DOCKER_UDEV_INPUT" \
+            "_apply_udev_input_primary" "_apply_udev_input_fb1" "_apply_udev_input_fb2"
+
+        # ---------------------------------------------------------------------
+        # Patch 3: Network diagnostics in Remote Control Mode (OPTIONAL)
+        # When the GUI fails to load, show network info for debugging.
+        # Uses awk replacement — no good fallback pattern.
+        # ---------------------------------------------------------------------
+        try_patch "NET_DIAG" "OPTIONAL" "$WORKDIR/linbo.sh" \
+            "DOCKER_NET_DIAG" \
+            "_apply_net_diag"
+    fi
+fi
+
+# =============================================================================
+# Patch Application Gate
+# =============================================================================
+CRITICAL_FAILED=0
+OPTIONAL_FAILED=0
+for _row in "${PATCH_RESULTS[@]}"; do
+    [[ "$_row" == *"|CRITICAL|FAILED" ]] && ((CRITICAL_FAILED++)) || true
+    [[ "$_row" == *"|OPTIONAL|FAILED" ]] && ((OPTIONAL_FAILED++)) || true
+done
+
+if (( CRITICAL_FAILED > 0 )); then
+    echo ""
+    echo "FATAL: $CRITICAL_FAILED critical patch(es) failed to apply!"
+    echo "Patch results:"
+    printf '  %s\n' "${PATCH_RESULTS[@]}"
+    echo ""
+    echo "Aborting build. Original linbofs64 preserved as ${LINBOFS}.bak"
+    exit 1
+fi
+
+if (( OPTIONAL_FAILED > 0 )); then
+    echo ""
+    echo "WARNING: $OPTIONAL_FAILED optional patch(es) did not apply."
+    echo "Build continues, but some features may be missing."
+fi
 # =============================================================================
 # Step 10.5: Inject firmware files
 # =============================================================================
@@ -527,7 +1026,10 @@ fi
 # =============================================================================
 
 echo "Repacking linbofs64 (this may take a while)..."
-find . -print | cpio --quiet -o -H newc | xz -e --check=none -z -f -T 0 -c > "$LINBOFS.new"
+# --owner 0:0 ensures all files in the initrd are owned by root.
+# The build runs as non-root (linbo, uid 1001) in Docker, but the LINBO
+# client boots as root. dropbear refuses authorized_keys owned by non-root.
+find . -print | cpio --quiet -o -H newc --owner 0:0 | xz -e --check=none -z -f -T 0 -c > "$LINBOFS.new"
 
 if [ $? -ne 0 ]; then
     echo "ERROR: Failed to repack linbofs64!"
@@ -555,6 +1057,43 @@ if [ "$NEW_SIZE" -lt "$MIN_SIZE" ]; then
 fi
 
 # =============================================================================
+# Step 12.5: Verify Docker patches in repacked archive
+# =============================================================================
+
+echo "Verifying Docker patches in archive..."
+_init_txt="$(xzcat "$LINBOFS.new" | cpio -i --to-stdout init.sh 2>/dev/null || true)"
+_linbo_txt="$(xzcat "$LINBOFS.new" | cpio -i --to-stdout linbo.sh 2>/dev/null || true)"
+_vfail=false
+
+# Marker checks
+for _m in DOCKER_STORAGE_MODULES DOCKER_IFACE_WAIT; do
+    if echo "$_init_txt" | grep -q "$_m"; then echo "  OK: $_m"
+    else echo "  FAIL: $_m [CRITICAL]"; _vfail=true; fi
+done
+for _m in DOCKER_UDEV_INPUT; do
+    if echo "$_linbo_txt" | grep -q "$_m"; then echo "  OK: $_m"
+    else echo "  FAIL: $_m [CRITICAL]"; _vfail=true; fi
+done
+
+# Semantic check: SERVERID guard — no unguarded LINBOSERVER=SERVERID lines
+if echo "$_init_txt" | grep -qE '^[[:space:]]*LINBOSERVER=.*SERVERID' && \
+   ! echo "$_init_txt" | grep -qE 'grep -q "server=".*LINBOSERVER=.*SERVERID'; then
+    echo "  FAIL: SERVERID_GUARD semantics [CRITICAL]"
+    _vfail=true
+else
+    echo "  OK: SERVERID_GUARD"
+fi
+
+if [[ "$_vfail" == "true" ]]; then
+    echo ""
+    echo "FATAL: Critical patches missing or invalid in final archive!"
+    echo "Build aborted. Original linbofs64 preserved."
+    rm -f "$LINBOFS.new"
+    exit 1
+fi
+echo "All critical patches verified in archive."
+
+# =============================================================================
 # Step 13: Replace original file
 # =============================================================================
 
@@ -570,6 +1109,17 @@ md5sum "$LINBOFS" | awk '{print $1}' > "${LINBOFS}.md5"
 echo "  - MD5: $(cat ${LINBOFS}.md5)"
 
 # =============================================================================
+# Step 14.5: Write patch status manifest
+# =============================================================================
+
+{
+    echo "# Patch Status — $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf '%s\n' "${PATCH_RESULTS[@]}"
+} > "${LINBO_DIR}/.linbofs-patch-status"
+chmod 644 "${LINBO_DIR}/.linbofs-patch-status"
+echo "Patch status written to ${LINBO_DIR}/.linbofs-patch-status"
+
+# =============================================================================
 # Step 15: Copy kernel from variant (if available)
 # =============================================================================
 
@@ -578,6 +1128,7 @@ if [ "$SKIP_KERNEL_COPY" = "true" ]; then
 elif [ "$HAS_KERNEL_VARIANT" = "true" ]; then
     echo "Copying kernel from variant '$KTYPE'..."
     cp "$VARIANT_DIR/linbo64" "$LINBO_DIR/linbo64"
+    chmod 644 "$LINBO_DIR/linbo64"
     md5sum "$LINBO_DIR/linbo64" | awk '{print $1}' > "$LINBO_DIR/linbo64.md5"
     echo "  - linbo64: $(cat $LINBO_DIR/linbo64.md5)"
 fi
