@@ -1152,6 +1152,22 @@ chmod 644 "${LINBO_DIR}/.linbofs-patch-status"
 echo "Patch status written to ${LINBO_DIR}/.linbofs-patch-status"
 
 # =============================================================================
+# Step 14.6: Sync to Docker volume (if different from LINBO_DIR)
+# =============================================================================
+
+DOCKER_VOLUME="/var/lib/docker/volumes/linbo_srv_data/_data"
+if [ -d "$DOCKER_VOLUME" ] && [ "$LINBO_DIR" != "$DOCKER_VOLUME" ]; then
+    echo "Syncing linbofs64 to Docker volume..."
+    cp "$LINBOFS" "$DOCKER_VOLUME/linbofs64"
+    cp "${LINBOFS}.md5" "$DOCKER_VOLUME/linbofs64.md5"
+    cp "${LINBO_DIR}/.linbofs-patch-status" "$DOCKER_VOLUME/.linbofs-patch-status" 2>/dev/null || true
+    chown 1001:1001 "$DOCKER_VOLUME/linbofs64" "$DOCKER_VOLUME/linbofs64.md5" 2>/dev/null || true
+    echo "  - Copied to $DOCKER_VOLUME/linbofs64"
+elif [ "$LINBO_DIR" = "$DOCKER_VOLUME" ]; then
+    echo "LINBO_DIR is Docker volume, no sync needed."
+fi
+
+# =============================================================================
 # Step 15: Copy kernel from variant (if available)
 # =============================================================================
 
