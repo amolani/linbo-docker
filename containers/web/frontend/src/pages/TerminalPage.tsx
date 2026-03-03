@@ -1,10 +1,10 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Terminal as TerminalIcon, Plus, X, Loader2, Wifi, WifiOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { notify } from '@/stores/notificationStore';
 import { useTerminalWs } from '@/hooks/useTerminalWs';
 import { terminalApi } from '@/api/terminal';
-import { TerminalView } from '@/components/terminal/TerminalView';
+import { TerminalView, getTerminalWriter } from '@/components/terminal/TerminalView';
 import type { TerminalWsMessage } from '@/hooks/useTerminalWs';
 
 interface Tab {
@@ -21,7 +21,6 @@ export function TerminalPage() {
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [hostIp, setHostIp] = useState('');
   const [isTesting, setIsTesting] = useState(false);
-  const termRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   const { connect, disconnect, send, onMessage, isConnected } = useTerminalWs();
 
@@ -47,11 +46,8 @@ export function TerminalPage() {
         }
 
         case 'terminal.output': {
-          // Write data to the correct terminal
-          const el = termRefs.current.get(msg.sessionId!);
-          if (el) {
-            (el as HTMLDivElement & { termWrite?: (data: string) => void }).termWrite?.(msg.data!);
-          }
+          const writer = getTerminalWriter(msg.sessionId!);
+          if (writer) writer(msg.data!);
           break;
         }
 
@@ -123,7 +119,6 @@ export function TerminalPage() {
       }
 
       setTabs((prev) => prev.filter((t) => t.id !== tabId));
-      termRefs.current.delete(tab?.sessionId || '');
 
       if (activeTabId === tabId) {
         setActiveTabId(() => {
@@ -322,19 +317,12 @@ export function TerminalPage() {
                 </div>
               )}
               {(tab.status === 'open' || tab.status === 'connecting') && tab.sessionId && (
-                <div
-                  className="h-full"
-                  ref={(el) => {
-                    if (el && tab.sessionId) termRefs.current.set(tab.sessionId, el);
-                  }}
-                >
-                  <TerminalView
-                    sessionId={tab.sessionId}
-                    onInput={handleInput}
-                    onResize={handleResize}
-                    isActive={activeTabId === tab.id}
-                  />
-                </div>
+                <TerminalView
+                  sessionId={tab.sessionId}
+                  onInput={handleInput}
+                  onResize={handleResize}
+                  isActive={activeTabId === tab.id}
+                />
               )}
             </div>
           ))

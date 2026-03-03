@@ -806,7 +806,14 @@ if [ -n "$LINBOSERVER" ] && [ -n "$HOSTGROUP" ]; then
     fi
 fi
 
-# Step 5: Start dropbear SSH if not running
+# Step 5: Mount devpts for PTY support (needed by SSH interactive shells)
+if [ ! -d /dev/pts ] || ! mountpoint -q /dev/pts 2>/dev/null; then
+    echo "  Mounting /dev/pts..."
+    mkdir -p /dev/pts
+    mount -t devpts devpts /dev/pts 2>/dev/null
+fi
+
+# Step 6: Start dropbear SSH if not running
 if ! pidof dropbear >/dev/null 2>&1; then
     echo "  Starting SSH (dropbear)..."
     /sbin/dropbear -r /etc/dropbear/dropbear_dss_host_key -r /etc/dropbear/dropbear_rsa_host_key -s -g -p 2222 2>/dev/null

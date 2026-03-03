@@ -3,3 +3,4 @@ Host *
   StrictHostKeyChecking no
   UserKnownHostsFile /dev/null
   LogLevel ERROR
+  Port 2222

@@ -1,8 +1,15 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
+
+/** Global registry: sessionId → write function (used by TerminalPage output handler) */
+const terminalWriters = new Map<string, (data: string) => void>();
+
+export function getTerminalWriter(sessionId: string) {
+  return terminalWriters.get(sessionId);
+}
 
 interface TerminalViewProps {
   sessionId: string | null;
@@ -116,18 +123,15 @@ export function TerminalView({ sessionId, onInput, onResize, isActive }: Termina
     }
   }, [isActive]);
 
-  // Public method to write data to terminal (called from parent)
-  const writeData = useCallback((data: string) => {
-    termRef.current?.write(data);
-  }, []);
-
-  // Expose write method via ref-like pattern on the DOM element
+  // Register write handler in global map so parent can write output
   useEffect(() => {
-    const el = containerRef.current;
-    if (el) {
-      (el as HTMLDivElement & { termWrite?: (data: string) => void }).termWrite = writeData;
+    if (sessionId) {
+      terminalWriters.set(sessionId, (data: string) => {
+        termRef.current?.write(data);
+      });
+      return () => { terminalWriters.delete(sessionId); };
     }
-  }, [writeData]);
+  }, [sessionId]);
 
   return (
     <div
