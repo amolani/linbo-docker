@@ -116,8 +116,18 @@ async function syncOnce() {
     }
 
     // 5. Sync hosts (cached in Redis, create start.conf symlinks)
-    if (delta.hostsChanged.length > 0) {
-      const { hosts } = await lmnClient.batchGetHosts(delta.hostsChanged);
+    // The authority API may return ["all"] instead of individual MACs when too many
+    // hosts changed — in that case, re-fetch ALL hosts via a full-snapshot request.
+    let hostsToSync = delta.hostsChanged;
+    if (Array.isArray(hostsToSync) && hostsToSync.includes('all')) {
+      console.log('[Sync] hostsChanged contains "all" — fetching full host list');
+      const fullDelta = await lmnClient.getChanges('');
+      hostsToSync = Array.isArray(fullDelta.hostsChanged)
+        ? fullDelta.hostsChanged.filter(m => m !== 'all')
+        : [];
+    }
+    if (hostsToSync.length > 0) {
+      const { hosts } = await lmnClient.batchGetHosts(hostsToSync);
       for (const host of hosts) {
         await client.set(`${KEY.HOST}${host.mac}`, JSON.stringify(host));
         await client.sadd(KEY.HOST_INDEX, host.mac);
