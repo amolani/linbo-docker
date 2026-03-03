@@ -528,6 +528,10 @@ router.post(
 // Firmware Management
 // =============================================================================
 
+const firmwareDetectSchema = z.object({
+  hostIp: z.string().regex(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/, 'Invalid IPv4 address'),
+});
+
 const firmwareEntrySchema = z.object({
   entry: z.string().min(1).max(512),
 });
@@ -547,6 +551,45 @@ const wlanConfigSchema = z.object({
   psk: z.string().max(128).optional(),
   scanSsid: z.boolean().optional(),
 });
+
+/**
+ * POST /system/firmware-detect
+ * Auto-detect missing firmware on a LINBO client via SSH + dmesg
+ */
+router.post(
+  '/firmware-detect',
+  authenticateToken,
+  requireRole(['admin']),
+  async (req, res, next) => {
+    try {
+      const parsed = firmwareDetectSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          error: {
+            code: 'INVALID_IP',
+            message: 'Invalid host IP address',
+            details: parsed.error.issues,
+          },
+        });
+      }
+
+      const result = await firmwareService.detectFirmwareFromHost(parsed.data.hostIp);
+      res.json({ data: result });
+    } catch (error) {
+      if (error.statusCode === 502) {
+        return res.status(502).json({
+          error: { code: 'SSH_FAILED', message: error.message },
+        });
+      }
+      if (error.statusCode === 504) {
+        return res.status(504).json({
+          error: { code: 'SSH_TIMEOUT', message: error.message },
+        });
+      }
+      next(error);
+    }
+  }
+);
 
 /**
  * GET /system/firmware-entries

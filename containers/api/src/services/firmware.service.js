@@ -7,6 +7,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const firmwareScanner = require('../lib/firmware-scanner');
 const firmwareCatalog = require('../lib/firmware-catalog');
+const dmesgParser = require('../lib/dmesg-firmware-parser');
 const kernelService = require('./kernel.service');
 const ws = require('../lib/websocket');
 
@@ -551,6 +552,172 @@ async function disableWlan() {
 }
 
 // =============================================================================
+// Auto-Detection from Client
+// =============================================================================
+
+/**
+ * Detect missing firmware on a LINBO client via SSH + dmesg.
+ * Groups results by driver/catalog entry with availability and config status.
+ * @param {string} hostIp - IP address of the LINBO client
+ * @returns {Promise<object>} Detection result with drivers, files, and summary
+ */
+async function detectFirmwareFromHost(hostIp) {
+  // Lazy-load SSH service to avoid circular deps
+  const sshService = require('./ssh.service');
+
+  // 1. SSH into client, run dmesg | grep -i firmware
+  let sshResult;
+  try {
+    sshResult = await sshService.executeWithTimeout(
+      hostIp,
+      'dmesg | grep -i firmware',
+      15000
+    );
+  } catch (err) {
+    if (err.message === 'Command timeout') {
+      throw Object.assign(new Error('SSH timeout connecting to client'), { statusCode: 504 });
+    }
+    throw Object.assign(
+      new Error(`SSH connection failed: ${err.message}`),
+      { statusCode: 502 }
+    );
+  }
+
+  // 2. Parse dmesg output
+  const events = dmesgParser.parseDmesgFirmware(sshResult.stdout || '');
+  const missingFiles = events
+    .filter(e => e.status === 'missing')
+    .map(e => e.filename);
+
+  if (missingFiles.length === 0) {
+    return {
+      host: hostIp,
+      detectedDrivers: [],
+      summary: { totalMissingFiles: 0, availableToAdd: 0, alreadyConfigured: 0 },
+    };
+  }
+
+  // 3. Load current config for comparison
+  const currentConfig = await readFirmwareConfig();
+  const configSet = new Set(currentConfig.map(e => {
+    try { return sanitizeEntry(e); } catch { return e; }
+  }));
+
+  // 4. Match each missing file against catalog and check disk availability
+  const catalog = firmwareCatalog.FIRMWARE_CATALOG;
+  const driverMap = new Map(); // key → { driver, category, vendor, files[] }
+
+  for (const filename of missingFiles) {
+    const catalogMatch = matchFileToCatalog(filename, catalog);
+    const available = await firmwareCatalog.checkAvailability(filename);
+    const suggestedEntry = determineSuggestedEntry(filename, catalogMatch);
+    const alreadyConfigured = configSet.has(suggestedEntry) || configSet.has(filename);
+
+    // Group by driver key
+    const driverKey = catalogMatch
+      ? catalogMatch.vendor.id
+      : (extractDriverDir(filename) || filename);
+
+    if (!driverMap.has(driverKey)) {
+      driverMap.set(driverKey, {
+        driver: catalogMatch ? catalogMatch.entry.path : (extractDriverDir(filename) || filename),
+        category: catalogMatch ? catalogMatch.vendor.category : null,
+        catalogVendor: catalogMatch ? catalogMatch.vendor.name : null,
+        firmwareFiles: [],
+      });
+    }
+
+    driverMap.get(driverKey).firmwareFiles.push({
+      filename,
+      availableOnDisk: available,
+      alreadyConfigured,
+      suggestedEntry,
+    });
+  }
+
+  // 5. Build response
+  const detectedDrivers = [...driverMap.values()];
+
+  let totalMissingFiles = 0;
+  let availableToAdd = 0;
+  let alreadyConfigured = 0;
+
+  for (const driver of detectedDrivers) {
+    for (const file of driver.firmwareFiles) {
+      totalMissingFiles++;
+      if (file.alreadyConfigured) {
+        alreadyConfigured++;
+      } else if (file.availableOnDisk) {
+        availableToAdd++;
+      }
+    }
+  }
+
+  return {
+    host: hostIp,
+    detectedDrivers,
+    summary: { totalMissingFiles, availableToAdd, alreadyConfigured },
+  };
+}
+
+/**
+ * Match a firmware filename against the catalog.
+ * @param {string} filename - e.g. "iwlwifi-ma-b0-gf-a0-86.ucode" or "i915/mtl_dmc.bin"
+ * @param {Array} catalog - FIRMWARE_CATALOG array
+ * @returns {object|null} { vendor, entry } or null
+ */
+function matchFileToCatalog(filename, catalog) {
+  for (const vendor of catalog) {
+    for (const entry of vendor.entries) {
+      if (entry.type === 'dir') {
+        // Dir match: filename starts with "dirname/"
+        if (filename.startsWith(entry.path + '/') || filename === entry.path) {
+          return { vendor, entry };
+        }
+      } else if (entry.type === 'prefix') {
+        // Prefix match: test against regex
+        const baseName = filename.includes('/') ? filename : filename;
+        if (entry.pattern.test(baseName)) {
+          return { vendor, entry };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Determine the suggested config entry for a missing firmware file.
+ * - Dir-match: suggest the directory name (covers all files in that dir)
+ * - Prefix-match: suggest the individual file
+ * - No match: suggest the individual file
+ * @param {string} filename
+ * @param {object|null} catalogMatch
+ * @returns {string}
+ */
+function determineSuggestedEntry(filename, catalogMatch) {
+  if (!catalogMatch) return filename;
+
+  if (catalogMatch.entry.type === 'dir') {
+    // Suggest the whole directory
+    return catalogMatch.entry.path;
+  }
+  // Prefix: suggest individual file
+  return filename;
+}
+
+/**
+ * Extract the directory part of a firmware path, if any.
+ * e.g. "i915/mtl_dmc.bin" → "i915", "iwlwifi-ma.ucode" → null
+ * @param {string} filename
+ * @returns {string|null}
+ */
+function extractDriverDir(filename) {
+  const slashIdx = filename.indexOf('/');
+  return slashIdx > 0 ? filename.substring(0, slashIdx) : null;
+}
+
+// =============================================================================
 // Exports
 // =============================================================================
 
@@ -573,6 +740,7 @@ module.exports = {
   getFirmwareStatus,
   getFirmwareCatalog,
   computeStats,
+  detectFirmwareFromHost,
   // wpa_supplicant
   validateSsid,
   escapeWpaString,

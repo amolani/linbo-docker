@@ -15,6 +15,30 @@ export interface LinboVersionInfo {
   filename?: string;
 }
 
+export interface DetectedFirmwareFile {
+  filename: string;
+  availableOnDisk: boolean;
+  alreadyConfigured: boolean;
+  suggestedEntry: string;
+}
+
+export interface DetectedDriver {
+  driver: string;
+  category: string | null;
+  catalogVendor: string | null;
+  firmwareFiles: DetectedFirmwareFile[];
+}
+
+export interface FirmwareDetectionResult {
+  host: string;
+  detectedDrivers: DetectedDriver[];
+  summary: {
+    totalMissingFiles: number;
+    availableToAdd: number;
+    alreadyConfigured: number;
+  };
+}
+
 export interface LinboUpdateStatus {
   status: 'idle' | 'checking' | 'downloading' | 'verifying' | 'extracting' | 'provisioning' | 'rebuilding' | 'done' | 'error' | 'cancelled';
   progress: number;
@@ -52,6 +76,12 @@ export const systemApi = {
 
   getLinbofsStatus: async (): Promise<{ status: string; message: string }> => {
     const response = await apiClient.get<ApiResponse<{ status: string; message: string }>>('/system/linbofs-status');
+    return response.data.data;
+  },
+
+  // Firmware Auto-Detection
+  detectFirmware: async (hostIp: string): Promise<FirmwareDetectionResult> => {
+    const response = await apiClient.post<ApiResponse<FirmwareDetectionResult>>('/system/firmware-detect', { hostIp });
     return response.data.data;
   },
 

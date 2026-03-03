@@ -19,7 +19,6 @@ import {
   Wifi,
   Hammer,
   Lightbulb,
-  Terminal,
   Sparkles,
 } from 'lucide-react';
 import { systemApi } from '@/api/system';
@@ -27,6 +26,7 @@ import { useWsStore } from '@/stores/wsStore';
 import type { FirmwareStatus, FirmwareEntry, FirmwareCatalogCategory, FirmwareCatalogVendor, FirmwareCatalogEntry } from '@/types';
 import { ConfirmModal } from '@/components/ui';
 import { WlanConfig } from './WlanConfig';
+import { FirmwareDetect } from './FirmwareDetect';
 
 function formatBytes(bytes: number): string {
   if (!bytes || bytes === 0) return '-';
@@ -394,22 +394,11 @@ export function FirmwareManager() {
 
           {showHelp && (
             <div className="mt-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-md space-y-3">
-              {/* dmesg tip */}
-              <div className="flex items-start space-x-2">
-                <Terminal className="h-4 w-4 text-amber-400 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-amber-200">
-                  <p className="font-medium mb-1">Fehlende Firmware finden:</p>
-                  <p className="text-xs text-amber-300 mb-1">
-                    Auf einem LINBO-Client im Terminal ausfuehren:
-                  </p>
-                  <code className="block bg-black/30 rounded px-2 py-1 text-xs font-mono text-amber-100">
-                    dmesg | grep firmware
-                  </code>
-                  <p className="text-xs text-amber-300 mt-1">
-                    Zeigt z.B. <span className="font-mono">Failed to load firmware i915/kbl_dmc_ver1_04.bin</span> — dann <span className="font-mono">i915</span> hier hinzufuegen.
-                  </p>
-                </div>
-              </div>
+              {/* Auto-Detect from Client */}
+              <FirmwareDetect
+                configuredEntries={configuredEntries}
+                onEntriesAdded={fetchData}
+              />
 
               {/* Recommended set */}
               <div className="flex items-start space-x-2">
