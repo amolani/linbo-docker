@@ -13,6 +13,7 @@ import {
   Wrench,
   Palette,
   MonitorSmartphone,
+  TerminalSquare,
   PanelLeftClose,
   PanelLeftOpen,
   Wifi,
@@ -51,6 +52,7 @@ const systemNavigation = [
   { name: 'Treiber', href: '/drivers', icon: Wrench },
   { name: 'GRUB Theme', href: '/grub-theme', icon: Palette },
   { name: 'LINBO GUI', href: '/linbo-gui', icon: MonitorSmartphone },
+  { name: 'Terminal', href: '/terminal', icon: TerminalSquare },
 ];
 
 export function Sidebar() {

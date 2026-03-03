@@ -18,6 +18,7 @@ import { GrubThemePage } from '@/pages/GrubThemePage';
 import { LinboGuiPage } from '@/pages/LinboGuiPage';
 import { SyncPage } from '@/pages/SyncPage';
 import { SettingsPage } from '@/pages/SettingsPage';
+import { TerminalPage } from '@/pages/TerminalPage';
 
 export function AppRoutes() {
   return (
@@ -174,6 +175,17 @@ export function AppRoutes() {
           <ProtectedRoute>
             <AppLayout>
               <SyncPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/terminal"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <TerminalPage />
             </AppLayout>
           </ProtectedRoute>
         }

@@ -315,6 +315,112 @@ async function startServer() {
   websocket.init(wss);
   console.log('  WebSocket initialized');
 
+  // Initialize Terminal WebSocket Server (dedicated path for interactive SSH)
+  const terminalService = require('./services/terminal.service');
+  const { verifyToken } = require('./middleware/auth');
+  const terminalWss = new WebSocket.Server({ server, path: '/ws/terminal' });
+
+  terminalWss.on('connection', (ws, req) => {
+    // Authenticate via ?token= query param
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const token = url.searchParams.get('token');
+    let user;
+    try {
+      user = verifyToken(token);
+    } catch (err) {
+      ws.close(4001, 'Authentication failed');
+      return;
+    }
+
+    console.log(`[Terminal WS] Client connected: ${user.username}`);
+
+    ws.on('message', async (raw) => {
+      let msg;
+      try {
+        msg = JSON.parse(raw);
+      } catch {
+        ws.send(JSON.stringify({ type: 'terminal.error', error: 'Invalid JSON' }));
+        return;
+      }
+
+      try {
+        switch (msg.type) {
+          case 'terminal.open': {
+            const { hostIp, cols, rows } = msg;
+            if (!hostIp) {
+              ws.send(JSON.stringify({ type: 'terminal.error', error: 'hostIp required' }));
+              return;
+            }
+            const sessionId = await terminalService.createSession(hostIp, user.id || user.username, {
+              cols: cols || 80,
+              rows: rows || 24,
+              onData: (data) => {
+                if (ws.readyState === WebSocket.OPEN) {
+                  ws.send(JSON.stringify({ type: 'terminal.output', sessionId, data }));
+                }
+              },
+              onClose: (reason) => {
+                if (ws.readyState === WebSocket.OPEN) {
+                  ws.send(JSON.stringify({ type: 'terminal.closed', sessionId, reason }));
+                }
+              },
+              onError: (error) => {
+                if (ws.readyState === WebSocket.OPEN) {
+                  ws.send(JSON.stringify({ type: 'terminal.error', sessionId, error }));
+                }
+              },
+            });
+            ws.send(JSON.stringify({ type: 'terminal.opened', sessionId, hostIp }));
+            break;
+          }
+
+          case 'terminal.input': {
+            const { sessionId, data } = msg;
+            if (!sessionId || data == null) return;
+            terminalService.writeToSession(sessionId, data);
+            break;
+          }
+
+          case 'terminal.resize': {
+            const { sessionId, cols, rows } = msg;
+            if (!sessionId) return;
+            terminalService.resizeSession(sessionId, cols || 80, rows || 24);
+            break;
+          }
+
+          case 'terminal.close': {
+            const { sessionId } = msg;
+            if (!sessionId) return;
+            terminalService.destroySession(sessionId);
+            break;
+          }
+
+          default:
+            ws.send(JSON.stringify({ type: 'terminal.error', error: `Unknown message type: ${msg.type}` }));
+        }
+      } catch (err) {
+        ws.send(JSON.stringify({
+          type: 'terminal.error',
+          sessionId: msg.sessionId,
+          error: err.message,
+        }));
+      }
+    });
+
+    ws.on('close', () => {
+      console.log(`[Terminal WS] Client disconnected: ${user.username}`);
+      // Close all sessions owned by this WS connection
+      for (const s of terminalService.listSessions()) {
+        if (s.userId === (user.id || user.username)) {
+          terminalService.destroySession(s.id);
+        }
+      }
+    });
+  });
+
+  server._terminalWss = terminalWss;
+  console.log('  Terminal WebSocket initialized');
+
   // Start Operation Worker (unless disabled)
   if (process.env.ENABLE_OPERATION_WORKER !== 'false') {
     const { startWorker } = require('./workers/operation.worker');
@@ -481,6 +587,20 @@ async function shutdown(signal) {
     if (server._hostStatusWorker) {
       server._hostStatusWorker.stopWorker();
       console.log('Host Status Worker stopped');
+    }
+
+    // Close terminal sessions
+    try {
+      const termService = require('./services/terminal.service');
+      termService.destroyAll();
+      console.log('Terminal sessions closed');
+    } catch {}
+
+    // Close Terminal WebSocket connections
+    if (server._terminalWss) {
+      server._terminalWss.clients.forEach((client) => {
+        client.close(1001, 'Server shutting down');
+      });
     }
 
     // Close WebSocket connections

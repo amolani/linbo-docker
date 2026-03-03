@@ -33,6 +33,9 @@ router.use('/system', systemRoutes);
 router.use('/patchclass', patchclassRoutes);
 router.use('/settings', settingsRoutes);
 
+const terminalRoutes = require('./terminal');
+router.use('/terminal', terminalRoutes);
+
 // ---------------------------------------------------------------------------
 // Images: always mounted (has Prisma-optional filesystem fallback)
 // ---------------------------------------------------------------------------
@@ -129,6 +132,11 @@ router.get('/', (req, res) => {
       'PUT /settings/:key': 'Update setting (admin)',
       'DELETE /settings/:key': 'Reset setting to default (admin)',
       'POST /settings/test-connection': 'Test authority API connection (admin)',
+    },
+    terminal: {
+      'GET /terminal/sessions': 'List active terminal sessions',
+      'DELETE /terminal/sessions/:id': 'Close a terminal session',
+      'POST /terminal/test-connection': 'Test SSH connectivity to a host',
     },
     patchclass: {
       'GET /patchclass': 'List all patchclasses',
