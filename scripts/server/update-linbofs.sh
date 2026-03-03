@@ -584,6 +584,19 @@ DIAGEOF
 # CRITICAL patches abort the build if they fail. OPTIONAL patches warn only.
 
 if [ -f "$WORKDIR/init.sh" ]; then
+    # Remove stale manual debug blocks (from previous debug sessions)
+    # These are NOT Docker patches — they were injected manually and cause issues:
+    # - 5-minute sleep blocking boot
+    # - Static IP 10.0.150.99 conflicting with DHCP
+    if grep -q "LINBO DEBUG - NETWORK CHECK" "$WORKDIR/init.sh"; then
+        echo "Removing stale debug block from init.sh..."
+        # Delete from "LINBO DEBUG" marker to "sleep 300" (inclusive)
+        sed -i '/LINBO DEBUG - NETWORK CHECK/,/^sleep 300/d' "$WORKDIR/init.sh"
+        # Also remove any leftover empty echo/hash-border lines right before "# do network setup"
+        sed -i '/^echo ""$/N;/\n.*echo ""$/{N;/\n.*#####/{N;/\n.*#####/d}}' "$WORKDIR/init.sh" 2>/dev/null || true
+        echo "  - Debug block removed"
+    fi
+
     echo "Applying Docker patches..."
 
     # -------------------------------------------------------------------------
@@ -838,7 +851,13 @@ if [ -n "$LINBOSERVER" ] && [ -n "$HOSTGROUP" ]; then
     fi
 fi
 
-# Step 5: Start dropbear SSH if not running
+# Step 5: Mount devpts for PTY support (interactive SSH)
+if [ ! -d /dev/pts ] || ! mountpoint -q /dev/pts 2>/dev/null; then
+    mkdir -p /dev/pts
+    mount -t devpts devpts /dev/pts 2>/dev/null
+fi
+
+# Step 6: Start dropbear SSH if not running
 if ! pidof dropbear >/dev/null 2>&1; then
     echo "  Starting SSH (dropbear)..."
     /sbin/dropbear -r /etc/dropbear/dropbear_dss_host_key -r /etc/dropbear/dropbear_rsa_host_key -s -g -p 2222 2>/dev/null
