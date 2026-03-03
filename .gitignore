@@ -99,3 +99,6 @@ docs/export/
 
 # LINBO kernel binary (provisioned at runtime, not in repo)
 linbo64
+
+# Agent templates (not part of the project)
+agents/
