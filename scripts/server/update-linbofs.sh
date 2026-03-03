@@ -468,6 +468,26 @@ for _mod in ahci sd_mod sr_mod nvme ata_piix ata_generic virtio_blk virtio_scsi 
 done' "$WORKDIR/init.sh"
 }
 
+_apply_devpts_mount_primary() {
+    # Insert devpts mount before "start dropbear" comment
+    sed -i '/# start dropbear/i\
+  # --- DOCKER_DEVPTS_MOUNT: mount devpts for PTY support (SSH interactive shells) ---\
+  if [ ! -d /dev/pts ] || ! mountpoint -q /dev/pts 2>/dev/null; then\
+    mkdir -p /dev/pts\
+    mount -t devpts devpts /dev/pts 2>/dev/null\
+  fi' "$WORKDIR/init.sh"
+}
+
+_apply_devpts_mount_fallback() {
+    # Insert devpts mount before dropbear binary invocation
+    sed -i '/\/sbin\/dropbear/i\
+  # --- DOCKER_DEVPTS_MOUNT: mount devpts for PTY support (SSH interactive shells) ---\
+  if [ ! -d /dev/pts ] || ! mountpoint -q /dev/pts 2>/dev/null; then\
+    mkdir -p /dev/pts\
+    mount -t devpts devpts /dev/pts 2>/dev/null\
+  fi' "$WORKDIR/init.sh"
+}
+
 _apply_dhcp_fallback_primary() {
     sed -i '/^[[:space:]]*# create environment/i\  # Fix RC when no interface was found (loop never executed)\n  [ -z "$ipaddr" ] && RC=1\n  # --- DOCKER_DHCP_FALLBACK ---\n  /docker_net_fallback.sh "$RC"\n  [ $? -eq 0 ] && RC=0' \
         "$WORKDIR/init.sh"
@@ -596,6 +616,18 @@ if [ -f "$WORKDIR/init.sh" ]; then
     try_patch "STORAGE_MODULES" "CRITICAL" "$WORKDIR/init.sh" \
         "DOCKER_STORAGE_MODULES" \
         "_apply_storage_modules_primary" "_apply_storage_modules_fallback"
+
+    # -------------------------------------------------------------------------
+    # Patch 8: Mount devpts for PTY support (CRITICAL)
+    # Without /dev/pts, dropbear cannot allocate PTYs, causing:
+    #   - "PTY allocation request failed" for linbo-ssh
+    #   - Web terminal falls back to exec mode (no echo, no prompt)
+    # Primary: match "# start dropbear" comment
+    # Fallback: match "/sbin/dropbear" binary invocation
+    # -------------------------------------------------------------------------
+    try_patch "DEVPTS_MOUNT" "CRITICAL" "$WORKDIR/init.sh" \
+        "DOCKER_DEVPTS_MOUNT" \
+        "_apply_devpts_mount_primary" "_apply_devpts_mount_fallback"
 
     # -------------------------------------------------------------------------
     # Patch 2: DHCP fallback — static IP when udhcpc fails (OPTIONAL)
@@ -806,14 +838,7 @@ if [ -n "$LINBOSERVER" ] && [ -n "$HOSTGROUP" ]; then
     fi
 fi
 
-# Step 5: Mount devpts for PTY support (needed by SSH interactive shells)
-if [ ! -d /dev/pts ] || ! mountpoint -q /dev/pts 2>/dev/null; then
-    echo "  Mounting /dev/pts..."
-    mkdir -p /dev/pts
-    mount -t devpts devpts /dev/pts 2>/dev/null
-fi
-
-# Step 6: Start dropbear SSH if not running
+# Step 5: Start dropbear SSH if not running
 if ! pidof dropbear >/dev/null 2>&1; then
     echo "  Starting SSH (dropbear)..."
     /sbin/dropbear -r /etc/dropbear/dropbear_dss_host_key -r /etc/dropbear/dropbear_rsa_host_key -s -g -p 2222 2>/dev/null
@@ -1073,7 +1098,7 @@ _linbo_txt="$(xzcat "$LINBOFS.new" | cpio -i --to-stdout linbo.sh 2>/dev/null ||
 _vfail=false
 
 # Marker checks
-for _m in DOCKER_STORAGE_MODULES DOCKER_IFACE_WAIT; do
+for _m in DOCKER_STORAGE_MODULES DOCKER_IFACE_WAIT DOCKER_DEVPTS_MOUNT; do
     if echo "$_init_txt" | grep -q "$_m"; then echo "  OK: $_m"
     else echo "  FAIL: $_m [CRITICAL]"; _vfail=true; fi
 done
