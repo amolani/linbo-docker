@@ -41,9 +41,10 @@ const CATEGORY_ICONS: Record<string, typeof Wifi> = {
   ethernet: Cable,
   gpu: Monitor,
   bluetooth: Bluetooth,
+  autoscan: Search,
 };
 
-const TAB_ORDER = ['wifi', 'ethernet', 'gpu', 'bluetooth', 'manual'];
+const TAB_ORDER = ['wifi', 'ethernet', 'gpu', 'bluetooth', 'manual', 'autoscan'];
 
 export function FirmwareManager() {
   const [status, setStatus] = useState<FirmwareStatus | null>(null);
@@ -342,7 +343,7 @@ export function FirmwareManager() {
           {TAB_ORDER.map(tabId => {
             const cat = catalog.find(c => c.id === tabId);
             const Icon = CATEGORY_ICONS[tabId] || Package;
-            const label = cat?.name || (tabId === 'manual' ? 'Manuell' : tabId);
+            const label = cat?.name || (tabId === 'manual' ? 'Manuell' : tabId === 'autoscan' ? 'Auto-Scan' : tabId);
             return (
               <button
                 key={tabId}
@@ -394,12 +395,6 @@ export function FirmwareManager() {
 
           {showHelp && (
             <div className="mt-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-md space-y-3">
-              {/* Auto-Detect from Client */}
-              <FirmwareDetect
-                configuredEntries={configuredEntries}
-                onEntriesAdded={fetchData}
-              />
-
               {/* Recommended set */}
               <div className="flex items-start space-x-2">
                 <Sparkles className="h-4 w-4 text-amber-400 mt-0.5 flex-shrink-0" />
@@ -460,7 +455,7 @@ export function FirmwareManager() {
             </div>
           )}
 
-          {activeTab !== 'wifi' && activeTab !== 'manual' && activeCatalogCategory && (
+          {activeTab !== 'wifi' && activeTab !== 'manual' && activeTab !== 'autoscan' && activeCatalogCategory && (
             <VendorList
               vendors={activeCatalogCategory.vendors}
               expandedVendors={expandedVendors}
@@ -474,6 +469,13 @@ export function FirmwareManager() {
               onAdd={handleAdd}
               onBulkAdd={handleBulkAdd}
               onPrefixSearchChange={(key, val) => setPrefixSearch(prev => ({ ...prev, [key]: val }))}
+            />
+          )}
+
+          {activeTab === 'autoscan' && (
+            <FirmwareDetect
+              configuredEntries={configuredEntries}
+              onEntriesAdded={fetchData}
             />
           )}
 
