@@ -19,8 +19,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Configure TFTP
 COPY tftpd-hpa.conf /etc/default/tftpd-hpa
 
+# Copy entrypoint script
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 # TFTP uses UDP port 69
 EXPOSE 69/udp
 
-# Run TFTP in foreground
+# Wait for patched linbofs64 before starting TFTP
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["in.tftpd", "-L", "-u", "tftp", "-a", "0.0.0.0:69", "-s", "/srv/linbo", "--blocksize", "1468", "--verbosity", "3"]

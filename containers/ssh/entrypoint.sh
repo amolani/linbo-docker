@@ -17,6 +17,40 @@ if [ ! -f /etc/linuxmuster/linbo/ssh_host_rsa_key ]; then
     ssh-keygen -t ed25519 -f /etc/linuxmuster/linbo/ssh_host_ed25519_key -N ""
 fi
 
+# --- Dropbear host keys (for LINBO client SSH daemon inside linbofs64) ---
+if [ ! -f /etc/linuxmuster/linbo/dropbear_rsa_host_key ]; then
+    echo "Generating Dropbear RSA host key..."
+    dropbearkey -t rsa -f /etc/linuxmuster/linbo/dropbear_rsa_host_key
+fi
+if [ ! -f /etc/linuxmuster/linbo/dropbear_dss_host_key ]; then
+    echo "Generating Dropbear DSS host key..."
+    dropbearkey -t dss -f /etc/linuxmuster/linbo/dropbear_dss_host_key
+fi
+
+# --- LINBO client key (API → Client SSH connections) ---
+if [ ! -f /etc/linuxmuster/linbo/linbo_client_key ]; then
+    if [ -f /root/.ssh/id_rsa ] && [ -s /root/.ssh/id_rsa ]; then
+        cp /root/.ssh/id_rsa /etc/linuxmuster/linbo/linbo_client_key
+        ssh-keygen -y -f /root/.ssh/id_rsa > /etc/linuxmuster/linbo/linbo_client_key.pub
+        echo "  Copied host id_rsa as linbo_client_key"
+    else
+        ssh-keygen -t rsa -b 4096 -f /etc/linuxmuster/linbo/linbo_client_key -N "" -q
+        echo "  Generated new linbo_client_key"
+    fi
+fi
+
+# Ensure .pub exists
+if [ ! -f /etc/linuxmuster/linbo/linbo_client_key.pub ]; then
+    ssh-keygen -y -f /etc/linuxmuster/linbo/linbo_client_key \
+      > /etc/linuxmuster/linbo/linbo_client_key.pub 2>/dev/null
+fi
+
+# server_id_rsa.pub (compatibility with update-linbofs.sh)
+if [ ! -f /etc/linuxmuster/linbo/server_id_rsa.pub ]; then
+    cp /etc/linuxmuster/linbo/linbo_client_key.pub \
+       /etc/linuxmuster/linbo/server_id_rsa.pub
+fi
+
 # Link SSH host keys to sshd config location
 ln -sf /etc/linuxmuster/linbo/ssh_host_rsa_key /etc/ssh/ssh_host_rsa_key
 ln -sf /etc/linuxmuster/linbo/ssh_host_rsa_key.pub /etc/ssh/ssh_host_rsa_key.pub

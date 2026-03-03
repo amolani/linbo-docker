@@ -800,6 +800,164 @@ docker exec linbo-api ls -la /app/config/linbo_client_key
 
 ---
 
+## 24. SSH Keys fehlen nach frischem Clone (Auto-Key-Provisioning)
+
+### Problem
+Nach `git clone` + `docker compose up` auf einer neuen Maschine:
+- Kein SSH zu LINBO-Clients möglich
+- `linbo-ssh 10.0.150.2` → `Permission denied (publickey)`
+- Web-Terminal → Verbindung schlägt fehl
+- update-linbofs.sh kann keine SSH-Keys in linbofs64 einbetten
+
+### Ursache
+Drei Key-Dateien in `./config/` sind gitignored (und sollen es sein — Secrets gehören nicht ins Repo):
+- `config/dropbear_rsa_host_key` — Dropbear RSA Host-Key für LINBO-Client SSH-Daemon
+- `config/dropbear_dss_host_key` — Dropbear DSS Host-Key für LINBO-Client SSH-Daemon
+- `config/linbo_client_key` — RSA-Key für API→Client SSH-Verbindungen
+
+**Ohne diese Dateien:**
+- Docker erstellt leere Dateien für fehlende Bind-Mounts → stille Fehler
+- update-linbofs.sh bettet leere Keys in linbofs64 ein → Dropbear startet nicht
+- API hat keinen privaten Schlüssel → kann nicht zu Clients verbinden
+
+### Lösung: Auto-Key-Provisioning im SSH-Container
+
+**Commit:** Session 26 — Keys werden nicht mehr als Bind-Mounts vom Host gemountet, sondern leben im persistenten `linbo_config` Docker-Volume. Der SSH-Container (`containers/ssh/entrypoint.sh`) generiert alle fehlenden Keys automatisch beim Start:
+
+```bash
+# Dropbear Host-Keys (für LINBO-Client SSH-Daemon in linbofs64)
+dropbearkey -t rsa -f /etc/linuxmuster/linbo/dropbear_rsa_host_key
+dropbearkey -t dss -f /etc/linuxmuster/linbo/dropbear_dss_host_key
+
+# LINBO Client Key (API → Client SSH)
+# Kopiert host /root/.ssh/id_rsa falls vorhanden, sonst generiert neu
+ssh-keygen -t rsa -b 4096 -f /etc/linuxmuster/linbo/linbo_client_key -N ""
+
+# server_id_rsa.pub (Kompatibilität mit update-linbofs.sh)
+cp linbo_client_key.pub → server_id_rsa.pub
+```
+
+**Geänderte Dateien:**
+- `containers/ssh/entrypoint.sh` — Auto-Generierung aller fehlenden Keys
+- `docker-compose.yml` — 4 Key-Bind-Mounts entfernt (Zeilen 143-145, 149)
+- `containers/api/Dockerfile` — `dropbear-bin` zu Runtime-Dependencies hinzugefügt
+- `.gitignore` — `config/dropbear_*_host_key` hinzugefügt
+
+### Verifikation
+```bash
+# Nach docker compose up: Alle Keys vorhanden?
+docker exec linbo-ssh ls -la /etc/linuxmuster/linbo/
+# Erwartet: dropbear_rsa_host_key, dropbear_dss_host_key,
+#           linbo_client_key, linbo_client_key.pub, server_id_rsa.pub,
+#           ssh_host_rsa_key, ssh_host_ed25519_key
+
+# Logs prüfen (frische Installation):
+docker logs linbo-ssh 2>&1 | grep -i "generat"
+# Erwartet: "Generating Dropbear RSA host key..."
+#           "Generating Dropbear DSS host key..."
+#           "Generated new linbo_client_key"
+
+# Bestehende Installation:
+docker logs linbo-ssh 2>&1 | grep -i "key"
+# Erwartet: Keine "Generating"-Meldungen (Keys existieren bereits)
+```
+
+### Migration bestehender Deployments
+Keine manuellen Schritte nötig. Nach `git pull && docker compose up -d --build`:
+- SSH-Container erkennt vorhandene Keys im Volume → überspringt Generierung
+- `/root/.ssh/id_rsa` wird als `linbo_client_key` kopiert → gleicher Key wie vorher
+- Bind-Mounts fallen weg, Volume-Keys werden genutzt
+
+---
+
+## 25. TFTP Race Condition — Ungepatche linbofs64 wird ausgeliefert
+
+### Problem
+Bei einem frischen Deployment (`git clone` + `docker compose up`) bootet ein LINBO-Client, aber:
+- Kein Netzwerk nach GRUB-Handoff
+- Kein SSH, kein rsync, keine GUI
+- Client zeigt "Control Mode" oder bleibt hängen
+
+### Ursache
+**Race Condition zwischen TFTP und API:**
+
+```
+Zeitlinie:
+  0s  — Init-Container lädt vanilla linbofs64 herunter
+  5s  — TFTP startet → serviert UNGEPATCHE vanilla linbofs64!
+ 30s  — API startet, erkennt .needs-rebuild → beginnt linbofs64-Patching
+ 60s  — API fertig → .linbofs-patch-status geschrieben
+ ???  — Client bootet im 5-60s Fenster → bekommt kaputte linbofs64
+```
+
+Die vanilla linbofs64 aus dem linbo7-Paket hat keine Docker-Patches:
+- Kein Netzwerk-Recovery (Patch 3)
+- Kein udevd-Restart (Patch 7)
+- Kein devpts-Mount (Patch 8)
+- Keine SSH-Keys eingebettet
+
+### Lösung: TFTP Entrypoint wartet auf Patch-Marker
+
+Ein neuer Entrypoint-Script (`containers/tftp/entrypoint.sh`) blockiert den TFTP-Start, bis die gepatchte linbofs64 bereit ist:
+
+```bash
+MARKER="/srv/linbo/.linbofs-patch-status"
+
+# Bestehende Installation: Marker existiert → sofort starten
+if [ -f "$MARKER" ]; then
+    exec "$@"
+fi
+
+# Fresh deploy: warten (max 300s)
+while [ ! -f "$MARKER" ]; do sleep 2; done
+exec "$@"
+```
+
+**Doppelte Sicherheit:** Zusätzlich `depends_on: api: condition: service_started` in `docker-compose.yml` — Docker startet TFTP erst, wenn API läuft.
+
+**Geänderte Dateien:**
+- `containers/tftp/entrypoint.sh` — **NEU** — Wartet auf `.linbofs-patch-status`
+- `containers/tftp/Dockerfile` — ENTRYPOINT/CMD Trennung
+- `docker-compose.yml` — TFTP `depends_on` um `api` erweitert
+
+### Startup-Reihenfolge nach Fix
+```
+1. init        — lädt vanilla linbofs64 + boot files herunter
+2. cache       — Redis startet
+3. ssh         — generiert alle SSH-Keys (auto-provisioning)
+4. api         — startet, findet .needs-rebuild, patcht linbofs64 (8 Patches + Keys)
+                 → schreibt .linbofs-patch-status
+5. tftp        — Entrypoint erkennt Marker → startet TFTP
+                 → serviert NUR gepatchte linbofs64
+6. web         — Frontend (wartet auf api healthy)
+```
+
+### Verifikation
+```bash
+# TFTP-Logs prüfen:
+docker logs linbo-tftp 2>&1 | grep -i "patch"
+
+# Fresh deploy:
+# "TFTP: Waiting for linbofs64 to be patched (max 300s)..."
+# "TFTP: linbofs64 patched after 42s, starting."
+
+# Bestehende Installation:
+# "TFTP: linbofs64 already patched, starting immediately."
+
+# Marker prüfen:
+docker exec linbo-api cat /srv/linbo/.linbofs-patch-status
+# Erwartet: Zeitstempel oder "ok"
+```
+
+### Edge Case: Timeout
+Wenn die API die linbofs64 nach 300s nicht gepatcht hat, startet TFTP trotzdem mit einer Warnung:
+```
+TFTP: WARNING — timeout after 300s, starting with unpatched linbofs64!
+```
+Dies verhindert, dass ein defekter API-Container den gesamten Boot-Dienst blockiert.
+
+---
+
 ## Patch-Übersicht: update-linbofs.sh (8 Patches)
 
 Alle Patches werden automatisch beim Bauen von linbofs64 angewendet. Sie modifizieren Dateien innerhalb des CPIO-Archivs.
@@ -891,6 +1049,8 @@ DC Worker laeuft auf 10.0.0.11 und verbindet sich zu Redis/API auf 10.0.0.13.
 - [x] Sync-Modus Toggle (Runtime-Einstellung)
 - [x] 8 Docker-Patches in update-linbofs.sh (inkl. PTY-Support)
 - [x] WebSocket Heartbeat (Server-seitig Ping/Pong)
+- [x] Auto-Key-Provisioning (SSH/Dropbear-Keys werden automatisch generiert)
+- [x] TFTP Race Condition Fix (wartet auf gepatchte linbofs64)
 
 ### Bekannte Einschraenkungen
 - TFTP-Container kann mit Produktions-TFTP kollidieren
@@ -906,10 +1066,13 @@ DC Worker laeuft auf 10.0.0.11 und verbindet sich zu Redis/API auf 10.0.0.13.
 1. **Docker & Docker Compose installieren**
 2. **Repository klonen:** `git clone https://github.com/amolani/linbo-docker.git`
 3. **.env erstellen:** `cp .env.example .env` und anpassen
-4. **Boot-Dateien:** Entweder automatisch (GitHub Release) oder manuell kopieren
-5. **Container starten:** `docker compose up -d`
-6. **Admin erstellen:** Über API oder Seed-Script
-7. **Port-Konflikte prüfen:** Besonders TFTP (69/udp)
+4. **Container starten:** `docker compose up -d`
+   - Init lädt Boot-Dateien automatisch herunter
+   - SSH-Container generiert alle SSH/Dropbear-Keys automatisch
+   - API patcht linbofs64 mit Docker-Patches + Keys
+   - TFTP wartet auf gepatchte linbofs64 bevor es startet
+5. **Port-Konflikte prüfen:** Besonders TFTP (69/udp)
+6. **Fertig!** — Kein manuelles Key-Kopieren oder Setup nötig
 
 ---
 

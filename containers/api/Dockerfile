@@ -40,6 +40,7 @@ RUN apk add --no-cache \
     bash \
     curl \
     dpkg \
+    dropbear-bin \
     openssh-client \
     openssl \
     rsync \

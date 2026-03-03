@@ -39,6 +39,8 @@ services:
     depends_on:
       init:
         condition: service_completed_successfully
+      api:
+        condition: service_started
     healthcheck:
       test: ["CMD", "pgrep", "in.tftpd"]
       interval: 30s
@@ -140,13 +142,9 @@ services:
       - linbo_driver_data:/var/lib/linbo/drivers
       - ./scripts/server:/usr/share/linuxmuster/linbo
       - ./config/rsyncd.secrets:/etc/rsyncd.secrets:ro
-      - ./config/server_id_rsa.pub:/etc/linuxmuster/linbo/server_id_rsa.pub:ro
-      - ./config/dropbear_dss_host_key:/etc/linuxmuster/linbo/dropbear_dss_host_key:ro
-      - ./config/dropbear_rsa_host_key:/etc/linuxmuster/linbo/dropbear_rsa_host_key:ro
       - /lib/firmware:/lib/firmware:ro
       - /boot:/boot:ro
       - /lib/modules:/lib/modules:ro
-      - ./config/linbo_client_key:/etc/linuxmuster/linbo/linbo_client_key:ro
     environment:
       # Server
       - NODE_ENV=${NODE_ENV:-production}
