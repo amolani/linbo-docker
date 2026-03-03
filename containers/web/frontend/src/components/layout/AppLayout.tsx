@@ -1,15 +1,12 @@
-import { useState, useEffect, ReactNode } from 'react';
+import { useState, useEffect } from 'react';
+import { Outlet } from 'react-router-dom';
 import { Sidebar, MobileSidebar } from './Sidebar';
 import { Header } from './Header';
 import { ToastContainer } from '@/components/ui';
 import { useWebSocket, useHostStatusUpdates, useNotificationEvents } from '@/hooks/useWebSocket';
 import { useServerConfigStore } from '@/stores/serverConfigStore';
 
-interface AppLayoutProps {
-  children: ReactNode;
-}
-
-export function AppLayout({ children }: AppLayoutProps) {
+export function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const fetchMode = useServerConfigStore((s) => s.fetchMode);
 
@@ -30,7 +27,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         <Header onMenuClick={() => setSidebarOpen(true)} />
 
         <main className="flex-1 overflow-y-auto p-6">
-          {children}
+          <Outlet />
         </main>
       </div>
 

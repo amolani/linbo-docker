@@ -260,14 +260,19 @@ async function startServer() {
     });
   });
 
-  // Initialize WebSocket Server
+  // Initialize WebSocket Server (noServer to avoid conflict with terminal WS)
   console.log('Initializing WebSocket...');
-  const wss = new WebSocket.Server({ server, path: '/ws' });
+  const wss = new WebSocket.Server({ noServer: true });
 
   // Setup WebSocket connection handling
   wss.on('connection', (ws, req) => {
     console.log('WebSocket client connected from:', req.socket.remoteAddress);
     ws.channels = [];
+    ws.isAlive = true;
+
+    ws.on('pong', () => {
+      ws.isAlive = true;
+    });
 
     ws.on('message', (message) => {
       try {
@@ -307,14 +312,24 @@ async function startServer() {
     }));
   });
 
+  // Heartbeat: ping clients every 30s, terminate dead connections
+  const wsHeartbeat = setInterval(() => {
+    wss.clients.forEach((ws) => {
+      if (ws.isAlive === false) return ws.terminate();
+      ws.isAlive = false;
+      ws.ping();
+    });
+  }, 30000);
+  wss.on('close', () => clearInterval(wsHeartbeat));
+
   // Initialize websocket utilities with server instance
   websocket.init(wss);
   console.log('  WebSocket initialized');
 
-  // Initialize Terminal WebSocket Server (dedicated path for interactive SSH)
+  // Initialize Terminal WebSocket Server (noServer to avoid conflict with main WS)
   const terminalService = require('./services/terminal.service');
   const { verifyToken } = require('./middleware/auth');
-  const terminalWss = new WebSocket.Server({ server, path: '/ws/terminal' });
+  const terminalWss = new WebSocket.Server({ noServer: true });
 
   terminalWss.on('connection', (ws, req) => {
     // Authenticate via ?token= query param
@@ -416,6 +431,23 @@ async function startServer() {
 
   server._terminalWss = terminalWss;
   console.log('  Terminal WebSocket initialized');
+
+  // Route HTTP upgrade requests to the correct WebSocket server
+  server.on('upgrade', (request, socket, head) => {
+    const { pathname } = new URL(request.url, `http://${request.headers.host}`);
+
+    if (pathname === '/ws/terminal') {
+      terminalWss.handleUpgrade(request, socket, head, (ws) => {
+        terminalWss.emit('connection', ws, request);
+      });
+    } else if (pathname === '/ws') {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+      });
+    } else {
+      socket.destroy();
+    }
+  });
 
   // Start Operation Worker (unless disabled)
   if (process.env.ENABLE_OPERATION_WORKER !== 'false') {

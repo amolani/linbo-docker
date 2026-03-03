@@ -25,171 +25,30 @@ export function AppRoutes() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
 
+      {/* Single layout route — AppLayout stays mounted across navigation */}
       <Route
-        path="/"
         element={
           <ProtectedRoute>
-            <AppLayout>
-              <DashboardPage />
-            </AppLayout>
+            <AppLayout />
           </ProtectedRoute>
         }
-      />
-
-      <Route
-        path="/hosts"
-        element={
-          <ProtectedRoute>
-            <AppLayout>
-              <HostsPage />
-            </AppLayout>
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/rooms"
-        element={
-          <ProtectedRoute>
-            <AppLayout>
-              <RoomsPage />
-            </AppLayout>
-          </ProtectedRoute>
-        }
-      />
-
-
-      <Route
-        path="/configs"
-        element={
-          <ProtectedRoute>
-            <AppLayout>
-              <ConfigsPage />
-            </AppLayout>
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/images"
-        element={
-          <ProtectedRoute>
-            <AppLayout>
-              <ImagesPage />
-            </AppLayout>
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/operations"
-        element={
-          <ProtectedRoute>
-            <AppLayout>
-              <OperationsPage />
-            </AppLayout>
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/dhcp"
-        element={
-          <ProtectedRoute>
-            <AppLayout>
-              <DhcpPage />
-            </AppLayout>
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/kernel"
-        element={
-          <ProtectedRoute>
-            <AppLayout>
-              <KernelPage />
-            </AppLayout>
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/firmware"
-        element={
-          <ProtectedRoute>
-            <AppLayout>
-              <FirmwarePage />
-            </AppLayout>
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/drivers"
-        element={
-          <ProtectedRoute>
-            <AppLayout>
-              <DriversPage />
-            </AppLayout>
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/grub-theme"
-        element={
-          <ProtectedRoute>
-            <AppLayout>
-              <GrubThemePage />
-            </AppLayout>
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/linbo-gui"
-        element={
-          <ProtectedRoute>
-            <AppLayout>
-              <LinboGuiPage />
-            </AppLayout>
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/server"
-        element={
-          <ProtectedRoute>
-            <AppLayout>
-              <SettingsPage />
-            </AppLayout>
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/sync"
-        element={
-          <ProtectedRoute>
-            <AppLayout>
-              <SyncPage />
-            </AppLayout>
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/terminal"
-        element={
-          <ProtectedRoute>
-            <AppLayout>
-              <TerminalPage />
-            </AppLayout>
-          </ProtectedRoute>
-        }
-      />
+      >
+        <Route index element={<DashboardPage />} />
+        <Route path="hosts" element={<HostsPage />} />
+        <Route path="rooms" element={<RoomsPage />} />
+        <Route path="configs" element={<ConfigsPage />} />
+        <Route path="images" element={<ImagesPage />} />
+        <Route path="operations" element={<OperationsPage />} />
+        <Route path="dhcp" element={<DhcpPage />} />
+        <Route path="kernel" element={<KernelPage />} />
+        <Route path="firmware" element={<FirmwarePage />} />
+        <Route path="drivers" element={<DriversPage />} />
+        <Route path="grub-theme" element={<GrubThemePage />} />
+        <Route path="linbo-gui" element={<LinboGuiPage />} />
+        <Route path="server" element={<SettingsPage />} />
+        <Route path="sync" element={<SyncPage />} />
+        <Route path="terminal" element={<TerminalPage />} />
+      </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
