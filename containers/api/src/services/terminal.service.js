@@ -10,22 +10,31 @@ const { Client } = require('ssh2');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 
-// SSH config (same as ssh.service.js)
-let loadedPrivateKey = null;
-const keyPath = process.env.SSH_PRIVATE_KEY;
-if (keyPath) {
+// SSH config for direct LINBO client connections (not via SSH container)
+// Uses the host server's key that matches the client's authorized_keys
+let linboClientKey = null;
+const linboKeyPath = process.env.LINBO_CLIENT_SSH_KEY || '/etc/linuxmuster/linbo/linbo_client_key';
+if (linboKeyPath) {
   try {
-    loadedPrivateKey = fs.readFileSync(keyPath);
+    linboClientKey = fs.readFileSync(linboKeyPath);
+    console.log(`[Terminal] Loaded LINBO client key from ${linboKeyPath}`);
   } catch (err) {
-    console.error(`[Terminal] Failed to read private key from ${keyPath}:`, err.message);
+    console.error(`[Terminal] Failed to read LINBO client key from ${linboKeyPath}:`, err.message);
+    // Fallback: try SSH container key (won't work for clients but avoids crash)
+    const fallbackPath = process.env.SSH_PRIVATE_KEY;
+    if (fallbackPath) {
+      try {
+        linboClientKey = fs.readFileSync(fallbackPath);
+        console.warn(`[Terminal] Using fallback key ${fallbackPath} — may not work for LINBO clients`);
+      } catch {}
+    }
   }
 }
 
 const sshDefaults = {
-  port: parseInt(process.env.SSH_PORT, 10) || 2222,
-  username: process.env.SSH_USERNAME || 'root',
-  privateKey: loadedPrivateKey,
-  passphrase: process.env.SSH_PASSPHRASE,
+  port: parseInt(process.env.LINBO_CLIENT_SSH_PORT, 10) || 2222,
+  username: 'root',
+  privateKey: linboClientKey,
   readyTimeout: parseInt(process.env.SSH_TIMEOUT, 10) || 10000,
   keepaliveInterval: 5000,
 };

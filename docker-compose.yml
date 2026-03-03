@@ -87,6 +87,8 @@ services:
       - linbo_config:/etc/linuxmuster/linbo
       - ./scripts/server:/usr/share/linuxmuster/linbo
       - linbo_log:/var/log/linuxmuster/linbo
+      - /root/.ssh/id_rsa:/root/.ssh/id_rsa:ro
+      - ./config/ssh_config:/etc/linuxmuster/linbo/ssh_config:ro
     environment:
       - LINBO_SERVER_IP=${LINBO_SERVER_IP:-10.0.0.1}
     networks:
@@ -144,6 +146,7 @@ services:
       - /lib/firmware:/lib/firmware:ro
       - /boot:/boot:ro
       - /lib/modules:/lib/modules:ro
+      - ./config/linbo_client_key:/etc/linuxmuster/linbo/linbo_client_key:ro
     environment:
       # Server
       - NODE_ENV=${NODE_ENV:-production}
@@ -165,12 +168,15 @@ services:
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-24h}
       - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-Muster!}
-      # SSH (for remote commands)
+      # SSH (for linbo-ssh container communication)
       - SSH_HOST=linbo-ssh
       - SSH_PORT=2222
       - SSH_USER=root
       - SSH_PRIVATE_KEY=/etc/linuxmuster/linbo/ssh_host_rsa_key
       - SSH_TIMEOUT=${SSH_TIMEOUT:-10000}
+      # SSH (for direct LINBO client connections - terminal, status checks)
+      - LINBO_CLIENT_SSH_KEY=/etc/linuxmuster/linbo/linbo_client_key
+      - LINBO_CLIENT_SSH_PORT=2222
       # Storage paths
       - LINBO_DATA_DIR=/srv/linbo
       - IMAGES_DIR=/srv/linbo/images

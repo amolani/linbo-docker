@@ -102,3 +102,4 @@ linbo64
 
 # Agent templates (not part of the project)
 agents/
+config/linbo_client_key
