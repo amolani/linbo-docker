@@ -815,6 +815,31 @@ Alle Patches werden automatisch beim Bauen von linbofs64 angewendet. Sie modifiz
 | 7 | DOCKER_UDEV_INPUT | linbo.sh | udevd Neustart vor GUI (Input-Geräte) | CRITICAL |
 | 8 | DOCKER_DEVPTS_MOUNT | init.sh | /dev/pts Mount vor Dropbear (PTY-Support) | CRITICAL |
 
+### Warum so viele Patches nötig sind: init.sh bricht ab
+
+**Root Cause (analysiert per SSH-Debug auf dem LINBO-Client):**
+
+Die originale `init.sh` aus dem linbo7-Paket hat folgenden Ablauf:
+```
+init_setup()     ← Zeile 602: LÄUFT (mountet /proc, /sys, /dev, startet klogd)
+exec > >(tee /tmp/init.log) 2>&1   ← Zeile 605: BRICHT AB!
+hwsetup()        ← Zeile 618: LÄUFT NIE (udevd, devpts, Hardware-Erkennung)
+network()        ← Zeile 628: LÄUFT NIE (DHCP, rsync, start.conf)
+```
+
+**Die `exec > >(tee ...)` Process Substitution scheitert in BusyBox init's sysinit Kontext.**
+Dies ist ein Bug in BusyBox ash, wenn stdout auf `/dev/console` zeigt. Beweis:
+- `/tmp/init.log` existiert nicht nach dem Boot
+- Console (`/dev/vcs1`) zeigt keine init.sh-Ausgabe nach init_setup
+- Direkt nach init_setup erscheint die DOCKER_NET_RECOVERY Ausgabe
+
+**Konsequenz:** Ohne `hwsetup()` fehlen udevd, devpts, Hardware-Erkennung. Ohne `network()` fehlt DHCP/rsync. Unsere Docker-Patches übernehmen diese Aufgaben:
+- Patch 3 (NET_RECOVERY) → ersetzt `network()`
+- Patch 7 (UDEV_INPUT) → ersetzt udevd-Teil von `hwsetup()`
+- Patch 8 (DEVPTS_MOUNT) → ersetzt devpts-Teil von `hwsetup()`
+
+**Hinweis:** Auf Produktions-linuxmuster.net fällt das nicht auf, weil `linbo-remote` immer exec-Modus nutzt (Kommando wird mitgegeben → kein PTY nötig).
+
 **Rebuild-Befehl:**
 ```bash
 /root/linbo-docker/scripts/server/update-linbofs.sh
