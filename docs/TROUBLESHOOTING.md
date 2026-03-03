@@ -1,6 +1,6 @@
 # LINBO Docker - Troubleshooting & Fehlerdokumentation
 
-**Stand:** 2026-03-02
+**Stand:** 2026-03-03
 
 ---
 
@@ -544,23 +544,84 @@ udevadm info --query=property --name=/dev/input/event3  # Muss ID_INPUT=1 zeigen
 
 ---
 
-## 18. PTY Allocation Failed (SSH ohne Kommando)
+## 18. PTY Allocation Failed — SSH interaktive Shell (KRITISCH)
 
 ### Problem
-```
-ssh -p 2222 root@10.0.150.2
+```bash
+linbo-ssh 10.0.150.2
 # PTY allocation request failed on channel 0
+# shell request failed on channel 0
+
+# Oder im Web-Terminal:
+# Verbindung hergestellt, aber keine Eingabe möglich
 ```
 
 ### Ursache
-LINBO-Clients haben kein `/dev/pts` → interaktive SSH-Sessions (ohne Kommando) scheitern.
+LINBO-Clients booten ein minimales Linux (initramfs). Das `/dev/pts` Pseudo-Terminal-Dateisystem ist standardmäßig nicht gemountet. Ohne `/dev/pts` kann Dropbear (SSH-Server) keine PTY-Geräte (`/dev/pts/0`, `/dev/pts/1`, ...) erzeugen → interaktive Shells scheitern.
 
-### Lösung
-Immer explizites Kommando mitgeben:
-```bash
-ssh -p 2222 root@10.0.150.2 "echo connected"     # OK
-ssh -p 2222 root@10.0.150.2                        # FEHLER
+**Boot-Kette:**
 ```
+init.sh → dropbear startet (Zeile ~561) → KEIN /dev/pts → PTY fail
+```
+
+### Permanente Lösung: Patch 8 (DOCKER_DEVPTS_MOUNT)
+In `scripts/server/update-linbofs.sh` wurde Patch 8 hinzugefügt, der `init.sh` im linbofs64-Archiv patcht. Der Patch mountet `/dev/pts` **direkt vor dem Dropbear-Start**:
+
+```bash
+# Wird automatisch in init.sh eingefügt (vor "# start dropbear"):
+if [ ! -d /dev/pts ] || ! mountpoint -q /dev/pts 2>/dev/null; then
+  mkdir -p /dev/pts
+  mount -t devpts devpts /dev/pts 2>/dev/null
+fi
+```
+
+**Anwenden:**
+```bash
+# 1. linbofs64 neu bauen (auf dem Hauptserver)
+/root/linbo-docker/scripts/server/update-linbofs.sh
+
+# 2. Prüfen ob Patch im Archiv ist
+xz -d < /var/lib/docker/volumes/linbo_srv_data/_data/linbofs64 | \
+  cpio -t 2>/dev/null | grep init.sh && \
+  xz -d < /var/lib/docker/volumes/linbo_srv_data/_data/linbofs64 | \
+  cpio -i --to-stdout init.sh 2>/dev/null | grep -c "DOCKER_DEVPTS_MOUNT"
+# Sollte "1" oder mehr ausgeben
+
+# 3. TFTP-Container neustarten (damit neue linbofs64 ausgeliefert wird)
+docker compose restart tftp
+
+# 4. Client PXE-Reboot → neues linbofs64 wird geladen → /dev/pts automatisch da
+```
+
+### Sofort-Fix (Live-Client ohne Reboot)
+```bash
+# Manuell devpts mounten auf dem laufenden Client:
+linbo-ssh -tt root@10.0.150.2 'mkdir -p /dev/pts && mount -t devpts devpts /dev/pts'
+
+# Danach funktioniert interaktive Shell:
+linbo-ssh root@10.0.150.2     # OK
+```
+
+### Verifikation
+```bash
+# PTY prüfen:
+linbo-ssh -tt root@10.0.150.2 'tty && exit'
+# Erwartet: /dev/pts/0
+
+# mountpoint prüfen:
+linbo-ssh root@10.0.150.2 'mountpoint /dev/pts'
+# Erwartet: /dev/pts is a mountpoint
+```
+
+### Häufiger Fehler: Patch in falscher Datei
+Der erste Versuch platzierte den devpts-Mount in `docker_net_recovery.sh`. **Das funktioniert nicht**, weil dieses Script bei normalem Boot (Netzwerk OK) übersprungen wird:
+```bash
+# docker_net_recovery.sh hat Early Return:
+if [ -n "$LINBOSERVER" ] && [ -s /start.conf ]; then
+    return 0  # ← Überspringt alles bei normalem Boot!
+fi
+```
+**Richtig:** Patch muss in `init.sh` stehen, direkt vor dem Dropbear-Start.
 
 ---
 
@@ -603,7 +664,168 @@ GITHUB_TOKEN=ghp_xxx docker compose up -d --build web
 
 ---
 
-## Aktueller Stand (2026-03-02)
+## 21. WebSocket "Getrennt" — Sidebar zeigt dauerhaft Disconnected
+
+### Problem
+Im Frontend zeigt die Sidebar dauerhaft "Getrennt" (roter Punkt) an. WebSocket verbindet sich, trennt sofort, verbindet erneut — Endlosschleife.
+
+Im API-Log:
+```
+websocketClients: 0  (statt 1 oder 2)
+```
+
+### Ursache
+Jede Route war einzeln mit `<ProtectedRoute><AppLayout>` gewrappt:
+```tsx
+// FALSCH — AppLayout wird bei JEDER Navigation neu gemountet
+<Route path="hosts" element={<ProtectedRoute><AppLayout><HostsPage /></AppLayout></ProtectedRoute>} />
+<Route path="rooms" element={<ProtectedRoute><AppLayout><RoomsPage /></AppLayout></ProtectedRoute>} />
+```
+
+Bei Navigation von `/hosts` zu `/rooms` wird `AppLayout` **komplett zerstört und neu erstellt**. Da `AppLayout` den `useWebSocket()` Hook enthält, wird die WS-Verbindung bei jeder Navigation getrennt und neu aufgebaut.
+
+### Lösung
+React Router **Layout Route Pattern**: Ein einziges `<AppLayout />` wrapping aller Kind-Routen via `<Outlet />`:
+
+```tsx
+// RICHTIG — AppLayout wird EINMAL gemountet und bleibt bestehen
+<Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+  <Route path="hosts" element={<HostsPage />} />
+  <Route path="rooms" element={<RoomsPage />} />
+  ...
+</Route>
+```
+
+**Geänderte Dateien:**
+- `containers/web/frontend/src/routes/index.tsx` — Layout Route Refactor
+- `containers/web/frontend/src/components/layout/AppLayout.tsx` — `children` → `<Outlet />`
+
+**Zusätzlich:** Server-seitiger Heartbeat (Ping/Pong alle 30s) in `containers/api/src/index.js` um tote Verbindungen zu erkennen.
+
+### Verifikation
+```bash
+# API Health prüfen — websocketClients sollte > 0 sein
+curl -s http://localhost:3000/health | jq .websocketClients
+# Erwartet: 1 oder 2 (je nach offene Browser-Tabs)
+```
+
+**Commit:** `cb599df`
+
+---
+
+## 22. Web-Terminal: Verbindung steht, aber keine Ein-/Ausgabe
+
+### Problem
+Im Terminal-Tab wird eine SSH-Verbindung erfolgreich hergestellt (grüner Punkt), aber:
+- Kein Output sichtbar (leerer schwarzer Bildschirm)
+- Tastatureingabe wird gesendet, aber keine Antwort angezeigt
+
+### Ursache
+**DOM-Element-Referenz-Fehler:** `TerminalPage` speicherte eine Ref auf ein Wrapper-`<div>`, aber `TerminalView` setzte `termWrite` auf ein anderes, inneres `containerRef`-Element. Die Referenzen zeigten auf **verschiedene DOM-Elemente**.
+
+```tsx
+// TerminalPage (FALSCH): Ref auf äußeres div
+<div ref={(el) => { if (el) termRefs.current.set(tab.id, el); }}>
+  <TerminalView ... />   // ← hat EIGENES containerRef, nicht das gleiche Element!
+</div>
+
+// Output-Handler versuchte:
+const el = termRefs.current.get(sessionId);
+el.termWrite?.(data);  // ← undefined, weil termWrite auf dem inneren Element liegt
+```
+
+### Lösung
+**Globale Writer-Registry** statt DOM-Element-Hack:
+
+```tsx
+// TerminalView.tsx — Globale Map
+const terminalWriters = new Map<string, (data: string) => void>();
+
+export function getTerminalWriter(sessionId: string) {
+  return terminalWriters.get(sessionId);
+}
+
+// In TerminalView: Registriert sich automatisch
+useEffect(() => {
+  if (sessionId) {
+    terminalWriters.set(sessionId, (data) => termRef.current?.write(data));
+    return () => { terminalWriters.delete(sessionId); };
+  }
+}, [sessionId]);
+
+// TerminalPage.tsx — Output-Handler
+case 'terminal.output': {
+  const writer = getTerminalWriter(msg.sessionId!);
+  if (writer) writer(msg.data!);
+  break;
+}
+```
+
+**Geänderte Dateien:**
+- `containers/web/frontend/src/components/terminal/TerminalView.tsx`
+- `containers/web/frontend/src/pages/TerminalPage.tsx`
+
+**Commit:** `c2a290a`
+
+---
+
+## 23. SSH Key Permissions: API-Container hat keinen Zugriff
+
+### Problem
+Terminal-Verbindungen vom Testserver scheitern, obwohl sie vom Hauptserver funktionieren:
+```
+Error: Cannot read SSH key: EACCES: permission denied
+```
+
+### Ursache
+Der API-Container läuft als User `linbo` (UID 1001). Die SSH-Key-Datei `config/linbo_client_key` hatte `root:root 600` auf dem Testserver.
+
+### Lösung
+```bash
+chmod 644 /root/linbo-docker/config/linbo_client_key
+```
+
+**Hinweis:** Der Key ist kein geheimer Host-Key — er wird zum Verbinden mit LINBO-Clients verwendet, die den öffentlichen Schlüssel bereits kennen. `644` ist hier ausreichend sicher.
+
+### Prüfung
+```bash
+# Auf dem Server:
+ls -la /root/linbo-docker/config/linbo_client_key
+# -rw-r--r-- 1 root root ... linbo_client_key
+
+# Im Container:
+docker exec linbo-api ls -la /app/config/linbo_client_key
+# Muss lesbar sein für linbo:1001
+```
+
+---
+
+## Patch-Übersicht: update-linbofs.sh (8 Patches)
+
+Alle Patches werden automatisch beim Bauen von linbofs64 angewendet. Sie modifizieren Dateien innerhalb des CPIO-Archivs.
+
+| # | Patch-Name | Datei | Beschreibung | Priorität |
+|---|-----------|-------|-------------|-----------|
+| 1 | DOCKER_STORAGE_MODULES | init.sh | Lädt virtio/scsi/nvme Module für VM-Disks | CRITICAL |
+| 2 | DOCKER_IFACE_WAIT | init.sh | Wartet bis Netzwerk-Interface bereit ist | CRITICAL |
+| 3 | DOCKER_NET_RECOVERY | init.sh | Netzwerk-Recovery + Dropbear-Port 2222 | CRITICAL |
+| 4 | DOCKER_SERVER_OVERRIDE | init.sh | Verhindert falschen SERVERID in standalone Docker | CRITICAL |
+| 5 | DOCKER_GUI_THEME | linbo_gui | Qt-GUI Theme-Anpassungen | LOW |
+| 6 | DOCKER_RSYNC_COMPAT | init.sh | rsync-Kompatibilität für Docker | MEDIUM |
+| 7 | DOCKER_UDEV_INPUT | linbo.sh | udevd Neustart vor GUI (Input-Geräte) | CRITICAL |
+| 8 | DOCKER_DEVPTS_MOUNT | init.sh | /dev/pts Mount vor Dropbear (PTY-Support) | CRITICAL |
+
+**Rebuild-Befehl:**
+```bash
+/root/linbo-docker/scripts/server/update-linbofs.sh
+# → Baut linbofs64 mit allen 8 Patches
+# → Danach: docker compose restart tftp
+# → Client PXE-Reboot nötig
+```
+
+---
+
+## Aktueller Stand (2026-03-03)
 
 ### Hauptserver (10.0.0.11 - Produktion)
 | Service | Status | Port | Notizen |
@@ -640,12 +862,17 @@ DC Worker laeuft auf 10.0.0.11 und verbindet sich zu Redis/API auf 10.0.0.13.
 - [x] GitHub Release mit Boot-Dateien
 - [x] Host Provisioning via DC Worker (AD + DNS + devices.csv)
 - [x] PXE Boot Chain: Config → GRUB → start.conf via rsync (E2E getestet)
+- [x] SSH Web-Terminal (xterm.js) mit Tab-System
+- [x] Sync-Modus Toggle (Runtime-Einstellung)
+- [x] 8 Docker-Patches in update-linbofs.sh (inkl. PTY-Support)
+- [x] WebSocket Heartbeat (Server-seitig Ping/Pong)
 
 ### Bekannte Einschraenkungen
 - TFTP-Container kann mit Produktions-TFTP kollidieren
 - GitHub "latest" Tag funktioniert nicht fuer Downloads
 - Bei DB-Neustart muessen User/Configs neu erstellt werden
 - `docker compose restart` laedt KEINE neuen ENV-Variablen (immer `up -d` verwenden)
+- Sync-Modus Umschalten erfordert Container-Restart (Routen werden beim Start gemountet)
 
 ---
 
