@@ -15,6 +15,7 @@ LINBO Docker is a containerized version of [LINBO](https://github.com/linuxmuste
 - **HTTP Boot** - Kernel/initrd served via HTTP for 5-10x faster transfers than TFTP
 - **Image Management** - Create, sync, and deploy disk images (qcow2)
 - **Remote Control** - Execute commands on clients via SSH (sync, start, reboot, shutdown, WoL)
+- **Web Terminal** - Interactive SSH sessions to LINBO clients (xterm.js + WebSocket)
 - **REST API** - Full REST API with JWT authentication and API key support
 - **Real-time Updates** - WebSocket for live status updates
 - **DHCP Integration** - Export ISC DHCP / dnsmasq configs, optional proxy-DHCP container
@@ -97,7 +98,7 @@ Open **http://localhost:8080** in your browser.
  │                                                             │
  │  ┌──────────────────────────────────────────────────────┐   │
  │  │          linbo-web :8080 (React + nginx)             │   │
- │  │  Dashboard │ Hosts │ Rooms │ Configs │ DHCP │ Images │   │
+ │  │  Dashboard │ Hosts │ Configs │ Images │ Terminal     │   │
  │  │  + HTTP Boot: serves linbo64/linbofs64 for GRUB      │   │
  │  └────────────────────────┬─────────────────────────────┘   │
  │                           │ /api/* proxy                    │
@@ -165,6 +166,7 @@ The frontend provides a modern, responsive interface for managing your LINBO env
 - **Images** - Track and verify disk images (qcow2)
 - **DHCP** - Network settings, ISC/dnsmasq config export with preview
 - **Operations** - Real-time progress tracking for all operations
+- **Terminal** - Interactive SSH shell to LINBO clients with tab support
 
 ### Tech Stack
 
@@ -287,6 +289,10 @@ curl http://localhost:3000/api/v1/hosts \
 | **Import/Export** | |
 | `POST /api/v1/import/devices` | CSV import (linuxmuster.net format) |
 | `GET /api/v1/export/devices` | CSV export |
+| **Terminal** | |
+| `GET /api/v1/terminal/sessions` | List active SSH terminal sessions |
+| `DELETE /api/v1/terminal/sessions/:id` | Close a terminal session |
+| `POST /api/v1/terminal/test-connection` | Test SSH connectivity to host |
 | **System** | |
 | `POST /api/v1/system/update-linbofs` | Inject keys into linbofs64 |
 | `POST /api/v1/system/regenerate-grub-configs` | Regenerate GRUB configs |
@@ -305,8 +311,8 @@ linbo-docker/
 │   ├── dhcp/                   # dnsmasq proxy-DHCP (optional)
 │   ├── api/                    # Node.js REST API
 │   │   ├── src/
-│   │   │   ├── routes/         # 12 route modules
-│   │   │   ├── services/       # 11 service modules
+│   │   │   ├── routes/         # 13 route modules
+│   │   │   ├── services/       # 12 service modules
 │   │   │   ├── workers/        # Operation worker
 │   │   │   ├── middleware/     # Auth, validation, audit
 │   │   │   ├── templates/grub/ # GRUB config templates
@@ -316,7 +322,7 @@ linbo-docker/
 │   └── web/                    # React Frontend
 │       ├── nginx.conf          # Nginx + API proxy + HTTP boot
 │       └── frontend/src/
-│           ├── pages/          # Dashboard, Hosts, Rooms, Configs, DHCP, Images, Operations
+│           ├── pages/          # Dashboard, Hosts, Rooms, Configs, DHCP, Images, Operations, Terminal
 │           ├── components/     # UI components
 │           ├── stores/         # Zustand state management
 │           └── api/            # API client modules

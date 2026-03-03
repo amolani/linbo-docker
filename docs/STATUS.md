@@ -112,6 +112,25 @@
 - **Tests:** 107 neue Tests (76 image-path + 31 internal-sidecar)
 - **Details:** Siehe `docs/SESSION-7-SIDECAR-HANDLING.md`
 
+### SSH Web Terminal (Session 21, 2026-03-03)
+
+- **Interaktive SSH-Sessions** vom Browser zu LINBO-Clients
+- **Backend:**
+  - `terminal.service.js` — Session-Management mit PTY → exec-Fallback
+  - In-Memory Session-Map, max 10 Sessions, 30min Idle-Timeout
+  - Dedizierter WebSocket-Server auf `/ws/terminal` (JWT-Auth via `?token=`)
+  - REST-Endpoints: `GET /terminal/sessions`, `DELETE /terminal/sessions/:id`, `POST /terminal/test-connection`
+- **Frontend:**
+  - xterm.js mit 256-Farben Dark Theme, FitAddon, WebLinksAddon
+  - Tab-System fuer mehrere parallele SSH-Sessions
+  - Host-IP-Eingabe mit Connection-Test
+  - Dedizierter WebSocket-Hook (`useTerminalWs`)
+- **WS-Protokoll:**
+  - Client → Server: `terminal.open`, `terminal.input`, `terminal.resize`, `terminal.close`
+  - Server → Client: `terminal.opened`, `terminal.output`, `terminal.closed`, `terminal.error`
+- **Nginx:** `/ws/terminal` Proxy-Block (vor `/ws`)
+- **Dependencies:** `@xterm/xterm`, `@xterm/addon-fit`, `@xterm/addon-web-links`
+
 ### Reactive Frontend via WebSocket (Sessions 4-5, 2026-02-07)
 
 - **WS-Refetch:** Debounced refetch bei Daten-Aenderungen via WebSocket
@@ -240,6 +259,12 @@ Host ─────────────┬───────────
 - `GET /api/v1/dhcp/export/isc-dhcp` - ISC DHCP Config generieren
 - `GET /api/v1/dhcp/export/dnsmasq` - dnsmasq Full Config generieren
 - `GET /api/v1/dhcp/export/dnsmasq-proxy` - dnsmasq Proxy Config generieren
+
+### Terminal
+- `GET /api/v1/terminal/sessions` - Aktive Terminal-Sessions auflisten
+- `DELETE /api/v1/terminal/sessions/:id` - Terminal-Session schliessen
+- `POST /api/v1/terminal/test-connection` - SSH-Verbindung testen
+- `ws://.../ws/terminal?token=JWT` - Interaktiver Terminal-WebSocket
 
 ### System
 - `POST /api/v1/system/update-linbofs` - linbofs aktualisieren
