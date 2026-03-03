@@ -18,7 +18,8 @@ const ws = require('../lib/websocket');
 // ---------------------------------------------------------------------------
 
 const SETTINGS = {
-  lmn_api_url:          { env: 'LMN_API_URL',      default: 'http://10.0.0.11:8000', secret: false, description: 'Authority API URL' },
+  sync_enabled:         { env: 'SYNC_ENABLED',      default: 'false',                secret: false, description: 'Sync-Modus aktivieren' },
+  lmn_api_url:          { env: 'LMN_API_URL',      default: 'http://10.0.0.11:8400', secret: false, description: 'Authority API URL' },
   lmn_api_key:          { env: 'LMN_API_KEY',      default: '',                      secret: true,  description: 'Authority API Key' },
   linbo_server_ip:      { env: 'LINBO_SERVER_IP',   default: '10.0.0.1',             secret: false, description: 'LINBO Server IP' },
   admin_password:       { env: null,                default: null,                    secret: true,  description: 'Admin-Passwort',    writeOnly: true },
@@ -55,6 +56,7 @@ function invalidateCache(key) {
 // ---------------------------------------------------------------------------
 
 const VALIDATORS = {
+  sync_enabled: (v) => v === 'true' || v === 'false',
   lmn_api_url: (v) => {
     try { const u = new URL(v); return u.protocol === 'http:' || u.protocol === 'https:'; }
     catch { return false; }

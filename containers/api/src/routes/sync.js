@@ -32,8 +32,15 @@ try {
 // ---------------------------------------------------------------------------
 // GET /sync/mode — Public (no auth required, needed before login)
 // ---------------------------------------------------------------------------
-router.get('/mode', (req, res) => {
-  const syncEnabled = process.env.SYNC_ENABLED === 'true' || !!process.env.LMN_API_URL;
+const settingsService = require('../services/settings.service');
+
+router.get('/mode', async (req, res) => {
+  let syncEnabled = process.env.SYNC_ENABLED === 'true';
+  try {
+    const syncSetting = await settingsService.get('sync_enabled');
+    if (syncSetting === 'true') syncEnabled = true;
+  } catch {}
+
   const standaloneEnabled = !!process.env.DATABASE_URL;
 
   let mode = 'offline';

@@ -151,7 +151,7 @@ services:
       - HOST=0.0.0.0
       # Sync (LMN Authority API)
       - SYNC_ENABLED=${SYNC_ENABLED:-false}
-      - LMN_API_URL=${LMN_API_URL:-http://10.0.0.11:8000}
+      - LMN_API_URL=${LMN_API_URL:-http://10.0.0.11:8400}
       - LMN_API_KEY=${LMN_API_KEY:-}
       # Database
       - DATABASE_URL=postgresql://linbo:${DB_PASSWORD:-linbo_secret_password}@linbo-db:5432/linbo?schema=public

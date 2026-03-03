@@ -31,8 +31,8 @@ const redis = require('./lib/redis');
 const websocket = require('./lib/websocket');
 const WebSocket = require('ws');
 
-// Import routes
-const apiRoutes = require('./routes');
+// Import route factory (async — called after Redis is ready)
+const createRouter = require('./routes');
 
 // =============================================================================
 // Express App Setup
@@ -148,73 +148,8 @@ app.get('/ready', async (req, res) => {
 });
 
 // =============================================================================
-// API Routes
+// API Routes + Error Handlers (mounted in startServer() after Redis is connected)
 // =============================================================================
-app.use('/api/v1', apiRoutes);
-
-// =============================================================================
-// Error Handling
-// =============================================================================
-
-// 404 Handler
-app.use((req, res) => {
-  res.status(404).json({
-    error: {
-      code: 'NOT_FOUND',
-      message: `Route ${req.method} ${req.path} not found`,
-      requestId: req.requestId,
-    },
-  });
-});
-
-// Global Error Handler
-app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
-
-  // Prisma errors
-  if (err.code && err.code.startsWith('P')) {
-    return res.status(400).json({
-      error: {
-        code: 'DATABASE_ERROR',
-        message: 'Database operation failed',
-        details: process.env.NODE_ENV === 'development' ? err.message : undefined,
-        requestId: req.requestId,
-      },
-    });
-  }
-
-  // Validation errors (Zod)
-  if (err.name === 'ZodError') {
-    return res.status(400).json({
-      error: {
-        code: 'VALIDATION_ERROR',
-        message: 'Request validation failed',
-        details: err.errors,
-        requestId: req.requestId,
-      },
-    });
-  }
-
-  // JWT errors
-  if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
-    return res.status(401).json({
-      error: {
-        code: 'AUTH_ERROR',
-        message: err.message,
-        requestId: req.requestId,
-      },
-    });
-  }
-
-  // Default error
-  res.status(err.status || 500).json({
-    error: {
-      code: err.code || 'INTERNAL_ERROR',
-      message: err.message || 'Internal server error',
-      requestId: req.requestId,
-    },
-  });
-});
 
 // =============================================================================
 // Server Startup
@@ -263,6 +198,67 @@ async function startServer() {
     console.error('  Redis connection failed:', err.message);
     console.log('  Server will start, but caching will be disabled');
   }
+
+  // Mount API routes (after Redis is ready so sync_enabled setting can be read)
+  console.log('Mounting API routes...');
+  const apiRoutes = await createRouter();
+  app.use('/api/v1', apiRoutes);
+
+  // 404 Handler (must be after route mounting)
+  app.use((req, res) => {
+    res.status(404).json({
+      error: {
+        code: 'NOT_FOUND',
+        message: `Route ${req.method} ${req.path} not found`,
+        requestId: req.requestId,
+      },
+    });
+  });
+
+  // Global Error Handler (must be after route mounting)
+  app.use((err, req, res, next) => {
+    console.error('Unhandled error:', err);
+
+    if (err.code && err.code.startsWith('P')) {
+      return res.status(400).json({
+        error: {
+          code: 'DATABASE_ERROR',
+          message: 'Database operation failed',
+          details: process.env.NODE_ENV === 'development' ? err.message : undefined,
+          requestId: req.requestId,
+        },
+      });
+    }
+
+    if (err.name === 'ZodError') {
+      return res.status(400).json({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Request validation failed',
+          details: err.errors,
+          requestId: req.requestId,
+        },
+      });
+    }
+
+    if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        error: {
+          code: 'AUTH_ERROR',
+          message: err.message,
+          requestId: req.requestId,
+        },
+      });
+    }
+
+    res.status(err.status || 500).json({
+      error: {
+        code: err.code || 'INTERNAL_ERROR',
+        message: err.message || 'Internal server error',
+        requestId: req.requestId,
+      },
+    });
+  });
 
   // Initialize WebSocket Server
   console.log('Initializing WebSocket...');
@@ -442,7 +438,12 @@ async function startServer() {
   }
 
   // Image sync startup recovery (clean stale locks from crashed containers)
-  const isSyncMode = process.env.SYNC_ENABLED === 'true' || !!process.env.LMN_API_URL;
+  let isSyncMode = process.env.SYNC_ENABLED === 'true';
+  try {
+    const settingsService2 = require('./services/settings.service');
+    const syncSetting = await settingsService2.get('sync_enabled');
+    if (syncSetting === 'true') isSyncMode = true;
+  } catch {}
   if (isSyncMode) {
     try {
       const imageSyncService = require('./services/image-sync.service');
