@@ -7,6 +7,8 @@
 LINBO Docker ist eine containerisierte Version von [LINBO](https://github.com/linuxmuster/linuxmuster-linbo7) (Linux Network Boot). Es kann als **Sync-Client** an einen bestehenden linuxmuster.net-Server angebunden werden oder als **Standalone-System** ohne linuxmuster.net betrieben werden.
 
 > **Architektur-Diagramme:** Siehe [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) für Mermaid-Diagramme (IST/SOLL).
+>
+> **Unterschiede zu Vanilla-LINBO:** Siehe [docs/UNTERSCHIEDE-ZU-LINBO.md](docs/UNTERSCHIEDE-ZU-LINBO.md) — was LINBO ist, was Docker anders macht, und warum.
 
 ## Features
 
