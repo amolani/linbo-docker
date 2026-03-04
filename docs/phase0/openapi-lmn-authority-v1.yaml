@@ -8,6 +8,10 @@ info:
     serves as the **single source of truth** for LINBO host registrations,
     start.conf configurations, and DHCP reservations.
 
+    **LINBO Docker consumes this API read-only.** Docker never writes host,
+    config, or room data back to the LMN server. All CRUD for these entities
+    happens on the LMN side (webui7 / linuxmuster-import-devices).
+
     The LINBO Runtime Docker stack polls this API via a cursor-based delta feed,
     fetches changed records in batches, and builds local snapshots that are
     served to PXE clients over TFTP / HTTP / rsync.

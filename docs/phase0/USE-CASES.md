@@ -4,6 +4,9 @@
 > **Date:** 2026-02-26
 > **Status:** Phase 0 - Planning
 > **Scope:** Complete use-case catalog for the restructured LINBO Docker architecture
+>
+> **Note:** Future design document — not yet fully implemented.
+> Docker is permanently read-only for LMN data (hosts, configs, rooms).
 
 ## Architecture Overview (Context)
 

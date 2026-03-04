@@ -3,6 +3,9 @@
 > **Version:** 1.0
 > **Date:** 2026-02-26
 > **Status:** Draft
+>
+> **Note:** Future design document — not yet fully implemented.
+> Docker is permanently read-only for LMN data (hosts, configs, rooms).
 
 ## Executive Summary
 
