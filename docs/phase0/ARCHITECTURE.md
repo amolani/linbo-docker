@@ -2,8 +2,19 @@
 
 > **Version:** 1.0.0 | **Date:** 2026-02-26 | **Status:** Phase 0 - Design
 >
-> **Note:** Future design document — not yet fully implemented.
-> Docker is permanently read-only for LMN data (hosts, configs, rooms).
+> **ACHTUNG: Dieses Dokument ist ein NICHT umgesetzter Entwurf vom 26.02.2026.**
+> Viele hier beschriebene Konzepte (SnapshotService, atomares Verzeichnis-Switching,
+> Entfernung der CRUD-Routen, PostgreSQL-Datenmodelle) wurden **nicht implementiert**.
+>
+> **Fuer die aktuelle Architektur siehe:**
+> - [docs/ARCHITECTURE.md](../ARCHITECTURE.md) — Aktuelle Mermaid-Diagramme (IST/SOLL)
+> - [docs/UNTERSCHIEDE-ZU-LINBO.md](../UNTERSCHIEDE-ZU-LINBO.md) — Was LINBO Docker anders macht
+>
+> **Wesentliche Abweichungen von diesem Entwurf:**
+> - PostgreSQL wurde komplett aus docker-compose.yml entfernt (Redis-primaer im Sync-Modus)
+> - SnapshotService/atomares Switching wurde nicht implementiert (Dateien direkt in /srv/linbo/)
+> - CRUD-Routen fuer Hosts/Configs/Rooms existieren noch (geben 409 im Sync-Modus zurueck)
+> - Patchclass, Firmware, Kernel Switching, Web Terminal fehlen in diesem Entwurf
 
 ---
 

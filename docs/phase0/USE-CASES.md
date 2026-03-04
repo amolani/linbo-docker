@@ -5,8 +5,7 @@
 > **Status:** Phase 0 - Planning
 > **Scope:** Complete use-case catalog for the restructured LINBO Docker architecture
 >
-> **Note:** Future design document — not yet fully implemented.
-> Docker is permanently read-only for LMN data (hosts, configs, rooms).
+> **ACHTUNG: Nicht umgesetzter Entwurf.** Siehe [docs/ARCHITECTURE.md](../ARCHITECTURE.md) fuer den aktuellen Stand.
 
 ## Architecture Overview (Context)
 

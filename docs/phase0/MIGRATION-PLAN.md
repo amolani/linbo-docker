@@ -4,8 +4,7 @@
 > **Date:** 2026-02-26
 > **Status:** Draft
 >
-> **Note:** Future design document — not yet fully implemented.
-> Docker is permanently read-only for LMN data (hosts, configs, rooms).
+> **ACHTUNG: Nicht umgesetzter Entwurf.** Siehe [docs/ARCHITECTURE.md](../ARCHITECTURE.md) fuer den aktuellen Stand.
 
 ## Executive Summary
 
