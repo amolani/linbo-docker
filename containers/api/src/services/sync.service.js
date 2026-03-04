@@ -106,13 +106,34 @@ async function syncOnce() {
     // means the parsed config changed too (they derive from the same file).
     const allConfigsChanged = [...new Set([...delta.configsChanged, ...delta.startConfsChanged])];
     if (allConfigsChanged.length > 0) {
-      const { configs } = await lmnClient.batchGetConfigs(allConfigsChanged);
-      for (const config of configs) {
-        await client.set(`${KEY.CONFIG}${config.id}`, JSON.stringify(config));
-        await client.sadd(KEY.CONFIG_INDEX, config.id);
-        stats.configs++;
+      try {
+        const { configs } = await lmnClient.batchGetConfigs(allConfigsChanged);
+        for (const config of configs) {
+          await client.set(`${KEY.CONFIG}${config.id}`, JSON.stringify(config));
+          await client.sadd(KEY.CONFIG_INDEX, config.id);
+          stats.configs++;
+        }
+        console.log(`[Sync] Cached ${stats.configs} config records`);
+      } catch (err) {
+        // 404 = no GRUB configs found (e.g. new groups without hosts yet)
+        if (!err.message.includes('404')) throw err;
+        console.log('[Sync] No GRUB configs found for changed groups (new groups without hosts?)');
       }
-      console.log(`[Sync] Cached ${stats.configs} config records`);
+    }
+
+    // 4b. Ensure every written start.conf has a config entry in Redis.
+    // New groups may not have a GRUB .cfg yet (no hosts assigned), but the
+    // frontend needs them in the config index to list the group.
+    if (delta.startConfsChanged.length > 0) {
+      for (const scId of delta.startConfsChanged) {
+        const exists = await client.sismember(KEY.CONFIG_INDEX, scId);
+        if (!exists) {
+          const record = { id: scId, content: null, updatedAt: new Date().toISOString() };
+          await client.set(`${KEY.CONFIG}${scId}`, JSON.stringify(record));
+          await client.sadd(KEY.CONFIG_INDEX, scId);
+          stats.configs++;
+        }
+      }
     }
 
     // 5. Sync hosts (cached in Redis, create start.conf symlinks)
@@ -176,12 +197,20 @@ async function syncOnce() {
       console.log(`[Sync] Deleted ${stats.deletedHosts} host records + symlinks`);
     }
 
-    // 8. Full snapshot reconciliation — delete local items NOT in the response
+    // 8. Incremental deletion detection via universe lists
+    //    The server may include allStartConfIds / allHostMacs / allConfigIds
+    //    listing every entity it currently knows about. Anything locally cached
+    //    but NOT in these lists has been deleted on the server.
+    if (!isFullSync) {
+      await reconcileUniverseLists(client, delta, stats);
+    }
+
+    // 9. Full snapshot reconciliation — delete local items NOT in the response
     if (isFullSync) {
       await reconcileFullSnapshot(client, delta, stats);
     }
 
-    // 9. DHCP export (conditional GET with ETag)
+    // 10. DHCP export (conditional GET with ETag)
     if (delta.dhcpChanged) {
       const currentEtag = await client.get(KEY.DHCP_ETAG);
       const dhcpResult = await lmnClient.getDhcpExport(currentEtag);
@@ -198,7 +227,7 @@ async function syncOnce() {
       }
     }
 
-    // 10. Regenerate GRUB configs from Redis-cached data
+    // 11. Regenerate GRUB configs from Redis-cached data
     const hasChanges = stats.startConfs > 0 || stats.configs > 0 || stats.hosts > 0
       || stats.deletedStartConfs > 0 || stats.deletedHosts > 0;
 
@@ -217,7 +246,7 @@ async function syncOnce() {
       stats.grub = true;
     }
 
-    // 11. Save cursor + metadata
+    // 12. Save cursor + metadata
     await client.set(KEY.CURSOR, delta.nextCursor);
     await client.set(KEY.SERVER_IP, serverIp);
     await client.set(KEY.LAST_SYNC, new Date().toISOString());
@@ -238,6 +267,79 @@ async function syncOnce() {
     throw err;
   } finally {
     await client.set(KEY.IS_RUNNING, 'false');
+  }
+}
+
+/**
+ * Incremental deletion detection using universe lists.
+ * When the server includes allStartConfIds / allHostMacs / allConfigIds,
+ * we compare against local state and remove anything not on the server.
+ */
+async function reconcileUniverseLists(client, delta, stats) {
+  // Start.conf files: compare allStartConfIds against files on disk
+  if (Array.isArray(delta.allStartConfIds)) {
+    const serverIds = new Set(delta.allStartConfIds);
+    try {
+      const files = await fsp.readdir(LINBO_DIR);
+      for (const file of files) {
+        if (!file.startsWith('start.conf.') || file.endsWith('.md5') || file.endsWith('.bak')) continue;
+        const confId = file.replace('start.conf.', '');
+        if (!serverIds.has(confId)) {
+          await safeUnlink(path.join(LINBO_DIR, file));
+          await safeUnlink(path.join(LINBO_DIR, `${file}.md5`));
+          await client.del(`${KEY.CONFIG}${confId}`);
+          await client.srem(KEY.CONFIG_INDEX, confId);
+          stats.deletedStartConfs++;
+          console.log(`[Sync] Deleted start.conf: ${confId}`);
+        }
+      }
+    } catch (err) {
+      if (err.code !== 'ENOENT') console.error('[Sync] Universe list start.conf cleanup error:', err.message);
+    }
+  }
+
+  // Hosts: compare allHostMacs against Redis host index
+  if (Array.isArray(delta.allHostMacs)) {
+    const serverMacs = new Set(delta.allHostMacs);
+    const existingMacs = await client.smembers(KEY.HOST_INDEX);
+    for (const mac of existingMacs) {
+      if (!serverMacs.has(mac)) {
+        // Read host data to clean up symlinks
+        const hostJson = await client.get(`${KEY.HOST}${mac}`);
+        if (hostJson) {
+          const host = JSON.parse(hostJson);
+          if (host.ip) await safeUnlink(path.join(LINBO_DIR, `start.conf-${host.ip}`));
+          if (host.mac) await safeUnlink(path.join(LINBO_DIR, `start.conf-${host.mac.toLowerCase()}`));
+        }
+        await client.del(`${KEY.HOST}${mac}`);
+        await client.srem(KEY.HOST_INDEX, mac);
+        stats.deletedHosts++;
+        console.log(`[Sync] Deleted host: ${mac}`);
+      }
+    }
+  }
+
+  // Configs: compare against Redis config index.
+  // A valid config can come from either a GRUB .cfg (allConfigIds) OR a
+  // start.conf without hosts (allStartConfIds). Merge both sets so new
+  // groups without GRUB configs are not immediately deleted.
+  if (Array.isArray(delta.allConfigIds) || Array.isArray(delta.allStartConfIds)) {
+    const serverIds = new Set([
+      ...(delta.allConfigIds || []),
+      ...(delta.allStartConfIds || []),
+    ]);
+    const existingIds = await client.smembers(KEY.CONFIG_INDEX);
+    for (const id of existingIds) {
+      if (!serverIds.has(id)) {
+        await client.del(`${KEY.CONFIG}${id}`);
+        await client.srem(KEY.CONFIG_INDEX, id);
+        console.log(`[Sync] Deleted config: ${id}`);
+      }
+    }
+  }
+
+  if (stats.deletedStartConfs > 0 || stats.deletedHosts > 0) {
+    console.log(`[Sync] Universe list reconciliation: ${stats.deletedStartConfs} start.confs, ${stats.deletedHosts} hosts deleted`);
   }
 }
 
@@ -280,8 +382,9 @@ async function reconcileFullSnapshot(client, delta, stats) {
     }
   }
 
-  // Reconcile config Redis entries
-  const validConfigIds = new Set(delta.configsChanged);
+  // Reconcile config Redis entries — include both configsChanged (GRUB configs)
+  // and startConfsChanged (start.conf groups that may not have GRUB configs yet)
+  const validConfigIds = new Set([...delta.configsChanged, ...delta.startConfsChanged]);
   const existingConfigIds = await client.smembers(KEY.CONFIG_INDEX);
   for (const id of existingConfigIds) {
     if (!validConfigIds.has(id)) {
@@ -406,5 +509,6 @@ module.exports = {
   loadAllHostsFromRedis,
   loadAllConfigsFromRedis,
   reconcileFullSnapshot,
+  reconcileUniverseLists,
   KEY,
 };

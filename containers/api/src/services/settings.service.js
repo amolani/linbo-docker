@@ -6,7 +6,7 @@
  *
  * Security:
  *   - admin_password → bcrypt hash stored as config:admin_password_hash
- *   - lmn_api_key → plaintext in Redis (needed for API calls), masked in getAll()
+ *   - lmn_api_key, lmn_api_password → plaintext in Redis (needed for API calls), masked in getAll()
  */
 
 const bcrypt = require('bcryptjs');
@@ -19,8 +19,10 @@ const ws = require('../lib/websocket');
 
 const SETTINGS = {
   sync_enabled:         { env: 'SYNC_ENABLED',      default: 'false',                secret: false, description: 'Sync-Modus aktivieren' },
-  lmn_api_url:          { env: 'LMN_API_URL',      default: 'http://10.0.0.11:8400', secret: false, description: 'Authority API URL' },
-  lmn_api_key:          { env: 'LMN_API_KEY',      default: '',                      secret: true,  description: 'Authority API Key' },
+  lmn_api_url:          { env: 'LMN_API_URL',      default: 'http://10.0.0.11:8001', secret: false, description: 'LMN API URL (Port 8001=linuxmuster-api, 8400=legacy)' },
+  lmn_api_key:          { env: 'LMN_API_KEY',      default: '',                      secret: true,  description: 'Authority API Key (legacy port 8400 only)' },
+  lmn_api_user:         { env: 'LMN_API_USER',     default: '',                      secret: false, description: 'LMN API Username (port 8001 JWT auth)' },
+  lmn_api_password:     { env: 'LMN_API_PASSWORD',  default: '',                      secret: true,  description: 'LMN API Password (port 8001 JWT auth)' },
   linbo_server_ip:      { env: 'LINBO_SERVER_IP',   default: '10.0.0.1',             secret: false, description: 'LINBO Server IP' },
   admin_password:       { env: null,                default: null,                    secret: true,  description: 'Admin-Passwort',    writeOnly: true },
   admin_password_hash:  { env: null,                default: null,                    secret: true,  description: 'Admin-Passwort',    readOnly: true },
@@ -62,6 +64,8 @@ const VALIDATORS = {
     catch { return false; }
   },
   lmn_api_key: () => true,
+  lmn_api_user: () => true,
+  lmn_api_password: () => true,
   linbo_server_ip: (v) => /^(\d{1,3}\.){3}\d{1,3}$/.test(v) && v.split('.').every(o => +o <= 255),
   admin_password: (v) => v.length >= 4,
   sync_interval: (v) => /^\d+$/.test(String(v)) && Number(v) >= 0,
@@ -187,7 +191,7 @@ async function getAll() {
     if (key === 'admin_password_hash') {
       // Never expose hash value
       entry.isSet = isSet;
-    } else if (key === 'lmn_api_key') {
+    } else if (key === 'lmn_api_key' || key === 'lmn_api_password') {
       if (rawValue && rawValue.length > 0) {
         entry.valueMasked = rawValue.length > 4
           ? '****' + rawValue.slice(-4)

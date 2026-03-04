@@ -1,6 +1,11 @@
 /**
- * LINBO Docker - LMN Authority API Client
- * HTTP client for fetching data from the linuxmuster.net Authority API
+ * LINBO Docker - LMN API Client
+ * HTTP client for fetching LINBO data from linuxmuster-api (port 8001)
+ * or the legacy Authority API (port 8400).
+ *
+ * Auth mode is auto-detected from the configured URL:
+ *   - Port 8001 (linuxmuster-api): JWT auth via /v1/auth, paths under /v1/linbo/
+ *   - Port 8400 (Authority API):   Static Bearer token, paths under /api/v1/linbo/
  */
 
 const REQUEST_TIMEOUT = 10_000;
@@ -13,18 +18,96 @@ function getSettings() {
   return _settings;
 }
 
+// JWT token cache for linuxmuster-api mode
+let _jwtToken = null;
+let _jwtExpiry = 0;
+
 /**
- * Make an authenticated request to the LMN Authority API with retries
- * @param {string} path - API path (e.g., '/api/v1/linbo/changes')
+ * Detect API mode from URL (linuxmuster-api vs legacy Authority API)
+ * @param {string} baseUrl
+ * @returns {{ pathPrefix: string, useJwt: boolean }}
+ */
+function _detectMode(baseUrl) {
+  try {
+    const url = new URL(baseUrl);
+    if (url.port === '8001') {
+      return { pathPrefix: '/v1/linbo', useJwt: true };
+    }
+  } catch { /* fall through */ }
+  return { pathPrefix: '/api/v1/linbo', useJwt: false };
+}
+
+/**
+ * Get JWT token for linuxmuster-api via HTTP Basic Auth (cached, auto-refreshes)
+ * linuxmuster-api uses GET /v1/auth/ with HTTP Basic Auth, returns a bare JWT string.
+ * @param {string} baseUrl
+ * @returns {Promise<string>}
+ */
+async function _getJwtToken(baseUrl) {
+  // Return cached token if still valid (5min buffer)
+  if (_jwtToken && Date.now() < _jwtExpiry - 300_000) {
+    return _jwtToken;
+  }
+
+  const lmnUser = await getSettings().get('lmn_api_user');
+  const lmnPass = await getSettings().get('lmn_api_password');
+
+  if (!lmnUser || !lmnPass) {
+    throw new Error(
+      'lmn_api_user and lmn_api_password required for linuxmuster-api (port 8001). ' +
+      'Set via settings API or use port 8400 with lmn_api_key for legacy mode.'
+    );
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+
+  // linuxmuster-api auth: GET with HTTP Basic Auth, returns bare JWT string
+  const basicAuth = Buffer.from(`${lmnUser}:${lmnPass}`).toString('base64');
+  const response = await fetch(`${baseUrl}/v1/auth/`, {
+    headers: { 'Authorization': `Basic ${basicAuth}` },
+    signal: controller.signal,
+  });
+  clearTimeout(timeout);
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`JWT login failed (${response.status}): ${body}`);
+  }
+
+  // Response is a bare JWT string (quoted), not a JSON object
+  const raw = await response.text();
+  _jwtToken = raw.replace(/^"|"$/g, '');
+  // Default 1h expiry
+  _jwtExpiry = Date.now() + 3600 * 1000;
+
+  return _jwtToken;
+}
+
+/**
+ * Make an authenticated request to the LMN API with retries
+ * @param {string} path - API path (without base URL, e.g., '/changes')
  * @param {object} options - fetch options
  * @returns {Promise<Response>}
  */
 async function request(path, options = {}) {
   const lmnApiUrl = await getSettings().get('lmn_api_url');
-  const lmnApiKey = await getSettings().get('lmn_api_key');
-  const url = `${lmnApiUrl}${path}`;
+  const { pathPrefix, useJwt } = _detectMode(lmnApiUrl);
+
+  let token;
+  if (useJwt) {
+    token = await _getJwtToken(lmnApiUrl);
+  } else {
+    token = await getSettings().get('lmn_api_key');
+  }
+
+  const url = `${lmnApiUrl}${pathPrefix}${path}`;
+  // linuxmuster-api uses X-API-Key header; legacy Authority API uses Authorization: Bearer
+  const authHeader = useJwt
+    ? { 'X-API-Key': token }
+    : { 'Authorization': `Bearer ${token}` };
   const headers = {
-    'Authorization': `Bearer ${lmnApiKey}`,
+    ...authHeader,
     'Accept': 'application/json',
     ...options.headers,
   };
@@ -41,6 +124,15 @@ async function request(path, options = {}) {
         signal: controller.signal,
       });
       clearTimeout(timeout);
+
+      // On 401 with JWT mode, clear token cache and retry once
+      if (response.status === 401 && useJwt && attempt === 0) {
+        _jwtToken = null;
+        _jwtExpiry = 0;
+        token = await _getJwtToken(lmnApiUrl);
+        headers['X-API-Key'] = token;
+        continue;
+      }
 
       // Don't retry on client errors (4xx) except 429
       if (response.status >= 400 && response.status < 500 && response.status !== 429) {
@@ -77,7 +169,7 @@ async function request(path, options = {}) {
  * @returns {Promise<{nextCursor, hostsChanged, startConfsChanged, configsChanged, dhcpChanged, deletedHosts, deletedStartConfs}>}
  */
 async function getChanges(cursor = '') {
-  const response = await request(`/api/v1/linbo/changes?since=${encodeURIComponent(cursor)}`);
+  const response = await request(`/changes?since=${encodeURIComponent(cursor)}`);
   if (!response.ok) {
     const body = await response.text();
     throw new Error(`getChanges failed (${response.status}): ${body}`);
@@ -91,7 +183,7 @@ async function getChanges(cursor = '') {
  * @returns {Promise<{hosts: HostRecord[]}>}
  */
 async function batchGetHosts(macs) {
-  const response = await request('/api/v1/linbo/hosts:batch', {
+  const response = await request('/hosts:batch', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ macs }),
@@ -109,7 +201,7 @@ async function batchGetHosts(macs) {
  * @returns {Promise<{startConfs: StartConfRecord[]}>}
  */
 async function batchGetStartConfs(ids) {
-  const response = await request('/api/v1/linbo/startconfs:batch', {
+  const response = await request('/startconfs:batch', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ids }),
@@ -127,7 +219,7 @@ async function batchGetStartConfs(ids) {
  * @returns {Promise<{configs: ConfigRecord[]}>}
  */
 async function batchGetConfigs(ids) {
-  const response = await request('/api/v1/linbo/configs:batch', {
+  const response = await request('/configs:batch', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ids }),
@@ -150,7 +242,7 @@ async function getDhcpExport(etag = null) {
     headers['If-None-Match'] = etag;
   }
 
-  const response = await request('/api/v1/linbo/dhcp/export/dnsmasq-proxy', { headers });
+  const response = await request('/dhcp/export/dnsmasq-proxy', { headers });
 
   if (response.status === 304) {
     return { status: 304, content: null, etag };
@@ -168,7 +260,7 @@ async function getDhcpExport(etag = null) {
 }
 
 /**
- * Check LMN Authority API health
+ * Check LMN API health
  * @returns {Promise<{healthy: boolean, status?: string, version?: string}>}
  */
 async function checkHealth() {

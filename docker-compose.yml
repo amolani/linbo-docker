@@ -150,10 +150,13 @@ services:
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=3000
       - HOST=0.0.0.0
-      # Sync (LMN Authority API)
+      # Sync (LMN API — port 8001=linuxmuster-api, 8400=legacy)
       - SYNC_ENABLED=${SYNC_ENABLED:-false}
-      - LMN_API_URL=${LMN_API_URL:-http://10.0.0.11:8400}
+      - LMN_API_URL=${LMN_API_URL:-https://10.0.0.11:8001}
       - LMN_API_KEY=${LMN_API_KEY:-}
+      - LMN_API_USER=${LMN_API_USER:-}
+      - LMN_API_PASSWORD=${LMN_API_PASSWORD:-}
+      - NODE_TLS_REJECT_UNAUTHORIZED=${NODE_TLS_REJECT_UNAUTHORIZED:-0}
       # Database
       - DATABASE_URL=postgresql://linbo:${DB_PASSWORD:-linbo_secret_password}@linbo-db:5432/linbo?schema=public
       # Redis

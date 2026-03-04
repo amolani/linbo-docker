@@ -31,25 +31,58 @@ router.get('/', async (req, res, next) => {
 });
 
 /**
- * POST /test-connection — Test authority API connectivity
- * Optional body: { url, key } to test before saving
+ * POST /test-connection — Test LMN API connectivity
+ * Supports both linuxmuster-api (port 8001, JWT) and legacy Authority API (port 8400, Bearer token).
+ * Optional body: { url, key, user, password } to test before saving.
  */
 router.post('/test-connection', requireAdmin, async (req, res, next) => {
   try {
     const url = req.body.url || await settings.get('lmn_api_url');
-    const key = req.body.key || await settings.get('lmn_api_key');
 
     const start = Date.now();
     let reachable = false;
     let healthy = false;
     let version = null;
+    let authMode = 'token';
 
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 8000);
 
-      const response = await fetch(`${url}/health`, {
-        headers: { 'Authorization': `Bearer ${key}`, 'Accept': 'application/json' },
+      // Detect mode from port
+      let token;
+      let healthPath;
+      try {
+        const parsed = new URL(url);
+        if (parsed.port === '8001') {
+          authMode = 'jwt';
+          // JWT auth via HTTP Basic Auth: GET /v1/auth/
+          const user = req.body.user || await settings.get('lmn_api_user');
+          const pass = req.body.password || await settings.get('lmn_api_password');
+          const basicAuth = Buffer.from(`${user}:${pass}`).toString('base64');
+          const loginResp = await fetch(`${url}/v1/auth/`, {
+            headers: { 'Authorization': `Basic ${basicAuth}` },
+            signal: controller.signal,
+          });
+          if (loginResp.ok) {
+            const raw = await loginResp.text();
+            token = raw.replace(/^"|"$/g, '');
+          }
+          healthPath = '/v1/linbo/health';
+        }
+      } catch { /* fall through to token mode */ }
+
+      if (authMode === 'token') {
+        token = req.body.key || await settings.get('lmn_api_key');
+        healthPath = '/health';
+      }
+
+      // linuxmuster-api uses X-API-Key; legacy uses Authorization: Bearer
+      const authHeader = authMode === 'jwt'
+        ? { 'X-API-Key': token }
+        : { 'Authorization': `Bearer ${token}` };
+      const response = await fetch(`${url}${healthPath}`, {
+        headers: { ...authHeader, 'Accept': 'application/json' },
         signal: controller.signal,
       });
       clearTimeout(timeout);
@@ -65,7 +98,7 @@ router.post('/test-connection', requireAdmin, async (req, res, next) => {
     }
 
     const latency = Date.now() - start;
-    res.json({ data: { reachable, healthy, version, latency } });
+    res.json({ data: { reachable, healthy, version, latency, authMode } });
   } catch (err) {
     next(err);
   }

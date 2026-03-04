@@ -52,7 +52,7 @@ beforeEach(() => {
 describe('get()', () => {
   test('returns default when no Redis or env', async () => {
     const val = await settings.get('lmn_api_url');
-    expect(val).toBe('http://10.0.0.11:8000');
+    expect(val).toBe('http://10.0.0.11:8001');
   });
 
   test('returns env when no Redis value', async () => {
@@ -189,7 +189,7 @@ describe('reset()', () => {
     await settings.get('lmn_api_url');
     await settings.reset('lmn_api_url');
     const val = await settings.get('lmn_api_url');
-    expect(val).toBe('http://10.0.0.11:8000'); // back to default
+    expect(val).toBe('http://10.0.0.11:8001'); // back to default
   });
 
   test('broadcasts settings.changed', async () => {
