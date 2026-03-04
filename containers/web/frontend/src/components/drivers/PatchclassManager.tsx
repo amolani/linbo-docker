@@ -2,11 +2,15 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Plus, Trash2, Upload, FileArchive, FolderOpen, ChevronRight,
   Monitor, HardDrive, Send, X, RefreshCw, Cpu, BookOpen, Info,
+  Search, Loader2, CheckCircle, AlertTriangle, ExternalLink,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { patchclassApi } from '@/api/patchclass';
+import type { DriverScanResult, DeployedPostsync } from '@/api/patchclass';
+import { hostsApi } from '@/api/hosts';
+import { imagesApi } from '@/api/images';
 import type {
-  Patchclass, PatchclassDetail, DriverSet, DriverMap, DriverMapModel, DriverFile,
+  Patchclass, PatchclassDetail, DriverSet, DriverMap, DriverMapModel, DriverFile, Host, Image,
 } from '@/types';
 import { notify } from '@/stores/notificationStore';
 import { DriverCatalog } from './DriverCatalog';
@@ -37,6 +41,7 @@ export function PatchclassManager() {
   const [loading, setLoading] = useState(false);
   const [newPcName, setNewPcName] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  const [scanDmi, setScanDmi] = useState<{ sys_vendor: string; product_name: string } | null>(null);
 
   const fetchPatchclasses = useCallback(async () => {
     try {
@@ -158,6 +163,9 @@ export function PatchclassManager() {
         )}
       </div>
 
+      {/* Hardware Scan (always visible, patchclass-independent) */}
+      <DriverScanCard onFillModel={selected ? (dmi) => setScanDmi(dmi) : undefined} />
+
       {/* Detail: Driver Sets + Map + Device Rules + Deploy */}
       {selected && detail && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -171,6 +179,8 @@ export function PatchclassManager() {
             map={detail.driverMap}
             sets={detail.driverSets}
             onRefresh={() => fetchDetail(selected)}
+            prefillDmi={scanDmi}
+            onPrefillConsumed={() => setScanDmi(null)}
           />
           <DeviceRulesCard
             pcName={selected}
@@ -203,6 +213,9 @@ function DriverSetsCard({ pcName, sets, onRefresh }: {
   const [expandedSet, setExpandedSet] = useState<string | null>(null);
   const [files, setFiles] = useState<DriverFile[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null); // null=idle, 0-100=upload%, 101=extracting
+  const [uploadFileName, setUploadFileName] = useState('');
+  const [uploadFileSize, setUploadFileSize] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const zipInputRef = useRef<HTMLInputElement>(null);
 
@@ -268,15 +281,23 @@ function DriverSetsCard({ pcName, sets, onRefresh }: {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
+    setUploadFileName(file.name);
+    setUploadFileSize(file.size);
+    setUploadProgress(0);
     try {
-      const result = await patchclassApi.extractDriverZip(pcName, setName, file);
-      notify.success(`ZIP entpackt: ${result.entryCount} Dateien`);
+      const result = await patchclassApi.extractDriverZip(pcName, setName, file, (pct) => {
+        setUploadProgress(pct);
+        if (pct >= 100) setUploadProgress(101); // switch to "extracting" phase
+      });
+      notify.success(`Archiv entpackt: ${result.entryCount} Dateien`);
       await loadFiles(setName);
       onRefresh();
     } catch (err: any) {
-      notify.error('ZIP-Fehler', err.response?.data?.error?.message || err.message);
+      notify.error('Archiv-Fehler', err.response?.data?.error?.message || err.message);
     } finally {
       setUploading(false);
+      setUploadProgress(null);
+      setUploadFileName('');
       e.target.value = '';
     }
   };
@@ -348,15 +369,39 @@ function DriverSetsCard({ pcName, sets, onRefresh }: {
                     >
                       <Upload className="h-3 w-3" /> Datei
                     </button>
-                    <input ref={zipInputRef} type="file" accept=".zip" className="hidden" onChange={e => handleZipExtract(e, set.name)} />
+                    <input ref={zipInputRef} type="file" accept=".zip,.exe,.7z" className="hidden" onChange={e => handleZipExtract(e, set.name)} />
                     <button
                       onClick={() => zipInputRef.current?.click()}
                       disabled={uploading}
                       className="flex items-center gap-1 px-2 py-1 text-xs bg-accent text-accent-foreground rounded hover:bg-accent/80"
                     >
-                      <FileArchive className="h-3 w-3" /> ZIP
+                      <FileArchive className="h-3 w-3" /> Archiv
                     </button>
-                    {uploading && <span className="text-xs text-muted-foreground">Hochladen...</span>}
+                    {uploading && uploadProgress !== null && (
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                          <span className="truncate">
+                            {uploadProgress <= 100
+                              ? `${uploadFileName} (${formatSize(uploadFileSize)})`
+                              : 'Entpacke Archiv...'}
+                          </span>
+                          {uploadProgress <= 100 && <span>{uploadProgress}%</span>}
+                        </div>
+                        <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
+                          {uploadProgress <= 100 ? (
+                            <div
+                              className="bg-primary rounded-full h-2 transition-all duration-300"
+                              style={{ width: `${uploadProgress}%` }}
+                            />
+                          ) : (
+                            <div className="bg-primary rounded-full h-2 w-full animate-pulse" />
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {uploading && uploadProgress === null && (
+                      <span className="text-xs text-muted-foreground">Hochladen...</span>
+                    )}
                   </div>
 
                   {files.filter(f => !f.isDirectory).length === 0 ? (
@@ -385,8 +430,10 @@ function DriverSetsCard({ pcName, sets, onRefresh }: {
 // Driver Map Card
 // =============================================================================
 
-function DriverMapCard({ pcName, map, sets, onRefresh }: {
+function DriverMapCard({ pcName, map, sets, onRefresh, prefillDmi, onPrefillConsumed }: {
   pcName: string; map: DriverMap; sets: DriverSet[]; onRefresh: () => void;
+  prefillDmi?: { sys_vendor: string; product_name: string } | null;
+  onPrefillConsumed?: () => void;
 }) {
   const [showAdd, setShowAdd] = useState(false);
   const [modelName, setModelName] = useState('');
@@ -396,9 +443,30 @@ function DriverMapCard({ pcName, map, sets, onRefresh }: {
   const [selectedDrivers, setSelectedDrivers] = useState<string[]>([]);
   const [defaultDrivers, setDefaultDrivers] = useState(map.defaultDrivers.join(', '));
 
+  // Stable ref for callback to avoid useEffect re-firing on every render
+  const onPrefillConsumedRef = useRef(onPrefillConsumed);
+  onPrefillConsumedRef.current = onPrefillConsumed;
+
+  // Auto-fill from scan results
+  useEffect(() => {
+    if (prefillDmi) {
+      setSysVendor(prefillDmi.sys_vendor);
+      setProductName(prefillDmi.product_name);
+      setModelName(`${prefillDmi.sys_vendor} ${prefillDmi.product_name}`);
+      setSelectedDrivers(sets.map(s => s.name));
+      setShowAdd(true);
+      onPrefillConsumedRef.current?.();
+    }
+  }, [prefillDmi]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleAddModel = async () => {
-    if (!modelName || !sysVendor || !productName || selectedDrivers.length === 0) {
-      notify.error('Alle Felder ausfuellen');
+    const missing: string[] = [];
+    if (!modelName) missing.push('Name');
+    if (!sysVendor) missing.push('sys_vendor');
+    if (!productName) missing.push('product_name');
+    if (selectedDrivers.length === 0) missing.push('Treiber-Sets');
+    if (missing.length > 0) {
+      notify.error(`Fehlend: ${missing.join(', ')}`);
       return;
     }
 
@@ -730,12 +798,228 @@ function DeviceRulesCard({ pcName, map, sets, onRefresh }: {
 }
 
 // =============================================================================
+// Manufacturer Support Link
+// =============================================================================
+
+function ManufacturerLink({ vendor, product }: { vendor: string; product: string }) {
+  const v = vendor.toUpperCase();
+  const p = encodeURIComponent(product);
+  let label: string, url: string;
+
+  if (v.includes('LENOVO')) {
+    label = 'Lenovo'; url = `https://pcsupport.lenovo.com/us/en/products/${p}`;
+  } else if (v.includes('DELL')) {
+    label = 'Dell'; url = `https://www.dell.com/support/home/en-us?q=${p}`;
+  } else if (v.includes('HP') || v.includes('HEWLETT')) {
+    label = 'HP'; url = `https://support.hp.com/us-en/search?q=${p}`;
+  } else if (v.includes('ACER')) {
+    label = 'Acer'; url = `https://www.acer.com/us-en/support/drivers-and-manuals?q=${p}`;
+  } else {
+    return null;
+  }
+
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer"
+      className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+      <ExternalLink className="h-3 w-3" /> {label} Treiber-Support
+    </a>
+  );
+}
+
+// =============================================================================
+// Driver Scan Card (Hardware-Scan)
+// =============================================================================
+
+function DriverScanCard({ onFillModel }: { onFillModel?: (dmi: { sys_vendor: string; product_name: string }) => void }) {
+  const [hostIp, setHostIp] = useState('');
+  const [onlineHosts, setOnlineHosts] = useState<Host[]>([]);
+  const [scanning, setScanning] = useState(false);
+  const [result, setResult] = useState<DriverScanResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    hostsApi.list({ limit: 200, filters: { status: 'online' } })
+      .then(res => setOnlineHosts(res.data))
+      .catch(() => setOnlineHosts([]));
+  }, []);
+
+  const handleScan = async () => {
+    if (!hostIp.trim()) return;
+    setScanning(true);
+    setError(null);
+    setResult(null);
+    try {
+      const data = await patchclassApi.scanClient(hostIp.trim());
+      setResult(data);
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'response' in err) {
+        const axiosErr = err as { response?: { data?: { error?: { message?: string } } } };
+        setError(axiosErr.response?.data?.error?.message || 'Scan fehlgeschlagen');
+      } else {
+        setError(err instanceof Error ? err.message : 'Scan fehlgeschlagen');
+      }
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  return (
+    <div className="bg-card border border-border rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold flex items-center gap-2">
+          <Search className="h-4 w-4" /> Hardware-Scan
+          <InfoTooltip text="Liest DMI-Daten (Hersteller + Modell) per SSH vom Client und prueft, welche Patchclass-Regeln matchen wuerden. Der Client muss online und per SSH erreichbar sein." />
+        </h3>
+      </div>
+
+      {/* IP Input + Host Picker + Scan Button */}
+      <div className="flex items-center gap-2 mb-3">
+        <input
+          type="text"
+          placeholder="Client-IP (z.B. 10.0.152.111)"
+          value={hostIp}
+          onChange={e => setHostIp(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleScan()}
+          className="flex-1 px-3 py-1.5 text-sm bg-background border border-border rounded-md"
+        />
+        {onlineHosts.length > 0 && (
+          <select
+            value=""
+            onChange={e => { if (e.target.value) setHostIp(e.target.value); }}
+            className="px-2 py-1.5 text-sm bg-background border border-border rounded-md"
+          >
+            <option value="">Online-Hosts ({onlineHosts.length})</option>
+            {onlineHosts.map(h => (
+              <option key={h.id} value={h.ipAddress || ''}>
+                {h.hostname} ({h.ipAddress})
+              </option>
+            ))}
+          </select>
+        )}
+        <button
+          onClick={handleScan}
+          disabled={!hostIp.trim() || scanning}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
+        >
+          {scanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+          <span>{scanning ? 'Scanne...' : 'Scannen'}</span>
+        </button>
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-md mb-3">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-destructive flex-shrink-0" />
+            <p className="text-sm text-destructive">{error}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Scanning indicator */}
+      {scanning && (
+        <div className="flex items-center gap-2 py-4 justify-center text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span className="text-sm">Verbinde mit {hostIp} und lese DMI-Daten...</span>
+        </div>
+      )}
+
+      {/* Results */}
+      {result && !scanning && (
+        <div className="space-y-3">
+          {/* DMI Info */}
+          <div className="p-3 bg-secondary/50 border border-border rounded-md">
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-xs text-muted-foreground">DMI-Daten von {result.host}</div>
+              {onFillModel && (
+                <button
+                  onClick={() => onFillModel(result.dmi)}
+                  className="flex items-center gap-1 px-2 py-0.5 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90"
+                >
+                  <Plus className="h-3 w-3" /> Uebernehmen
+                </button>
+              )}
+            </div>
+            <div className="font-mono text-sm">
+              <span className="text-foreground">{result.dmi.sys_vendor}</span>
+              <span className="text-muted-foreground mx-2">&mdash;</span>
+              <span className="text-foreground">{result.dmi.product_name}</span>
+            </div>
+          </div>
+
+          {/* Matches */}
+          {result.matches.length > 0 ? (
+            <div className="space-y-2">
+              {result.matches.map((m, i) => (
+                <div key={i} className="flex items-center gap-3 p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-md">
+                  <CheckCircle className="h-4 w-4 text-emerald-500 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-medium">{m.patchclass}</span>
+                    <span className="text-muted-foreground mx-1.5">&rarr;</span>
+                    <span className="text-sm text-muted-foreground">Modell "{m.model}"</span>
+                    <span className="text-muted-foreground mx-1.5">&rarr;</span>
+                    {m.driverSets.map(ds => (
+                      <span key={ds} className="inline-block px-1.5 py-0.5 text-xs bg-primary/10 text-primary rounded mr-1">
+                        {ds}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-md">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-yellow-500 flex-shrink-0" />
+                <p className="text-sm text-yellow-500">Keine Patchclass-Regel passt zu diesem Geraet</p>
+              </div>
+            </div>
+          )}
+
+          {/* Unmatched patchclasses */}
+          {result.unmatched.length > 0 && result.matches.length > 0 && (
+            <div className="text-xs text-muted-foreground">
+              Kein Match: {result.unmatched.join(', ')}
+            </div>
+          )}
+
+          {/* Manufacturer support link */}
+          <ManufacturerLink vendor={result.dmi.sys_vendor} product={result.dmi.product_name} />
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!result && !scanning && !error && (
+        <div className="text-center py-4 text-muted-foreground">
+          <Search className="h-6 w-6 mx-auto mb-1.5 opacity-50" />
+          <p className="text-sm">Client-IP eingeben um DMI-Daten zu lesen und Patchclass-Matching zu pruefen.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =============================================================================
 // Deploy Card
 // =============================================================================
 
 function DeployCard({ pcName }: { pcName: string }) {
   const [imageName, setImageName] = useState('');
   const [deploying, setDeploying] = useState(false);
+  const [availableImages, setAvailableImages] = useState<Image[]>([]);
+  const [deployed, setDeployed] = useState<DeployedPostsync[]>([]);
+
+  const fetchDeployed = useCallback(async () => {
+    try {
+      const list = await patchclassApi.listDeployedPostsyncs(pcName);
+      setDeployed(list);
+    } catch { setDeployed([]); }
+  }, [pcName]);
+
+  useEffect(() => {
+    imagesApi.list().then(setAvailableImages).catch(() => setAvailableImages([]));
+    fetchDeployed();
+  }, [fetchDeployed]);
 
   const handleDeploy = async () => {
     if (!imageName.trim()) return;
@@ -744,6 +1028,7 @@ function DeployCard({ pcName }: { pcName: string }) {
       const result = await patchclassApi.deployPostsync(pcName, imageName.trim());
       notify.success(`Postsync "${result.postsync}" deployed`);
       setImageName('');
+      await fetchDeployed();
     } catch (err: any) {
       notify.error('Deploy fehlgeschlagen', err.response?.data?.error?.message || err.message);
     } finally {
@@ -757,23 +1042,51 @@ function DeployCard({ pcName }: { pcName: string }) {
         <Send className="h-4 w-4" /> Postsync deployen
         <InfoTooltip text="Aktiviert die Treiber-Verteilung fuer ein bestimmtes Image. Dabei wird ein Postsync-Script erstellt, das nach jedem Sync auf dem Client automatisch laeuft: Hardware erkennen, passende Treiber vom Server holen, nach C:\\Drivers kopieren und Windows pnputil zur Installation registrieren." />
       </h3>
-      <div className="flex gap-2">
-        <input
-          type="text"
+      <div className="flex gap-2 mb-3">
+        <select
           value={imageName}
           onChange={e => setImageName(e.target.value)}
-          placeholder="Image-Name (z.B. win11.qcow2)"
           className="flex-1 px-2 py-1.5 text-sm bg-background border border-border rounded"
-          onKeyDown={e => e.key === 'Enter' && handleDeploy()}
-        />
+        >
+          <option value="">Image waehlen...</option>
+          {availableImages.map(img => (
+            <option key={img.id} value={img.filename}>
+              {img.filename} ({formatSize(img.fileSize || img.size || 0)})
+            </option>
+          ))}
+        </select>
         <button
           onClick={handleDeploy}
-          disabled={deploying || !imageName.trim()}
+          disabled={deploying || !imageName}
           className="flex items-center gap-1 px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
         >
           <Send className="h-4 w-4" /> Deploy
         </button>
       </div>
+
+      {/* Deployed postsync list */}
+      {deployed.length > 0 && (
+        <div>
+          <div className="text-xs text-muted-foreground mb-1.5">Aktive Postsyncs:</div>
+          <div className="space-y-1">
+            {deployed.map(d => (
+              <div key={d.path} className="flex items-center justify-between px-2 py-1.5 rounded bg-emerald-500/10 border border-emerald-500/20">
+                <div className="flex items-center gap-2 min-w-0">
+                  <CheckCircle className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0" />
+                  <span className="text-sm font-medium truncate">{d.image}</span>
+                  <span className="text-xs text-muted-foreground">{d.postsync}</span>
+                </div>
+                <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">
+                  {new Date(d.modifiedAt).toLocaleDateString('de-DE')} {new Date(d.modifiedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {deployed.length === 0 && (
+        <p className="text-xs text-muted-foreground">Noch kein Postsync deployed.</p>
+      )}
     </div>
   );
 }

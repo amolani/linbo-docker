@@ -46,8 +46,11 @@ RUN apk add --no-cache \
     rsync \
     tini \
     xz \
+    zstd \
     cpio \
     kmod \
+    innoextract \
+    p7zip \
     tar
 
 # Create non-root user for security

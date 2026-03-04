@@ -46,11 +46,13 @@ fi
 . "$RULES"
 
 # Read DMI
-SYS_VENDOR=$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null | tr -d '\n')
-PRODUCT_NAME=$(cat /sys/class/dmi/id/product_name 2>/dev/null | tr -d '\n')
+SYS_VENDOR=$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null | tr -d '\n\r')
+PRODUCT_NAME=$(cat /sys/class/dmi/id/product_name 2>/dev/null | tr -d '\n\r')
 echo "DMI: vendor='$SYS_VENDOR' product='$PRODUCT_NAME'" | tee -a "$LOG"
 
-# Match DMI
+# Match DMI (strip trailing whitespace/CR from sysfs)
+SYS_VENDOR=$(printf '%s' "$SYS_VENDOR" | tr -d '\r' | sed 's/[[:space:]]*$//')
+PRODUCT_NAME=$(printf '%s' "$PRODUCT_NAME" | tr -d '\r' | sed 's/[[:space:]]*$//')
 DRIVER_SETS=""
 match_drivers "$SYS_VENDOR" "$PRODUCT_NAME"
 DMI_SETS="$DRIVER_SETS"

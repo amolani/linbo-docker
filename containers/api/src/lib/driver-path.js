@@ -14,8 +14,8 @@ const LINBO_DIR = process.env.LINBO_DIR || process.env.SRV_LINBO_DIR || '/srv/li
 // Default: dedicated driver volume; fallback to legacy path for backward compat
 const PATCHCLASS_BASE = process.env.PATCHCLASS_BASE || '/var/lib/linbo/drivers';
 const IMAGE_DIR = process.env.IMAGE_DIR || path.join(LINBO_DIR, 'images');
-const MAX_ZIP_ENTRIES = 1000;
-const MAX_ZIP_SIZE = 500 * 1024 * 1024; // 500MB
+const MAX_ZIP_ENTRIES = 50000;
+const MAX_ZIP_SIZE = 4 * 1024 * 1024 * 1024; // 4GB
 
 // =============================================================================
 // Path Security

@@ -98,4 +98,6 @@ echo $NOW > /mnt/lastsync
 echo "##### POSTSYNC END (patchclass) #####" | tee -a $LOG
 
 # Self-update: ensure postsync script stays current
-rsync --progress -r "${SERVERIP}::linbo/images/${IMAGENAME%.qcow2}.postsync" /cache/ 2>/dev/null
+IMAGEBASE="${IMAGENAME%.qcow2}"
+IMAGEBASE="${IMAGEBASE%.cloop}"
+rsync -q "${SERVERIP}::linbo/images/${IMAGEBASE}/${IMAGEBASE}.postsync" /cache/ 2>/dev/null

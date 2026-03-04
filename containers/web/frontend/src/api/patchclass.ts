@@ -16,6 +16,25 @@ interface ApiResponse<T> {
   data: T;
 }
 
+export interface DeployedPostsync {
+  image: string;
+  postsync: string;
+  path: string;
+  size: number;
+  modifiedAt: string;
+}
+
+export interface DriverScanResult {
+  host: string;
+  dmi: { sys_vendor: string; product_name: string };
+  matches: Array<{
+    patchclass: string;
+    model: string;
+    driverSets: string[];
+  }>;
+  unmatched: string[];
+}
+
 export const patchclassApi = {
   // Patchclass CRUD
   listPatchclasses: async (): Promise<Patchclass[]> => {
@@ -87,14 +106,23 @@ export const patchclassApi = {
     return response.data.data;
   },
 
-  extractDriverZip: async (pcName: string, setName: string, file: File): Promise<{ entryCount: number; totalUncompressed: number }> => {
+  extractDriverZip: async (
+    pcName: string, setName: string, file: File,
+    onProgress?: (pct: number) => void,
+  ): Promise<{ entryCount: number; totalUncompressed: number }> => {
     const formData = new FormData();
     formData.append('file', file);
 
     const response = await apiClient.post<ApiResponse<{ entryCount: number; totalUncompressed: number }>>(
       `/patchclass/${encodeURIComponent(pcName)}/driver-sets/${encodeURIComponent(setName)}/extract`,
       formData,
-      { headers: { 'Content-Type': 'multipart/form-data' } }
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (e) => {
+          if (onProgress && e.total)
+            onProgress(Math.round((e.loaded / e.total) * 100));
+        },
+      },
     );
     return response.data.data;
   },
@@ -141,6 +169,22 @@ export const patchclassApi = {
   deployPostsync: async (pcName: string, imageName: string): Promise<PostsyncDeployResult> => {
     const response = await apiClient.post<ApiResponse<PostsyncDeployResult>>(
       `/patchclass/${encodeURIComponent(pcName)}/deploy-postsync/${encodeURIComponent(imageName)}`
+    );
+    return response.data.data;
+  },
+
+  listDeployedPostsyncs: async (pcName: string): Promise<DeployedPostsync[]> => {
+    const response = await apiClient.get<ApiResponse<DeployedPostsync[]>>(
+      `/patchclass/${encodeURIComponent(pcName)}/deployed-postsyncs`
+    );
+    return response.data.data;
+  },
+
+  // Hardware Scan
+  scanClient: async (hostIp: string): Promise<DriverScanResult> => {
+    const response = await apiClient.post<ApiResponse<DriverScanResult>>(
+      '/patchclass/scan-client',
+      { hostIp }
     );
     return response.data.data;
   },

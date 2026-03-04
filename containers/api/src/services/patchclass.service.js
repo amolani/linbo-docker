@@ -351,9 +351,10 @@ async function deleteDriverFile(pcName, setName, relPath) {
 }
 
 /**
- * Extract a ZIP file into a driver set with security checks
+ * Extract an archive (ZIP, EXE, 7z) into a driver set with security checks.
+ * @param {string} originalName - Original filename from upload (used for format detection)
  */
-async function extractDriverZip(pcName, setName, zipPath) {
+async function extractDriverZip(pcName, setName, archivePath, originalName) {
   pcName = sanitizeName(pcName);
   setName = sanitizeName(setName);
 
@@ -366,7 +367,6 @@ async function extractDriverZip(pcName, setName, zipPath) {
     throw Object.assign(new Error(`Driver set not found: ${setName}`), { statusCode: 404 });
   }
 
-  // Use unzip with security checks
   const { execFile } = require('child_process');
 
   function execFileAsync(cmd, args, opts = {}) {
@@ -378,64 +378,182 @@ async function extractDriverZip(pcName, setName, zipPath) {
     });
   }
 
-  // First, list ZIP contents for security validation
-  let listOutput;
-  try {
-    const result = await execFileAsync('unzip', ['-l', zipPath], { maxBuffer: 10 * 1024 * 1024 });
-    listOutput = result.stdout;
-  } catch (err) {
-    throw Object.assign(new Error('Invalid ZIP file: ' + (err.stderr || err.message)), { statusCode: 400 });
-  }
+  // Detect archive format from original filename
+  const ext = (originalName || '').toLowerCase().replace(/^.*\./, '.');
+  const use7z = ext === '.exe' || ext === '.7z';
 
-  // Parse the listing to check entries
-  const lines = listOutput.split('\n');
   let entryCount = 0;
   let totalUncompressed = 0;
 
-  for (const line of lines) {
-    // unzip -l output: "   size  date  time  name"
-    const match = line.match(/^\s*(\d+)\s+\d{2}-\d{2}-\d{2,4}\s+\d{2}:\d{2}\s+(.+)$/);
-    if (!match) continue;
+  if (use7z) {
+    // ---- 7z path (for .exe / .7z) ----
 
-    const size = parseInt(match[1], 10);
-    const entryName = match[2];
-    entryCount++;
-
-    // Security checks
-    if (entryName.includes('..')) {
-      throw Object.assign(new Error(`ZIP contains path traversal: ${entryName}`), { statusCode: 400 });
-    }
-    if (entryName.startsWith('/')) {
-      throw Object.assign(new Error(`ZIP contains absolute path: ${entryName}`), { statusCode: 400 });
+    // List contents for security validation
+    let listOutput;
+    try {
+      const result = await execFileAsync('7z', ['l', archivePath], { maxBuffer: 10 * 1024 * 1024 });
+      listOutput = result.stdout;
+    } catch (err) {
+      throw Object.assign(new Error('Invalid archive: ' + (err.stderr || err.message)), { statusCode: 400 });
     }
 
-    totalUncompressed += size;
-  }
+    // Parse 7z l output — lines between header separators (-------)
+    // Format: "Date      Time    Attr     Size   Compressed  Name"
+    const lines = listOutput.split('\n');
+    let inEntries = false;
+    for (const line of lines) {
+      if (line.startsWith('---')) {
+        inEntries = !inEntries;
+        continue;
+      }
+      if (!inEntries) continue;
 
-  if (entryCount > MAX_ZIP_ENTRIES) {
-    throw Object.assign(
-      new Error(`ZIP contains too many entries: ${entryCount} (max ${MAX_ZIP_ENTRIES})`),
-      { statusCode: 400 }
-    );
-  }
+      // 7z list line:  "2024-01-15 10:23:44 ....A      12345         6789  path/to/file"
+      const m = line.match(/^\S+\s+\S+\s+\S+\s+(\d+)\s+\d+\s+(.+)$/);
+      if (!m) continue;
 
-  if (totalUncompressed > MAX_ZIP_SIZE) {
-    throw Object.assign(
-      new Error(`ZIP uncompressed size too large: ${Math.round(totalUncompressed / 1024 / 1024)}MB (max ${Math.round(MAX_ZIP_SIZE / 1024 / 1024)}MB)`),
-      { statusCode: 400 }
-    );
-  }
+      const size = parseInt(m[1], 10);
+      const entryName = m[2].trim();
+      if (!entryName) continue;
+      entryCount++;
 
-  // Extract to set directory (no symlinks via -K)
-  try {
-    await execFileAsync('unzip', ['-o', '-K', zipPath, '-d', setDir], {
-      maxBuffer: 10 * 1024 * 1024,
-    });
-  } catch (err) {
-    throw Object.assign(
-      new Error('ZIP extraction failed: ' + (err.stderr || err.message)),
-      { statusCode: 500 }
-    );
+      // Security checks
+      if (entryName.includes('..')) {
+        throw Object.assign(new Error(`Archive contains path traversal: ${entryName}`), { statusCode: 400 });
+      }
+      if (entryName.startsWith('/')) {
+        throw Object.assign(new Error(`Archive contains absolute path: ${entryName}`), { statusCode: 400 });
+      }
+
+      totalUncompressed += size;
+    }
+
+    if (entryCount > MAX_ZIP_ENTRIES) {
+      throw Object.assign(
+        new Error(`Archive contains too many entries: ${entryCount} (max ${MAX_ZIP_ENTRIES})`),
+        { statusCode: 400 }
+      );
+    }
+
+    if (totalUncompressed > MAX_ZIP_SIZE) {
+      throw Object.assign(
+        new Error(`Archive uncompressed size too large: ${Math.round(totalUncompressed / 1024 / 1024)}MB (max ${Math.round(MAX_ZIP_SIZE / 1024 / 1024)}MB)`),
+        { statusCode: 400 }
+      );
+    }
+
+    // Extract with 7z
+    try {
+      await execFileAsync('7z', ['x', `-o${setDir}`, '-aoa', archivePath], {
+        maxBuffer: 10 * 1024 * 1024,
+      });
+    } catch (err) {
+      throw Object.assign(
+        new Error('Archive extraction failed: ' + (err.stderr || err.message)),
+        { statusCode: 500 }
+      );
+    }
+
+    // Inno Setup .exe detection: if 7z produced only PE sections (.text, .rsrc, [0])
+    // instead of real driver files, retry with innoextract
+    if (ext === '.exe') {
+      const extracted = await fs.readdir(setDir);
+      const peSections = ['.text', '.rdata', '.rsrc', '.data', '.idata', '.edata', '.bss', '.tls', '.itext', '.didata', 'CERTIFICATE'];
+      const allPE = extracted.every(f => peSections.includes(f) || f === '[0]');
+      if (allPE && extracted.length > 0) {
+        // Clean failed PE extraction
+        for (const f of extracted) {
+          await fs.rm(path.join(setDir, f), { recursive: true, force: true });
+        }
+        // Re-extract with innoextract (handles Inno Setup natively)
+        try {
+          await execFileAsync('innoextract', ['-e', '-d', setDir, archivePath], {
+            maxBuffer: 50 * 1024 * 1024,
+            timeout: 600000,
+          });
+          // innoextract may create wrapper dirs (app/, code$GetExtractPath$/, tmp/)
+          // If extraction produced exactly one subdirectory, flatten it
+          const topEntries = await fs.readdir(setDir);
+          if (topEntries.length === 1) {
+            const singleDir = path.join(setDir, topEntries[0]);
+            try {
+              const st = await fs.stat(singleDir);
+              if (st.isDirectory()) {
+                const innerFiles = await fs.readdir(singleDir);
+                for (const f of innerFiles) {
+                  await fs.rename(path.join(singleDir, f), path.join(setDir, f));
+                }
+                await fs.rm(singleDir, { recursive: true, force: true });
+              }
+            } catch { /* not a directory */ }
+          }
+          entryCount = await countFiles(setDir);
+        } catch (innoErr) {
+          throw Object.assign(
+            new Error('Inno Setup extraction failed: ' + (innoErr.stderr || innoErr.message)),
+            { statusCode: 500 }
+          );
+        }
+      }
+    }
+  } else {
+    // ---- unzip path (for .zip and fallback) ----
+
+    // List ZIP contents for security validation
+    let listOutput;
+    try {
+      const result = await execFileAsync('unzip', ['-l', archivePath], { maxBuffer: 10 * 1024 * 1024 });
+      listOutput = result.stdout;
+    } catch (err) {
+      throw Object.assign(new Error('Invalid ZIP file: ' + (err.stderr || err.message)), { statusCode: 400 });
+    }
+
+    const lines = listOutput.split('\n');
+    for (const line of lines) {
+      // unzip -l output: "   size  date  time  name"
+      const match = line.match(/^\s*(\d+)\s+\d{2}-\d{2}-\d{2,4}\s+\d{2}:\d{2}\s+(.+)$/);
+      if (!match) continue;
+
+      const size = parseInt(match[1], 10);
+      const entryName = match[2];
+      entryCount++;
+
+      // Security checks
+      if (entryName.includes('..')) {
+        throw Object.assign(new Error(`ZIP contains path traversal: ${entryName}`), { statusCode: 400 });
+      }
+      if (entryName.startsWith('/')) {
+        throw Object.assign(new Error(`ZIP contains absolute path: ${entryName}`), { statusCode: 400 });
+      }
+
+      totalUncompressed += size;
+    }
+
+    if (entryCount > MAX_ZIP_ENTRIES) {
+      throw Object.assign(
+        new Error(`ZIP contains too many entries: ${entryCount} (max ${MAX_ZIP_ENTRIES})`),
+        { statusCode: 400 }
+      );
+    }
+
+    if (totalUncompressed > MAX_ZIP_SIZE) {
+      throw Object.assign(
+        new Error(`ZIP uncompressed size too large: ${Math.round(totalUncompressed / 1024 / 1024)}MB (max ${Math.round(MAX_ZIP_SIZE / 1024 / 1024)}MB)`),
+        { statusCode: 400 }
+      );
+    }
+
+    // Extract to set directory (no symlinks via -K)
+    try {
+      await execFileAsync('unzip', ['-o', '-K', archivePath, '-d', setDir], {
+        maxBuffer: 10 * 1024 * 1024,
+      });
+    } catch (err) {
+      throw Object.assign(
+        new Error('ZIP extraction failed: ' + (err.stderr || err.message)),
+        { statusCode: 500 }
+      );
+    }
   }
 
   // Post-extraction: remove any symlinks that may have snuck in
@@ -595,7 +713,7 @@ async function regenerateRules(pcName) {
     'match_drivers() {',
     '  local vendor="$1"',
     '  local product="$2"',
-    '  case "$vendor|$product" in',
+    '  case "$vendor::$product" in',
   ];
 
   for (const model of map.models) {
@@ -610,7 +728,7 @@ async function regenerateRules(pcName) {
     }
 
     const driverSets = model.drivers.join(' ');
-    lines.push(`    "${vendor}|${pattern}")`);
+    lines.push(`    ${vendor}::${pattern})`);
     lines.push(`      DRIVER_SETS="${driverSets}"`);
     lines.push('      ;;');
   }
@@ -646,14 +764,14 @@ async function regenerateRules(pcName) {
       const pattern = `${rule.match.vendor}:${rule.match.device}:${rule.match.subvendor}:${rule.match.subdevice}`.toLowerCase();
       const sets = rule.drivers.join(' ');
       lines.push(`      # ${rule.name} (subsystem match)`);
-      lines.push(`      "${pattern}") EXTRA_SETS="$EXTRA_SETS ${sets}" ;;`);
+      lines.push(`      ${pattern}) EXTRA_SETS="$EXTRA_SETS ${sets}" ;;`);
     }
 
     for (const rule of baseRules) {
       const pattern = `${rule.match.vendor}:${rule.match.device}`.toLowerCase();
       const sets = rule.drivers.join(' ');
       lines.push(`      # ${rule.name}`);
-      lines.push(`      "${pattern}") EXTRA_SETS="$EXTRA_SETS ${sets}" ;;`);
+      lines.push(`      ${pattern}) EXTRA_SETS="$EXTRA_SETS ${sets}" ;;`);
     }
 
     lines.push('      *) ;;');
@@ -753,14 +871,23 @@ async function deployPostsyncToImage(pcName, imageName) {
     throw Object.assign(new Error(`Patchclass not found: ${pcName}`), { statusCode: 404 });
   }
 
+  // Auto-append .qcow2 if no recognized extension
+  if (imageName && !/\.(qcow2|cloop)$/.test(imageName)) {
+    imageName = imageName + '.qcow2';
+  }
+
   // Sanitize image name
   if (!imageName || !/^[a-zA-Z0-9][a-zA-Z0-9._-]*\.(qcow2|cloop)$/.test(imageName)) {
     throw Object.assign(new Error('Invalid image name'), { statusCode: 400 });
   }
 
   const content = await generatePostsyncScript(pcName, imageName);
-  const postsyncName = imageName.replace(/\.(qcow2|cloop)$/, '.postsync');
-  const targetPath = path.join(IMAGE_DIR, postsyncName);
+  const imageBase = imageName.replace(/\.(qcow2|cloop)$/, '');
+  const postsyncName = imageBase + '.postsync';
+  // LINBO expects postsync in image subdirectory: images/<imageBase>/<imageBase>.postsync
+  const targetDir = path.join(IMAGE_DIR, imageBase);
+  await fs.mkdir(targetDir, { recursive: true });
+  const targetPath = path.join(targetDir, postsyncName);
 
   const tmp = targetPath + '.tmp.' + process.pid;
   await fs.writeFile(tmp, content, { mode: 0o755 });
@@ -773,6 +900,55 @@ async function deployPostsyncToImage(pcName, imageName) {
   });
 
   return { postsync: postsyncName, patchclass: pcName, image: imageName };
+}
+
+// =============================================================================
+// List Deployed Postsyncs
+// =============================================================================
+
+/**
+ * List all deployed postsync scripts that reference a given patchclass.
+ * Scans IMAGE_DIR for *.postsync files containing the patchclass name.
+ */
+async function listDeployedPostsyncs(pcName) {
+  pcName = sanitizeName(pcName);
+  const results = [];
+
+  let imageDirs;
+  try {
+    imageDirs = await fs.readdir(IMAGE_DIR, { withFileTypes: true });
+  } catch {
+    return results;
+  }
+
+  for (const entry of imageDirs) {
+    if (!entry.isDirectory()) continue;
+    const subDir = path.join(IMAGE_DIR, entry.name);
+    let files;
+    try {
+      files = await fs.readdir(subDir);
+    } catch { continue; }
+
+    for (const file of files) {
+      if (!file.endsWith('.postsync')) continue;
+      const filePath = path.join(subDir, file);
+      try {
+        const content = await fs.readFile(filePath, 'utf-8');
+        if (content.includes(`PATCHCLASS="${pcName}"`) || content.includes(`PATCHCLASS=${pcName}`)) {
+          const stat = await fs.stat(filePath);
+          results.push({
+            image: entry.name,
+            postsync: file,
+            path: `images/${entry.name}/${file}`,
+            size: stat.size,
+            modifiedAt: stat.mtime.toISOString(),
+          });
+        }
+      } catch { continue; }
+    }
+  }
+
+  return results;
 }
 
 // =============================================================================
@@ -823,6 +999,7 @@ module.exports = {
   // Postsync
   generatePostsyncScript,
   deployPostsyncToImage,
+  listDeployedPostsyncs,
 
   // Schema (for testing)
   driverMapSchema,

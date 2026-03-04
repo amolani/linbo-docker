@@ -453,8 +453,8 @@ _apply_iface_wait_fallback() {
 
 _apply_storage_modules_primary() {
     sed -i '1,/^#!/{/^#!/a\
-# --- DOCKER_STORAGE_MODULES: load disk drivers early ---\
-for _mod in ahci sd_mod sr_mod nvme ata_piix ata_generic virtio_blk virtio_scsi evdev hid hid_generic usbhid virtio_input psmouse xhci_hcd ehci_hcd uhci_hcd; do\
+# --- DOCKER_STORAGE_MODULES: load disk + NIC drivers early ---\
+for _mod in ahci sd_mod sr_mod nvme ata_piix ata_generic virtio_blk virtio_scsi evdev hid hid_generic usbhid virtio_input psmouse xhci_hcd ehci_hcd uhci_hcd e1000 e1000e igb igc ixgbe r8169 r8152 sky2 tg3 bnxt_en virtio_net vmxnet3 atlantic alx atl1c bcmgenet; do\
     modprobe "$_mod" 2>/dev/null\
 done
 }' "$WORKDIR/init.sh"
@@ -462,8 +462,8 @@ done
 
 _apply_storage_modules_fallback() {
     sed -i '/^set -e/a\
-# --- DOCKER_STORAGE_MODULES: load disk drivers early ---\
-for _mod in ahci sd_mod sr_mod nvme ata_piix ata_generic virtio_blk virtio_scsi evdev hid hid_generic usbhid virtio_input psmouse xhci_hcd ehci_hcd uhci_hcd; do\
+# --- DOCKER_STORAGE_MODULES: load disk + NIC drivers early ---\
+for _mod in ahci sd_mod sr_mod nvme ata_piix ata_generic virtio_blk virtio_scsi evdev hid hid_generic usbhid virtio_input psmouse xhci_hcd ehci_hcd uhci_hcd e1000 e1000e igb igc ixgbe r8169 r8152 sky2 tg3 bnxt_en virtio_net vmxnet3 atlantic alx atl1c bcmgenet; do\
     modprobe "$_mod" 2>/dev/null\
 done' "$WORKDIR/init.sh"
 }
@@ -545,20 +545,22 @@ _apply_net_diag() {
     cat > /tmp/diag_block.txt << 'DIAGEOF'
     echo " This LINBO client is in remote control mode."
     echo ""
-    echo " --- DOCKER_NET_DIAG v2 ---"
-    echo " BEFORE fix: $(ip link show dev eth0 2>&1 | head -1)"
-    ip link set dev eth0 up 2>/dev/null
-    _fixrc=$?
-    sleep 1
-    echo " ip link set eth0 up: exit=$_fixrc"
-    echo " AFTER fix: $(ip link show dev eth0 2>&1 | head -1)"
-    echo " carrier: $(cat /sys/class/net/eth0/carrier 2>/dev/null || echo none)"
-    echo " operstate: $(cat /sys/class/net/eth0/operstate 2>/dev/null)"
-    echo ""
-    echo " IP: $(ip addr show dev eth0 2>/dev/null | grep 'inet ' || echo 'none')"
+    echo " --- DOCKER_NET_DIAG v3 ---"
     echo " Kernel: $(uname -r)"
     echo " LINBOSERVER=$LINBOSERVER SERVERID=$SERVERID"
     echo " cmdline: $(cat /proc/cmdline)"
+    echo ""
+    echo " Network interfaces:"
+    for _dif in $(ls /sys/class/net/ 2>/dev/null | grep -v ^lo); do
+        _dtype="unknown"
+        [ -d "/sys/class/net/$_dif/wireless" ] && _dtype="wifi" || _dtype="ethernet"
+        _dstate=$(cat /sys/class/net/$_dif/operstate 2>/dev/null || echo "?")
+        _dcarrier=$(cat /sys/class/net/$_dif/carrier 2>/dev/null || echo "?")
+        _dip=$(ip addr show dev "$_dif" 2>/dev/null | grep 'inet ' | awk '{print $2}' || echo "none")
+        _dmac=$(ip link show dev "$_dif" 2>/dev/null | grep 'link/ether' | awk '{print $2}')
+        echo "  $_dif [$_dtype] state=$_dstate carrier=$_dcarrier ip=${_dip:-none} mac=$_dmac"
+    done
+    [ -z "$(ls /sys/class/net/ 2>/dev/null | grep -v ^lo)" ] && echo "  (no interfaces found!)"
     echo ""
     echo " init.sh log (last 20 lines):"
     tail -20 /tmp/linbo.log 2>/dev/null || tail -20 /tmp/init.log 2>/dev/null || echo "  (no log)"
@@ -652,13 +654,15 @@ if [ -f "$WORKDIR/init.sh" ]; then
 #!/bin/sh
 # DOCKER_DHCP_FALLBACK: Static IP fallback when udhcpc fails
 # This runs after the udhcpc loop in network()
+# Supports any interface name (eth0, enp3s0, eno1, etc.)
 
 echo "=== Docker Network Fallback ==="
 echo "udhcpc exit code: $1"
-echo "Interfaces in /proc/net/dev:"
-cat /proc/net/dev | grep -v "Inter\|face"
-echo "Link states:"
-ip link show 2>/dev/null
+echo "Available interfaces:"
+for _fi in $(ls /sys/class/net/ 2>/dev/null | grep -v ^lo); do
+    _ft="eth"; [ -d "/sys/class/net/$_fi/wireless" ] && _ft="wifi"
+    echo "  $_fi [$_ft] state=$(cat /sys/class/net/$_fi/operstate 2>/dev/null)"
+done
 echo "==="
 
 # Only activate if udhcpc failed and server= is on cmdline
@@ -669,31 +673,26 @@ grep -q "server=" /proc/cmdline || exit 0
 FALLBACK_SERVER=$(cat /proc/cmdline | tr ' ' '\n' | grep "^server=" | cut -d= -f2)
 [ -z "$FALLBACK_SERVER" ] && exit 1
 
-# Find first non-loopback interface
+# Try Ethernet interfaces first, then WiFi
 for IF in $(ls /sys/class/net/ 2>/dev/null | grep -v ^lo); do
-    echo "Trying interface: $IF"
+    [ -d "/sys/class/net/$IF/wireless" ] && continue
+    echo "Trying Ethernet: $IF"
     ip link set dev "$IF" up 2>/dev/null
-    # Wait for link to come up
-    sleep 2
-    # Check link state
+    sleep 3
     CARRIER=$(cat /sys/class/net/$IF/carrier 2>/dev/null)
     OPERSTATE=$(cat /sys/class/net/$IF/operstate 2>/dev/null)
     echo "  carrier=$CARRIER operstate=$OPERSTATE"
 
-    # Assign static IP regardless of carrier state
     ip addr add 10.0.150.254/16 dev "$IF" 2>/dev/null
     ip route add default via 10.0.0.1 2>/dev/null
     echo "ip='10.0.150.254'" > /tmp/dhcp.log
     echo "serverid='$FALLBACK_SERVER'" >> /tmp/dhcp.log
     echo "  Static IP 10.0.150.254 assigned to $IF"
-    # Test connectivity
     ping -c 1 -W 2 "$FALLBACK_SERVER" >/dev/null 2>&1
     if [ $? -eq 0 ]; then
         echo "  Ping to $FALLBACK_SERVER successful!"
         exit 0
     else
-        echo "  Ping to $FALLBACK_SERVER FAILED"
-        # Try to bring up with ethtool
         ethtool -s "$IF" speed 1000 duplex full autoneg on 2>/dev/null
         sleep 1
         ping -c 1 -W 2 "$FALLBACK_SERVER" >/dev/null 2>&1
@@ -703,11 +702,11 @@ for IF in $(ls /sys/class/net/ 2>/dev/null | grep -v ^lo); do
         fi
         echo "  Interface $IF not functional, trying next..."
         ip addr del 10.0.150.254/16 dev "$IF" 2>/dev/null
+        ip route del default 2>/dev/null
     fi
 done
 
 echo "WARNING: No functional network interface found!"
-# Still write dhcp.log so do_env can at least parse server from cmdline
 echo "ip='10.0.150.254'" > /tmp/dhcp.log
 echo "serverid='$FALLBACK_SERVER'" >> /tmp/dhcp.log
 exit 1
@@ -743,47 +742,105 @@ FALLBACK_SCRIPT
 #
 # This is the definitive fix for the udev timing issue where init.sh's
 # network() function fails because eth0 doesn't exist yet when it runs.
-# By the time linbo.sh starts, eth0 exists but is DOWN.
+# By the time linbo.sh starts, the interface exists but may be DOWN.
+#
+# Supports any interface name (eth0, enp3s0, eno1, etc.) — no hardcoding.
 
-# Skip if network is already working
+# Step 0: Ensure block device symlinks exist (init.sh may not have run)
+if ! ls /dev/disk0* >/dev/null 2>&1; then
+    echo "  Creating block device symlinks..."
+    linbo_link_blkdev 2>/dev/null || true
+fi
+
+# Check if primary network is already working
+NEED_PRIMARY=true
 if [ -n "$LINBOSERVER" ] && [ -s /start.conf ] && grep -qi '^\[os\]' /start.conf 2>/dev/null; then
-    echo "DOCKER_NET_RECOVERY: Network already OK, skipping"
-    return 0
+    echo "DOCKER_NET_RECOVERY: Primary network OK, skipping setup"
+    NEED_PRIMARY=false
 fi
 
 echo "=== DOCKER_NET_RECOVERY ==="
 
-# Step 1: Bring up network interfaces
-NET_IF=""
-for IF in $(ls /sys/class/net/ 2>/dev/null | grep -v ^lo); do
-    STATE=$(cat /sys/class/net/$IF/operstate 2>/dev/null)
-    if [ "$STATE" != "up" ]; then
-        echo "  $IF is $STATE, bringing up..."
-        ip link set dev "$IF" up
-        sleep 2
-    fi
-    NET_IF="$IF"
-    break
+if [ "$NEED_PRIMARY" = "true" ]; then
+
+# Load common NIC drivers (host kernel has them as modules)
+for _nmod in e1000 e1000e igb igc ixgbe r8169 r8152 sky2 tg3 bnxt_en \
+             virtio_net vmxnet3 mlx5_core atlantic alx atl1c bcmgenet; do
+    modprobe "$_nmod" 2>/dev/null
 done
+sleep 1
+
+# Step 1: Discover all interfaces, prefer Ethernet over WiFi
+NET_IF=""
+WIFI_IF=""
+echo "  Available interfaces:"
+for IF in $(ls /sys/class/net/ 2>/dev/null | grep -v ^lo); do
+    if [ -d "/sys/class/net/$IF/wireless" ]; then
+        echo "    $IF [wifi]"
+        [ -z "$WIFI_IF" ] && WIFI_IF="$IF"
+    else
+        echo "    $IF [ethernet]"
+        ip link set dev "$IF" up 2>/dev/null
+        [ -z "$NET_IF" ] && NET_IF="$IF"
+    fi
+done
+
+# Fallback to WiFi if no Ethernet found
+if [ -z "$NET_IF" ] && [ -n "$WIFI_IF" ]; then
+    echo "  No Ethernet found, trying WiFi: $WIFI_IF"
+    ip link set dev "$WIFI_IF" up 2>/dev/null
+    if [ -s /etc/wpa_supplicant.conf ]; then
+        wpa_supplicant -B -c/etc/wpa_supplicant.conf -i"$WIFI_IF" 2>/dev/null
+        sleep 3
+    fi
+    NET_IF="$WIFI_IF"
+fi
 
 if [ -z "$NET_IF" ]; then
     echo "  ERROR: No network interface found"
-    return 1
 fi
 
-# Step 2: Get IP via DHCP
+# Wait for link negotiation on real hardware
+if [ -n "$NET_IF" ]; then
+echo "  Using $NET_IF, waiting for link..."
+_link_wait=0
+while [ $_link_wait -lt 8 ]; do
+    _carrier=$(cat /sys/class/net/$NET_IF/carrier 2>/dev/null)
+    [ "$_carrier" = "1" ] && break
+    _link_wait=$((_link_wait + 1))
+    sleep 1
+done
+echo "  Link wait: ${_link_wait}s, carrier=$(cat /sys/class/net/$NET_IF/carrier 2>/dev/null || echo '?')"
+
+# Step 2: Try DHCP on primary interface, then fallback to others
 CUR_IP=$(ip addr show dev "$NET_IF" 2>/dev/null | grep 'inet ' | awk '{print $2}' | cut -d/ -f1)
 if [ -z "$CUR_IP" ]; then
     echo "  Running udhcpc on $NET_IF..."
     udhcpc -n -i "$NET_IF" -t 5
     DHCP_RC=$?
-    echo "  udhcpc exit=$DHCP_RC"
+    echo "  udhcpc on $NET_IF: exit=$DHCP_RC"
 
     if [ $DHCP_RC -ne 0 ]; then
-        # Static IP fallback
+        for ALT_IF in $(ls /sys/class/net/ 2>/dev/null | grep -v ^lo); do
+            [ "$ALT_IF" = "$NET_IF" ] && continue
+            [ -d "/sys/class/net/$ALT_IF/wireless" ] && continue
+            echo "  Trying alternative: $ALT_IF"
+            ip link set dev "$ALT_IF" up 2>/dev/null
+            sleep 2
+            udhcpc -n -i "$ALT_IF" -t 3
+            if [ $? -eq 0 ]; then
+                NET_IF="$ALT_IF"
+                DHCP_RC=0
+                echo "  DHCP succeeded on $ALT_IF"
+                break
+            fi
+        done
+    fi
+
+    if [ $DHCP_RC -ne 0 ]; then
         SRV=$(cat /proc/cmdline | tr ' ' '\n' | grep '^server=' | cut -d= -f2)
         if [ -n "$SRV" ]; then
-            echo "  DHCP failed, using static IP fallback"
+            echo "  DHCP failed on all interfaces, using static IP fallback"
             ip addr add 10.0.150.254/16 dev "$NET_IF" 2>/dev/null
             ip route add default via 10.0.0.1 2>/dev/null
         fi
@@ -792,12 +849,11 @@ if [ -z "$CUR_IP" ]; then
 fi
 echo "  $NET_IF IP: $CUR_IP"
 
-# Step 3: Parse environment from cmdline + dhcp.log (like do_env)
+# Step 3: Parse environment from cmdline + dhcp.log
 SRV=$(cat /proc/cmdline | tr ' ' '\n' | grep '^server=' | cut -d= -f2)
 GRP=$(cat /proc/cmdline | tr ' ' '\n' | grep '^group=' | cut -d= -f2)
 HGRP=$(cat /proc/cmdline | tr ' ' '\n' | grep '^hostgroup=' | cut -d= -f2)
 
-# Get SERVERID from DHCP if available
 if [ -s /tmp/dhcp.log ]; then
     DHCP_SID=$(grep '^serverid=' /tmp/dhcp.log | tail -1 | cut -d"'" -f2)
     DHCP_HOST=$(grep '^hostname=' /tmp/dhcp.log | tail -1 | cut -d"'" -f2)
@@ -805,26 +861,21 @@ if [ -s /tmp/dhcp.log ]; then
     DHCP_NIS=$(grep '^nisdomain=' /tmp/dhcp.log | tail -1 | cut -d"'" -f2)
 fi
 
-# Set LINBOSERVER: cmdline server= takes priority, fallback to DHCP serverid
 [ -n "$SRV" ] && export LINBOSERVER="$SRV" || export LINBOSERVER="$DHCP_SID"
 export SERVERID="${DHCP_SID:-$SRV}"
 
-# Set HOSTGROUP: cmdline hostgroup= or group=, fallback to DHCP nisdomain
 [ -n "$HGRP" ] && export HOSTGROUP="$HGRP"
 [ -z "$HOSTGROUP" ] && [ -n "$GRP" ] && export HOSTGROUP="$GRP"
 [ -z "$HOSTGROUP" ] && [ -n "$DHCP_NIS" ] && export HOSTGROUP="$DHCP_NIS"
 
-# Set HOSTNAME
 [ -n "$DHCP_HOST" ] && export HOSTNAME="$DHCP_HOST"
 [ -z "$HOSTNAME" ] && export HOSTNAME="linbo"
 echo "$HOSTNAME" > /etc/hostname
 hostname "$HOSTNAME" 2>/dev/null
 
-# Set IP and MAC
 export IP="$CUR_IP"
 export MACADDR=$(ip link show dev "$NET_IF" 2>/dev/null | grep 'link/ether' | awk '{print $2}')
 
-# Write everything to /.env
 {
     echo "export LINBOSERVER='$LINBOSERVER'"
     echo "export SERVERID='$SERVERID'"
@@ -844,23 +895,56 @@ if [ -n "$LINBOSERVER" ] && [ -n "$HOSTGROUP" ]; then
     rsync -L "$LINBOSERVER::linbo/start.conf.$HOSTGROUP" "/start.conf" 2>&1
     if [ -s /start.conf ]; then
         echo "  start.conf downloaded OK ($(wc -c < /start.conf) bytes)"
-        # Split start.conf into sections (if function available)
         type linbo_split_startconf >/dev/null 2>&1 && linbo_split_startconf
     else
         echo "  WARNING: start.conf download failed or empty"
     fi
 fi
 
-# Step 5: Mount devpts for PTY support (interactive SSH)
+fi # end NET_IF check
+fi # end NEED_PRIMARY
+
+# Step 5: Mount devpts for PTY support (always)
 if [ ! -d /dev/pts ] || ! mountpoint -q /dev/pts 2>/dev/null; then
     mkdir -p /dev/pts
     mount -t devpts devpts /dev/pts 2>/dev/null
 fi
 
-# Step 6: Start dropbear SSH if not running
+# Step 6: Start dropbear SSH if not running (always)
 if ! pidof dropbear >/dev/null 2>&1; then
     echo "  Starting SSH (dropbear)..."
-    /sbin/dropbear -r /etc/dropbear/dropbear_dss_host_key -r /etc/dropbear/dropbear_rsa_host_key -s -g -p 2222 2>/dev/null
+    # Build key arguments dynamically — use whatever host keys exist
+    _db_args=""
+    for _kf in /etc/dropbear/dropbear_*_host_key; do
+        [ -s "$_kf" ] && _db_args="$_db_args -r $_kf"
+    done
+    [ -n "$_db_args" ] && /sbin/dropbear $_db_args -s -g -p 2222 2>/dev/null
+fi
+
+# Step 7: Always bring up WiFi if wpa_supplicant.conf exists
+# Runs in BACKGROUND — iwlwifi firmware loading takes 15-30+ seconds
+# and we must not block the boot process.
+if [ -s /etc/wpa_supplicant.conf ]; then
+    echo "  WiFi: starting background setup..."
+    (
+        _wifi_wait=0
+        while [ $_wifi_wait -lt 60 ]; do
+            for _wif in $(ls /sys/class/net/ 2>/dev/null | grep -v ^lo); do
+                if [ -d "/sys/class/net/$_wif/wireless" ]; then
+                    ip link set dev "$_wif" up 2>/dev/null
+                    sleep 1
+                    wpa_supplicant -B -c /etc/wpa_supplicant.conf -i "$_wif" 2>/dev/null
+                    sleep 5
+                    udhcpc -n -i "$_wif" -t 5 2>/dev/null
+                    echo "WiFi: $_wif ready ($(ip addr show dev "$_wif" 2>/dev/null | grep 'inet ' | awk '{print $2}'))" > /tmp/wifi.log
+                    exit 0
+                fi
+            done
+            _wifi_wait=$((_wifi_wait + 3))
+            sleep 3
+        done
+        echo "WiFi: no wireless interface found after 60s" > /tmp/wifi.log
+    ) &
 fi
 
 echo "=== DOCKER_NET_RECOVERY done ==="
@@ -898,6 +982,40 @@ RECOVERY_SCRIPT
             "DOCKER_NET_DIAG" \
             "_apply_net_diag"
     fi
+fi
+
+# -------------------------------------------------------------------------
+# Patch 9: Fix linbo_link_blkdev to create both disk0pN AND disk0N symlinks
+# The linbo_gui binary normalizes device names from disk0pN to disk0N,
+# but linbo_link_blkdev only creates disk0pN symlinks.
+# This mismatch causes partition format/mount failures on NVMe devices.
+# -------------------------------------------------------------------------
+_apply_blkdev_compat_primary() {
+    # After the line that creates disk0pN symlink, add disk0N symlink
+    sed -i '/part_link="${disk_link}p${part_nr}"/a\
+            # DOCKER_BLKDEV_COMPAT: also create symlink without p separator\
+            alt_link="${disk_link}${part_nr}"\
+            if [ ! -e "$alt_link" ]; then\
+                echo "$part -> $alt_link"\
+                ln -sf "$part" "$alt_link"\
+            fi' "$WORKDIR/usr/bin/linbo_link_blkdev"
+}
+_apply_blkdev_compat_fallback() {
+    # Fallback: rewrite the entire partition linking section
+    sed -i '/ln -sf "$part" "$part_link"/a\
+            # DOCKER_BLKDEV_COMPAT: also create symlink without p separator\
+            alt_link="${disk_link}${part_nr}"\
+            if [ ! -e "$alt_link" ]; then\
+                echo "$part -> $alt_link"\
+                ln -sf "$part" "$alt_link"\
+            fi' "$WORKDIR/usr/bin/linbo_link_blkdev"
+}
+if [ -f "$WORKDIR/usr/bin/linbo_link_blkdev" ]; then
+    try_patch "BLKDEV_COMPAT" "CRITICAL" "$WORKDIR/usr/bin/linbo_link_blkdev" \
+        "DOCKER_BLKDEV_COMPAT" \
+        "_apply_blkdev_compat_primary" "_apply_blkdev_compat_fallback"
+else
+    echo "  SKIP: linbo_link_blkdev not found in initramfs"
 fi
 
 # =============================================================================
@@ -1125,6 +1243,13 @@ for _m in DOCKER_UDEV_INPUT; do
     if echo "$_linbo_txt" | grep -q "$_m"; then echo "  OK: $_m"
     else echo "  FAIL: $_m [CRITICAL]"; _vfail=true; fi
 done
+
+# Check linbo_link_blkdev patch
+_blkdev_txt="$(xzcat "$LINBOFS.new" | cpio -i --to-stdout usr/bin/linbo_link_blkdev 2>/dev/null || true)"
+if [ -n "$_blkdev_txt" ]; then
+    if echo "$_blkdev_txt" | grep -q "DOCKER_BLKDEV_COMPAT"; then echo "  OK: DOCKER_BLKDEV_COMPAT"
+    else echo "  FAIL: DOCKER_BLKDEV_COMPAT [CRITICAL]"; _vfail=true; fi
+fi
 
 # Semantic check: SERVERID guard — no unguarded LINBOSERVER=SERVERID lines
 if echo "$_init_txt" | grep -qE '^[[:space:]]*LINBOSERVER=.*SERVERID' && \
