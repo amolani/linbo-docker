@@ -14,7 +14,7 @@ in der Docker-Umgebung. Ziel: Beim naechsten Problem nicht von vorne anfangen.
 3. [DHCP & Netzwerk](./03-dhcp-netzwerk.md) — Proxy-DHCP, Produktions-DHCP, udhcpc
 4. [Kernel & Module](./04-kernel-module.md) — Host-Kernel, Modul-Mismatch, Boot-Dauer
 5. [GRUB Konfiguration](./05-grub-config.md) — Gruppenaufloesung, MAC-Fallback, hostcfg
-6. [init.sh Analyse](./06-init-sh.md) — SERVERID-Guard, do_env(), network(), hwsetup()
+6. [init.sh Analyse](./06-init-sh.md) — do_env(), network(), hwsetup()
 7. [Haeufige Fehlerbilder](./07-fehlerbilder.md) — "Remote Control Mode" und Co.
 8. [Dreischicht-Kernelschutz](./08-kernel-schutz.md) — Update-sichere Architektur
 9. [Kernel-Version-Bug](./09-kernel-version-bug.md) — 6.8.0-64 virtio-net Bug (2 Tage Debug)
@@ -36,8 +36,7 @@ Wenn ein Client die GUI anzeigt aber Maus/Tastatur nicht reagieren:
                    → GUI-Prozess killen (BusyBox respawnt ihn)
 ```
 
-Permanent: Patch 7 (DOCKER_UDEV_INPUT) in update-linbofs.sh
-Siehe [10-standard-funktionen.md](./10-standard-funktionen.md) Abschnitt 10.2
+Seit Session 30 werden keine Docker-Boot-Patches mehr angewendet. Vanilla LINBO bootet korrekt ohne Modifikationen.
 
 ---
 

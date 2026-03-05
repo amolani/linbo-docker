@@ -100,8 +100,8 @@ docs/export/
 # LINBO kernel binary (provisioned at runtime, not in repo)
 linbo64
 
-# Agent templates (not part of the project)
-agents/
+# Agent templates (tracked under docs/agents/)
+!docs/agents/
 config/linbo_client_key
 config/dropbear_dss_host_key
 config/dropbear_rsa_host_key

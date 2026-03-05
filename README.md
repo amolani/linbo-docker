@@ -235,7 +235,7 @@ make test            # Tests ausführen
 | Buttons nicht klickbar | udevd tot → linbofs64 neu bauen |
 | SSH refused | Port 22 vs 2222 prüfen |
 | Keys fehlen nach Clone | Werden automatisch generiert (SSH-Container) |
-| TFTP liefert ungepatches linbofs64 | TFTP wartet auf `.linbofs-patch-status` Marker |
+| TFTP liefert unfertiges linbofs64 | TFTP wartet auf `.linbofs-patch-status` Marker (Build-Indikator) |
 | 500 im Sync-Modus | Route-Mounting in routes/index.js prüfen |
 | EACCES | `chown -R 1001:1001` auf Docker Volume |
 | .env-Änderungen nicht aktiv | `docker compose up -d` statt `restart` |

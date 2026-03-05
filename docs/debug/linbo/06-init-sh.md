@@ -69,55 +69,7 @@ grep -n "^hwsetup()" /tmp/init.sh
 
 ---
 
-## 3. SERVERID-Guard (Kritisch fuer Docker-Standalone)
-
-### Problem
-
-Im Original-init.sh ueberschreibt diese Zeile LINBOSERVER:
-```bash
-export LINBOSERVER="${SERVERID}"
-```
-
-`SERVERID` kommt aus dem DHCP-Feld `server-identifier` und zeigt auf den
-DHCP-Server (10.0.0.11 = Produktionsserver). In Standard-linuxmuster ist
-DHCP-Server = LINBO-Server, daher kein Problem. In Docker-Standalone sind
-es verschiedene Server!
-
-### Patch (wird von update-linbofs.sh Step 10.4 automatisch angewendet)
-
-```bash
-# Vorher:
-export LINBOSERVER="${SERVERID}"
-
-# Nachher:
-grep -q "server=" /proc/cmdline || export LINBOSERVER="${SERVERID}"
-```
-
-**Logik:**
-- `server=` auf Cmdline (Docker-Standalone) → SERVERID-Override wird UEBERSPRUNGEN
-- Kein `server=` auf Cmdline (Standard-linuxmuster) → SERVERID-Override wie bisher
-
-### Pruefen ob Guard aktiv
-
-```bash
-docker exec linbo-api sh -c \
-  "xz -dc /srv/linbo/linbofs64 | cpio -i --to-stdout init.sh 2>/dev/null | grep -n SERVERID"
-
-# MUSS zeigen (2 Zeilen mit "grep -q"):
-#   128:    grep -q "server=" /proc/cmdline || export LINBOSERVER="${SERVERID}"
-# oder aehnlich. OHNE "grep -q" = NICHT gepatcht!
-```
-
-### Symptome bei fehlendem Guard
-
-1. LINBOSERVER wird auf 10.0.0.11 (Produktionsserver) gesetzt
-2. rsync versucht start.conf von 10.0.0.11 zu holen
-3. Schlaegt fehl oder holt falsche Config
-4. → Keine GUI, "Remote Control Mode"
-
----
-
-## 4. do_env() — Umgebungsvariablen parsen
+## 3. do_env() — Umgebungsvariablen parsen
 
 `do_env()` ist die zentrale Funktion die LINBOSERVER, HOSTGROUP und HOSTNAME setzt.
 
@@ -144,8 +96,8 @@ docker exec linbo-api sh -c \
 
 | Variable | Quelle | Prioritaet |
 |----------|--------|------------|
-| LINBOSERVER | server= (cmdline) | Hoechste (wenn Guard aktiv) |
-| LINBOSERVER | SERVERID (DHCP) | Fallback (wenn kein server= auf cmdline) |
+| LINBOSERVER | server= (cmdline) | Hoechste |
+| LINBOSERVER | SERVERID (DHCP) | Fallback |
 | HOSTGROUP | nisdomain (DHCP) | Aus ISC DHCP `option nis-domain` |
 | HOSTGROUP | hostgroup= (cmdline) | Fallback |
 | HOSTNAME | hostname (DHCP) | Aus ISC DHCP `option host-name` |
@@ -153,7 +105,7 @@ docker exec linbo-api sh -c \
 
 ---
 
-## 5. network() — Netzwerk-Konfiguration
+## 4. network() — Netzwerk-Konfiguration
 
 ### Ablauf
 
@@ -193,7 +145,7 @@ docker exec linbo-web ls -la /srv/linbo/start.conf.*
 
 ---
 
-## 6. hwsetup() — Hardware-Erkennung
+## 5. hwsetup() — Hardware-Erkennung
 
 ```bash
 hwsetup() {
@@ -223,7 +175,7 @@ docker exec linbo-rsync sed -i 's/quiet splash/loglevel=7/g' \
 
 ---
 
-## 7. Weitere wichtige Dateien im Initrd
+## 6. Weitere wichtige Dateien im Initrd
 
 ### /etc/inittab
 
@@ -267,7 +219,7 @@ GUI-Binary kommt aus `linbo_gui64_7.tar.lz` (via rsync heruntergeladen).
 
 ---
 
-## 8. init.sh Debugging-Workflow
+## 7. init.sh Debugging-Workflow
 
 ### Schritt 1: Wo haengt es?
 

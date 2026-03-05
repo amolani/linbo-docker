@@ -893,7 +893,7 @@ DC Worker laeuft auf 10.0.0.11 und verbindet sich zu Redis/API auf 10.0.0.13.
    - Init lädt Boot-Dateien automatisch herunter
    - SSH-Container generiert alle SSH/Dropbear-Keys automatisch
    - API baut linbofs64 mit SSH-Keys + Kernel-Modulen
-   - TFTP wartet auf gepatchte linbofs64 bevor es startet
+   - TFTP wartet auf gebaute linbofs64 bevor es startet
 5. **Port-Konflikte prüfen:** Besonders TFTP (69/udp)
 6. **Fertig!** — Kein manuelles Key-Kopieren oder Setup nötig
 

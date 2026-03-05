@@ -1,6 +1,6 @@
 # Unterschiede zwischen LINBO Docker und Vanilla-LINBO (linuxmuster-linbo7)
 
-Dieses Dokument beschreibt alle Abweichungen, Erweiterungen und Patches, die LINBO Docker gegenueber dem Original-LINBO-Paket (`linuxmuster-linbo7`) einfuehrt. Es richtet sich an Administratoren, Entwickler und alle, die verstehen wollen, was LINBO Docker anders macht — und warum.
+Dieses Dokument beschreibt alle Abweichungen und Erweiterungen, die LINBO Docker gegenueber dem Original-LINBO-Paket (`linuxmuster-linbo7`) einfuehrt. Es richtet sich an Administratoren, Entwickler und alle, die verstehen wollen, was LINBO Docker anders macht — und warum.
 
 > **Lesehinweis:** "Vanilla-LINBO" meint das unmodifizierte `linuxmuster-linbo7`-Paket, wie es im Rahmen von linuxmuster.net 7.x installiert wird. "LINBO Docker" meint die standalone Docker-Loesung in diesem Repository.
 
@@ -40,7 +40,7 @@ Dieses Dokument beschreibt alle Abweichungen, Erweiterungen und Patches, die LIN
 | React Frontend | PHP webui7 | 16 Seiten, Dark Theme, WebSocket-Live-Updates | Neues Feature |
 | Sync-Modus (Authority API) | Nicht vorhanden | Read-Only Delta-Feed von LMN Authority | Neues Feature |
 | Auto-Key-Provisioning | Manuelle Installation | Automatische Generierung beim Container-Start | Infrastruktur |
-| TFTP Race Condition Fix | N/A | Marker-basiertes Warten auf gepatchtes linbofs64 | Infrastruktur |
+| TFTP Race Condition Fix | N/A | Marker-basiertes Warten auf gebautes linbofs64 | Infrastruktur |
 | Keine Boot-Patches noetig | N/A | Vanilla LINBO bootet korrekt mit Host-Kernel | Verifiziert 2026-03-05 |
 
 ---
@@ -533,7 +533,7 @@ if [ -f "$MARKER" ]; then
     exec "$@"
 fi
 
-# Frischer Deploy: warten bis API linbofs64 gepatcht hat
+# Frischer Deploy: warten bis API linbofs64 gebaut hat
 while [ ! -f "$MARKER" ] && [ $elapsed -lt $TIMEOUT ]; do
     sleep 2
     elapsed=$((elapsed + 2))
@@ -556,7 +556,7 @@ Nicht anwendbar. In Vanilla-LINBO gibt es keine Container. Der TFTP-Server (atft
 ### Vanilla LINBO funktioniert ohne Patches
 
 **Verifiziert am 2026-03-05** auf realer Hardware (Intel Core Ultra 5 125U, NVMe SSD, Intel NIC):
-Vanilla LINBO (ohne jegliche Docker-Patches) bootet korrekt mit dem Host-Kernel. Alle Funktionen funktionieren:
+Vanilla LINBO bootet korrekt mit dem Host-Kernel. Alle Funktionen funktionieren:
 - Netzwerk (DHCP, rsync, start.conf-Download)
 - GUI (Buttons klickbar, Maus/Tastatur)
 - SSH (PTY-Allokation, devpts)

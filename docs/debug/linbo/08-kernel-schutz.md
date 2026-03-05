@@ -27,7 +27,6 @@ verhindert werden.**
 │                                                                    │
 │ USE_HOST_KERNEL=true → Host-Module statt Package-Module           │
 │ SKIP_KERNEL_COPY=true → linbo64 wird NICHT ueberschrieben        │
-│ + SERVERID-Guard wird in init.sh gepatcht                         │
 │                                                                    │
 │ Wann: Manueller Rebuild, API-Aufruf                               │
 ├────────────────────────────────────────────────────────────────────┤
@@ -142,14 +141,6 @@ Step 15: Normalerweise kopiert update-linbofs.sh den Kernel aus dem
 Package nach `/srv/linbo/linbo64`. Mit SKIP_KERNEL_COPY wird das uebersprungen,
 sodass der Host-Kernel erhalten bleibt.
 
-### SERVERID-Guard (Step 10.4)
-
-Automatisch bei jedem Rebuild:
-```bash
-sed -i '/LINBOSERVER.*SERVERID/{/grep -q/!s#^\([[:space:]]*\)#\1grep -q "server=" /proc/cmdline || #}' \
-    init.sh
-```
-
 ### Aufruf-Beispiel
 
 ```bash
@@ -249,12 +240,7 @@ echo "=== Schicht 2: Module ==="
 docker exec linbo-api sh -c \
   "xz -dc /srv/linbo/linbofs64 | cpio -t 2>/dev/null | grep 'lib/modules/' | head -1"
 
-# 4. Schicht 2: SERVERID-Guard aktiv?
-echo "=== Schicht 2: SERVERID-Guard ==="
-docker exec linbo-api sh -c \
-  "xz -dc /srv/linbo/linbofs64 | cpio -i --to-stdout init.sh 2>/dev/null | grep SERVERID"
-
-# 5. Schicht 3: Bind-Mounts vorhanden?
+# 4. Schicht 3: Bind-Mounts vorhanden?
 echo "=== Schicht 3: Bind-Mounts ==="
 docker exec linbo-api ls -la /boot/vmlinuz-$(uname -r) 2>/dev/null && echo "OK" || echo "FEHLT!"
 docker exec linbo-api ls -d /lib/modules/$(uname -r) 2>/dev/null && echo "OK" || echo "FEHLT!"

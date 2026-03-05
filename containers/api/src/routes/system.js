@@ -195,7 +195,7 @@ router.get(
 
 /**
  * GET /system/patch-status
- * Get Docker patch application status from last linbofs64 build
+ * Get linbofs64 build completion status
  */
 router.get(
   '/patch-status',

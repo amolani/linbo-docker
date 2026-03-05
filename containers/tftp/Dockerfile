@@ -26,6 +26,6 @@ RUN chmod +x /entrypoint.sh
 # TFTP uses UDP port 69
 EXPOSE 69/udp
 
-# Wait for patched linbofs64 before starting TFTP
+# Wait for built linbofs64 before starting TFTP
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["in.tftpd", "-L", "-u", "tftp", "-a", "0.0.0.0:69", "-s", "/srv/linbo", "--blocksize", "1468", "--verbosity", "3"]

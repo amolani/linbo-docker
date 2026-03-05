@@ -108,62 +108,22 @@ udevadm info --query=property --name=/dev/input/event3
 # ID_INPUT_TABLET=1   (QEMU USB Tablet für VNC/SPICE)
 ```
 
-### Fix — Patch 7 (DOCKER_UDEV_INPUT)
+### Hinweis
 
-In `scripts/server/update-linbofs.sh` wird vor dem `linbo_gui`-Start in `linbo.sh` eingefügt:
+Seit Session 30 werden keine Docker-Boot-Patches mehr angewendet. Vanilla LINBO bootet korrekt ohne Modifikationen.
 
+### Manueller Fix (falls udevd dennoch fehlt)
 ```bash
-# --- DOCKER_UDEV_INPUT: ensure udev database exists for libinput ---
-if ! pidof udevd >/dev/null 2>&1; then
-  mkdir -p /run/udev
-  udevd --daemon 2>/dev/null
-  udevadm trigger --type=all --action=add 2>/dev/null
-  udevadm settle --timeout=5 2>/dev/null
-fi
-```
-
-**Wichtig:** Die Reihenfolge ist kritisch:
-1. `mkdir -p /run/udev` — Verzeichnis muss existieren
-2. `udevd --daemon` — Daemon starten (systemd-udevd 255.4)
-3. `udevadm trigger` — Alle Geräte neu erkennen lassen
-4. `udevadm settle` — Warten bis alle Events verarbeitet sind
-
-### Verifikation
-```bash
-# Nach linbofs64-Rebuild + Client-Reboot:
-# 1. Buttons klickbar? → JA
-# 2. SSH-Check auf Client:
-pidof udevd        # Muss PID zurückgeben
-ls /run/udev/data/ # Muss Dateien enthalten (z.B. c13:65, c13:66)
-lsmod | grep evdev # evdev muss geladen sein
+# Auf dem Client (via SSH):
+udevd --daemon
+udevadm trigger --type=all --action=add
+udevadm settle
+# Danach GUI-Prozess killen (BusyBox respawnt ihn)
 ```
 
 ---
 
-## 10.3 STORAGE_MODULES — Timing-Verständnis
-
-### Erwartung vs. Realität
-
-**Patch 6 (DOCKER_STORAGE_MODULES)** fügt `modprobe` am Anfang von `init.sh` ein:
-```bash
-for _mod in ahci sd_mod sr_mod nvme ata_piix ata_generic virtio_blk virtio_scsi \
-            evdev hid hid_generic usbhid virtio_input psmouse xhci_hcd ehci_hcd uhci_hcd; do
-    modprobe "$_mod" 2>/dev/null
-done
-```
-
-**Erwartung:** Module werden bei Sekunde 0 geladen.
-**Realität:** `hid` erscheint bei [11.2s], `usbhid` bei [323s] in dmesg.
-
-### Erklärung
-Die Module werden zwar per `modprobe` geladen, aber die **Geräte-Registrierung** durch den Kernel dauert länger. Besonders USB-Controller (xhci/ehci) müssen erst initialisiert werden, bevor HID-Geräte erkannt werden.
-
-### Lektion
-**STORAGE_MODULES allein löst das Input-Problem NICHT.** Module laden ≠ Geräte erkannt. Die eigentliche Lösung ist **Patch 7 (DOCKER_UDEV_INPUT)**, das sicherstellt, dass udevd läuft und die Datenbank gefüllt ist, BEVOR die GUI startet.
-
----
-
-## 10.4 Deploy-Workflow (Code → Test-Server)
+## 10.3 Deploy-Workflow (Code → Test-Server)
 
 ### Setup
 - **Code-Entwicklung:** 10.0.0.1 (oder lokale Maschine)
@@ -209,7 +169,7 @@ ssh root@10.0.0.13 "COMPOSE_FILE=/root/linbo-docker/docker-compose.yml \
 
 ---
 
-## 10.5 PTY Allocation Failure (SSH ohne Kommando)
+## 10.4 PTY Allocation Failure (SSH ohne Kommando)
 
 ### Symptom
 ```bash
@@ -235,37 +195,7 @@ linbo-ssh 10.0.150.2 echo connected
 
 ---
 
-## 10.6 Vollständige Liste aller Docker-Patches in update-linbofs.sh
-
-Stand: 2026-03-02 (Session 20)
-
-| # | Name | Ziel-Datei | Funktion |
-|---|------|-----------|----------|
-| 1 | SERVERID Guard | init.sh | Schützt cmdline `server=` vor DHCP-Override |
-| 2 | DOCKER_DHCP_FALLBACK | init.sh + docker_net_fallback.sh | Statische IP wenn DHCP fehlschlägt |
-| 3 | DOCKER_NET_DIAG v2 | linbo.sh | Netzwerk-Diagnose im "Remote Control Mode" |
-| 4 | DOCKER_IFACE_WAIT | init.sh | Wartet bis NICs nach udev erscheinen |
-| 5 | DOCKER_NET_RECOVERY | linbo.sh + docker_net_recovery.sh | Netzwerk-Recovery vor GUI-Download |
-| 6 | DOCKER_STORAGE_MODULES | init.sh | Lädt Disk+Input-Module früh |
-| 7 | DOCKER_UDEV_INPUT | linbo.sh | **Startet udevd neu vor GUI (Input-Fix)** |
-
-### Abhängigkeiten
-```
-Boot → Kernel → init.sh
-                  ├── Patch 6: STORAGE_MODULES (Module laden)
-                  ├── Patch 4: IFACE_WAIT (auf NICs warten)
-                  ├── Patch 1: SERVERID Guard (Server-IP schützen)
-                  └── Patch 2: DHCP_FALLBACK (statische IP)
-              → linbo.sh
-                  ├── Patch 5: NET_RECOVERY (Netzwerk reparieren)
-                  ├── Patch 7: UDEV_INPUT (udevd für GUI-Input) ← KRITISCH
-                  ├── Patch 3: NET_DIAG (Diagnose bei Fehler)
-                  └── linbo_gui -platform linuxfb
-```
-
----
-
-## 10.7 Debug-Methodik (für zukünftige Probleme)
+## 10.5 Debug-Methodik (fuer zukuenftige Probleme)
 
 ### Wie wir den udev-Bug gefunden haben:
 
@@ -275,7 +205,7 @@ Boot → Kernel → init.sh
 4. **udev-Properties prüfen:** `udevadm info --query=property --name=/dev/input/event3` → **Keine ID_INPUT** ✗
 5. **Manuell fixen:** `udevd --daemon && udevadm trigger && udevadm settle`
 6. **Verifizieren:** Properties jetzt vorhanden → GUI neu starten → **Buttons funktionieren** ✓
-7. **Permanent fixen:** Patch 7 in update-linbofs.sh
+7. **Permanent fixen:** Seit Session 30 nicht mehr noetig — vanilla LINBO behandelt dies korrekt
 
 ### Nützliche Debug-Befehle auf LINBO-Clients
 
