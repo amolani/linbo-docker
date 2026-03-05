@@ -350,7 +350,9 @@ async function generateConfigGrubConfig(configName, options = {}) {
   // Ensure GRUB directory exists
   await fs.mkdir(GRUB_DIR, { recursive: true });
 
-  const filepath = path.join(GRUB_DIR, `${configName}.cfg`);
+  // "grub" is reserved for the main PXE grub.cfg — use _grub.cfg for the group config
+  const filename = configName === 'grub' ? '_grub.cfg' : `${configName}.cfg`;
+  const filepath = path.join(GRUB_DIR, filename);
   await fs.writeFile(filepath, content, 'utf8');
 
   console.log(`[GrubService] Generated config GRUB: ${filepath}`);
@@ -372,7 +374,9 @@ async function generateHostGrubConfig(hostname, configName, options = {}) {
   await fs.mkdir(HOSTCFG_DIR, { recursive: true });
 
   const filepath = path.join(HOSTCFG_DIR, `${hostname}.cfg`);
-  const target = `../${configName}.cfg`;
+  // "grub" is reserved for the main PXE grub.cfg
+  const cfgFile = configName === 'grub' ? '_grub.cfg' : `${configName}.cfg`;
+  const target = `../${cfgFile}`;
 
   // Remove existing file/symlink if exists
   try {
@@ -615,7 +619,8 @@ async function migrateHostConfigsToSymlinks() {
  * @returns {Promise<boolean>}
  */
 async function deleteConfigGrubConfig(configName) {
-  const filepath = path.join(GRUB_DIR, `${configName}.cfg`);
+  const filename = configName === 'grub' ? '_grub.cfg' : `${configName}.cfg`;
+  const filepath = path.join(GRUB_DIR, filename);
   try {
     await fs.unlink(filepath);
     console.log(`[GrubService] Deleted config GRUB: ${filepath}`);

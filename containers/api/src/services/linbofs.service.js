@@ -330,24 +330,17 @@ async function initializeKeys() {
 }
 
 /**
- * Read patch status manifest written by update-linbofs.sh
- * @returns {Promise<{available: boolean, buildDate: string|null, patches: Array, healthy: boolean}>}
+ * Read build status marker written by update-linbofs.sh
+ * @returns {Promise<{available: boolean, buildDate: string|null, healthy: boolean}>}
  */
 async function getPatchStatus() {
   const statusFile = path.join(LINBO_DIR, '.linbofs-patch-status');
   try {
     const content = await fs.readFile(statusFile, 'utf8');
-    const lines = content.split('\n').filter(l => l.trim() && !l.startsWith('#'));
-    const dateMatch = content.match(/Patch Status — (.+)/);
-    const patches = lines.map(l => {
-      const [name, level, status] = l.split('|');
-      return { name: name?.trim(), level: level?.trim(), status: status?.trim() };
-    }).filter(p => p.name && p.level && p.status);
-    const criticalPatches = patches.filter(p => p.level === 'CRITICAL');
-    const healthy = criticalPatches.length > 0 && criticalPatches.every(p => p.status === 'OK');
-    return { available: true, buildDate: dateMatch?.[1]?.trim() || null, patches, healthy };
+    const dateMatch = content.match(/Build Status — (.+)/);
+    return { available: true, buildDate: dateMatch?.[1]?.trim() || null, healthy: true };
   } catch {
-    return { available: false, buildDate: null, patches: [], healthy: false };
+    return { available: false, buildDate: null, healthy: false };
   }
 }
 

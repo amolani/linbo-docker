@@ -21,18 +21,8 @@ Dieses Dokument beschreibt alle Abweichungen, Erweiterungen und Patches, die LIN
 3. [Infrastruktur-Verbesserungen](#3-infrastruktur-verbesserungen)
    - [3.1 Auto-Key-Provisioning](#31-auto-key-provisioning)
    - [3.2 TFTP Race Condition Fix](#32-tftp-race-condition-fix)
-4. [Die 9 Boot-Patches (linbofs64)](#4-die-9-boot-patches-linbofs64)
-   - [4.1 Warum Patches noetig sind](#41-warum-patches-noetig-sind)
-   - [4.2 Patch-Uebersicht](#42-patch-uebersicht)
-   - [4.3 Patch 1 — SERVERID_GUARD](#43-patch-1--serverid_guard)
-   - [4.4 Patch 2 — DHCP_FALLBACK](#44-patch-2--dhcp_fallback)
-   - [4.5 Patch 3 — NET_DIAG](#45-patch-3--net_diag)
-   - [4.6 Patch 4 — IFACE_WAIT](#46-patch-4--iface_wait)
-   - [4.7 Patch 5 — NET_RECOVERY](#47-patch-5--net_recovery)
-   - [4.8 Patch 6 — STORAGE_MODULES](#48-patch-6--storage_modules)
-   - [4.9 Patch 7 — UDEV_INPUT](#49-patch-7--udev_input)
-   - [4.10 Patch 8 — DEVPTS_MOUNT](#410-patch-8--devpts_mount)
-   - [4.11 Patch 9 — BLKDEV_COMPAT](#411-patch-9--blkdev_compat)
+4. [Boot-Kompatibilitaet](#4-boot-kompatibilitaet)
+5. [Zusammenfassung](#5-zusammenfassung)
 5. [Modifizierte Vanilla-Dateien](#5-modifizierte-vanilla-dateien)
 6. [Zusammenfassung](#6-zusammenfassung)
 
@@ -51,7 +41,7 @@ Dieses Dokument beschreibt alle Abweichungen, Erweiterungen und Patches, die LIN
 | Sync-Modus (Authority API) | Nicht vorhanden | Read-Only Delta-Feed von LMN Authority | Neues Feature |
 | Auto-Key-Provisioning | Manuelle Installation | Automatische Generierung beim Container-Start | Infrastruktur |
 | TFTP Race Condition Fix | N/A | Marker-basiertes Warten auf gepatchtes linbofs64 | Infrastruktur |
-| 9 Docker-Patches in linbofs64 | N/A (nicht noetig) | Kritisch fuer Betrieb in Docker/KVM-Umgebungen | Boot-Patches |
+| Keine Boot-Patches noetig | N/A | Vanilla LINBO bootet korrekt mit Host-Kernel | Verifiziert 2026-03-05 |
 
 ---
 
@@ -553,353 +543,55 @@ exec "$@"
 
 Zusaetzlich in `docker-compose.yml`: `depends_on: api`
 
-**Warum es noetig war:**
-Problem: Bei einem frischen Deploy starten TFTP und API gleichzeitig. Die API braucht 30-60 Sekunden, um `update-linbofs.sh` auszufuehren und die 9 Docker-Patches zu injizieren. In diesem Zeitfenster serviert TFTP ein **ungepatchtes** linbofs64 an alle PXE-Clients, die gerade booten.
-
-Ein Client, der in diesen 30-60 Sekunden bootet, erhaelt ein linbofs64 ohne:
-- Storage-Module (kein Disk-Zugriff)
-- NIC-Warte-Schleife (kein Netzwerk)
-- SERVERID-Guard (falscher Server)
-- devpts (kein SSH)
+**Warum es noetig ist:**
+Bei einem frischen Deploy muss die API zuerst `update-linbofs.sh` ausfuehren (SSH-Keys und Kernel-Module injizieren). Ohne den Marker serviert TFTP eine linbofs64 ohne SSH-Keys.
 
 **Was Vanilla-LINBO stattdessen macht:**
-Nicht anwendbar. In Vanilla-LINBO gibt es keine Container und damit kein Timing-Problem zwischen TFTP- und Patch-Prozess. Der TFTP-Server (atftpd) wird erst nach der vollstaendigen Paketinstallation gestartet.
-
-**Auswirkung wenn fehlend:**
-Clients, die in den ersten 30-60 Sekunden nach `docker compose up` booten, erhalten ein defektes linbofs64 und bleiben im "Remote Control Mode" haengen — ohne Netzwerk, ohne SSH, ohne GUI.
+Nicht anwendbar. In Vanilla-LINBO gibt es keine Container. Der TFTP-Server (atftpd) wird nach der Paketinstallation gestartet.
 
 ---
 
-## 4. Die 9 Boot-Patches (linbofs64)
-
-### 4.1 Warum Patches noetig sind
-
-Der wichtigste Hintergrund fuer alle 9 Patches ist ein fundamentaler Unterschied in der Boot-Umgebung:
-
-**Vanilla-LINBO geht davon aus, dass:**
-- Hardware-Treiber bereits geladen sind (Built-in oder frueh per udev)
-- Netzwerkkarten sofort nach `udevadm settle` verfuegbar sind
-- DHCP zuverlaessig funktioniert (eigener DHCP-Server auf dem gleichen Host)
-- udevd durchgehend laeuft
-- `/dev/pts` fuer PTY-Allokation existiert
-- Der LINBO-Server per DHCP-Option mitgeteilt wird
-
-**In Docker/KVM-Umgebungen ist das anders:**
-- `virtio_net`, `virtio_blk` und AHCI sind Kernel-Module, nicht Built-in
-- NICs erscheinen verzoegert (manchmal erst 2-10 Sekunden nach udev settle)
-- Der DHCP-Server ist ein externer Dienst (moeglicherweise nicht verfuegbar)
-- udevd kann zwischen init.sh und linbo.sh sterben (`/run/udev/` leer)
-- Das Netzwerk-Setup (`hwsetup()` und `network()`) wird gar nicht ausgefuehrt
-
-**Kritisches Detail — init.sh bricht ab:**
-
-Die Datei `init.sh` im linbofs64 bricht bei **Zeile 605** ab:
-
-```bash
-exec > >(tee /tmp/init.log) 2>&1
-```
-
-Diese Zeile verwendet Process Substitution (`>()`), die in BusyBox ash im `sysinit`-Kontext von `/sbin/init` nicht funktioniert. Das Resultat: **`hwsetup()` und `network()` werden NIEMALS ausgefuehrt.** Die Docker-Patches muessen deren Funktionalitaet ersetzen.
-
-### 4.2 Patch-Uebersicht
-
-| Nr. | Name | Zieldatei | Prioritaet | Zweck |
-|-----|------|-----------|-----------|-------|
-| 1 | SERVERID_GUARD | init.sh | KRITISCH | Guard fuer `server=` Cmdline-Parameter |
-| 2 | DHCP_FALLBACK | init.sh | OPTIONAL | Statische IP als Fallback bei DHCP-Fehler |
-| 3 | NET_DIAG | linbo.sh | OPTIONAL | Netzwerk-Debug-Infos bei GUI-Fehler |
-| 4 | IFACE_WAIT | init.sh | KRITISCH | Warten auf NICs nach udev settle |
-| 5 | NET_RECOVERY | linbo.sh | OPTIONAL | Netzwerk-Setup vor GUI-Download wiederholen |
-| 6 | STORAGE_MODULES | init.sh | KRITISCH | Fruehes Laden von Disk/NIC-Treibern |
-| 7 | UDEV_INPUT | linbo.sh | KRITISCH | udevd-Restart vor GUI-Start |
-| 8 | DEVPTS_MOUNT | init.sh | KRITISCH | /dev/pts fuer PTY-Allokation |
-| 9 | BLKDEV_COMPAT | linbo_link_blkdev | KRITISCH | disk0pN UND disk0N Symlinks |
-
-Alle Patches werden von `update-linbofs.sh` ueber das `try_patch()`-Framework angewendet. Jeder Patch hat eine primaere und eine Fallback-Methode. Kritische Patches brechen den Build ab, wenn sie fehlschlagen. Optionale Patches warnen nur.
-
----
-
-### 4.3 Patch 1 — SERVERID_GUARD
-
-**Problem:**
-In der originalen `init.sh` gibt es die Zeile:
-```bash
-LINBOSERVER="${SERVERID}"
-```
-Diese ueberschreibt die Server-Adresse mit dem Wert aus der DHCP-Antwort (Option `next-server`). In einer linuxmuster.net-Umgebung ist das korrekt, weil LINBO-Server und DHCP-Server identisch sind.
-
-In Docker-Standalone wird der LINBO-Server ueber `server=<ip>` auf der GRUB-Kommandozeile uebergeben. Ohne Guard wuerde `SERVERID` (aus DHCP) die korrekte Adresse ueberschreiben — z.B. mit der Adresse des Schul-DHCP-Servers statt des Docker-Hosts.
-
-**Wie der Patch es loest:**
-```bash
-grep -q "server=" /proc/cmdline || LINBOSERVER="${SERVERID}"
-```
-Die Ueberschreibung findet nur statt, wenn `server=` NICHT auf der Kernel-Kommandozeile steht. Damit bleibt das Verhalten fuer Standard-linuxmuster.net unveraendert.
-
-**Was ohne den Patch passiert:**
-Der Client versucht, sich mit dem falschen Server zu verbinden. start.conf-Download, rsync und alle Remote-Operationen schlagen fehl.
-
-**Warum Vanilla-LINBO dieses Problem nicht hat:**
-In Vanilla-LINBO sind DHCP-Server und LINBO-Server derselbe Host. Die Ueberschreibung ist gewollt und korrekt.
-
----
-
-### 4.4 Patch 2 — DHCP_FALLBACK
-
-**Problem:**
-Wenn `udhcpc` keinen DHCP-Server findet (z.B. in isolierten Testnetzen oder wenn der DHCP-Server noch nicht bereit ist), hat der Client keine IP-Adresse und kann den LINBO-Server nicht erreichen.
-
-**Wie der Patch es loest:**
-Ein Helper-Script (`docker_net_fallback.sh`) wird in das linbofs64 injiziert und nach der DHCP-Schleife aufgerufen. Es:
-1. Prueft, ob `udhcpc` fehlgeschlagen ist UND `server=` auf der Cmdline steht
-2. Probiert alle Ethernet-Interfaces durch
-3. Weist eine statische Fallback-IP zu (konfigurierbar, Standard: `10.0.150.254/16`)
-4. Setzt die Default-Route
-5. Verifiziert die Erreichbarkeit des Servers per `ping`
-
-**Was ohne den Patch passiert:**
-In Umgebungen ohne DHCP bleibt der Client ohne Netzwerk. Die GUI zeigt "Remote Control Mode" und der Client ist nicht erreichbar.
-
-**Warum Vanilla-LINBO dieses Problem nicht hat:**
-In Vanilla-LINBO laeuft der DHCP-Server auf demselben Host. Der DHCP-Server ist immer verfuegbar, wenn LINBO laeuft.
-
----
-
-### 4.5 Patch 3 — NET_DIAG
-
-**Problem:**
-Wenn die LINBO-GUI nicht geladen werden kann, zeigt Vanilla-LINBO nur die knappe Meldung: "This LINBO client is in remote control mode." — ohne jegliche Diagnoseinformation. Der Administrator muss per SSH auf den Client zugreifen (was moeglicherweise auch nicht funktioniert).
-
-**Wie der Patch es loest:**
-Ersetzt die einzeilige Meldung durch einen ausfuehrlichen Diagnoseblock:
-```
-Kernel: 6.12.64
-LINBOSERVER=10.0.0.13 SERVERID=10.0.0.13
-cmdline: server=10.0.0.13 group=win11 ...
-
-Network interfaces:
-  enp3s0 [ethernet] state=up carrier=1 ip=10.0.0.42/16 mac=aa:bb:cc:dd:ee:ff
-  (oder: "no interfaces found!")
-
-init.sh log (last 20 lines):
-  ...
-```
-
-**Was ohne den Patch passiert:**
-Bei Boot-Problemen sieht der Administrator nur "remote control mode" auf dem Bildschirm und hat keine Informationen, um das Problem einzugrenzen.
-
-**Warum Vanilla-LINBO dieses Problem nicht hat:**
-In Vanilla-LINBO ist der "Remote Control Mode" selten, da die Hardware-Erkennung und das Netzwerk-Setup zuverlaessig funktionieren. Falls er doch auftritt, ist SSH (ueber linuxmuster.net) in der Regel verfuegbar.
-
----
-
-### 4.6 Patch 4 — IFACE_WAIT
-
-**Problem:**
-`udevadm settle` kehrt zurueck, bevor `virtio_net` (oder andere modular geladene NIC-Treiber) das Netzwerk-Interface erstellt hat. Die anschliessende Schleife ueber `/sys/class/net/` findet keine Interfaces und ueberspringt das gesamte Netzwerk-Setup.
-
-**Wie der Patch es loest:**
-Fuegt eine Warte-Schleife VOR der Interface-Iteration ein:
-```bash
-# Warte bis zu 10 Sekunden auf ein Non-Loopback-Interface
-local _iface_wait=0
-while [ $_iface_wait -lt 10 ]; do
-    _found_if=$(ls /sys/class/net/ 2>/dev/null | grep -v ^lo | head -1)
-    [ -n "$_found_if" ] && break
-    _iface_wait=$((_iface_wait + 1))
-    sleep 1
-done
-# Force UP alle Interfaces
-for _fif in $(ls /sys/class/net/ 2>/dev/null | grep -v ^lo); do
-    ip link set dev "$_fif" up 2>/dev/null
-done
-sleep 2
-```
-
-**Was ohne den Patch passiert:**
-Auf KVM/QEMU mit virtio_net und auf mancher physischer Hardware (Intel igc, Realtek r8169) wird das Netzwerk-Interface nicht rechtzeitig erkannt. Der Client hat keine IP-Adresse und erreicht den LINBO-Server nicht.
-
-**Warum Vanilla-LINBO dieses Problem nicht hat:**
-In der typischen Bare-Metal-Umgebung mit dem Host-Kernel sind die NIC-Treiber entweder built-in oder laden schnell genug, dass `udevadm settle` abwartet. In VMs mit emuliertem e1000 (statt virtio) tritt das Problem ebenfalls nicht auf.
-
----
-
-### 4.7 Patch 5 — NET_RECOVERY
-
-**Problem:**
-Selbst wenn die Patches in `init.sh` fehlschlagen (oder init.sh komplett bei Zeile 605 abbricht), muss das Netzwerk bis zum Start von `linbo.sh` funktionieren. Die NET_RECOVERY ist das "Sicherheitsnetz", das alle Netzwerk-Funktionalitaet nachholt.
-
-**Wie der Patch es loest:**
-Ein umfassendes Shell-Script (`docker_net_recovery.sh`) wird in das linbofs64 injiziert und am Anfang von `linbo.sh` per `source` geladen. Es:
-
-1. Erstellt Block-Device-Symlinks (`linbo_link_blkdev`), falls init.sh dies nicht getan hat
-2. Prueft, ob das primaere Netzwerk bereits funktioniert
-3. Laedt NIC-Treiber per `modprobe` (30+ gaengige Treiber)
-4. Sucht alle Ethernet-Interfaces, bevorzugt diese vor WLAN
-5. Wartet auf Link-Negotiation (bis 8 Sekunden)
-6. Fuehrt `udhcpc` durch, probiert alternative Interfaces bei Fehler
-7. Parst die Umgebung (`server=`, `group=`, `hostgroup=` von Cmdline + DHCP)
-8. Setzt alle Umgebungsvariablen (`LINBOSERVER`, `HOSTGROUP`, `HOSTNAME`, `IP`, `MACADDR`)
-9. Laedt `start.conf` per rsync vom Server herunter
-10. Mountet `/dev/pts` und startet dropbear SSH
-11. Startet im Hintergrund WLAN-Setup (falls `wpa_supplicant.conf` existiert)
-
-**Was ohne den Patch passiert:**
-Wenn init.sh bei Zeile 605 abbricht (was in Docker/KVM **immer** der Fall ist), gibt es kein Netzwerk, kein SSH, keine start.conf und keine GUI. Der Client ist ein schwarzer Bildschirm.
-
-**Warum Vanilla-LINBO dieses Problem nicht hat:**
-In Vanilla-LINBO laeuft init.sh vollstaendig durch, weil der BusyBox-Init-Kontext korrekt konfiguriert ist (oder die Umgebung die Process-Substitution unterstuetzt). Die Funktionen `hwsetup()` und `network()` werden normal ausgefuehrt.
-
----
-
-### 4.8 Patch 6 — STORAGE_MODULES
-
-**Problem:**
-Der Host-Kernel hat AHCI, NVMe und virtio_blk als **Module** kompiliert, nicht als Built-in. Ohne explizites Laden dieser Module findet der Kernel keine Festplatten. Das gleiche gilt fuer NIC-Treiber, HID (Eingabegeraete) und USB-Host-Controller.
-
-**Wie der Patch es loest:**
-Fuegt ganz am Anfang von `init.sh` (nach dem Shebang) ein `modprobe`-Block ein:
-```bash
-for _mod in ahci sd_mod sr_mod nvme ata_piix ata_generic \
-            virtio_blk virtio_scsi evdev hid hid_generic usbhid \
-            virtio_input psmouse xhci_hcd ehci_hcd uhci_hcd \
-            e1000 e1000e igb igc ixgbe r8169 r8152 sky2 tg3 \
-            bnxt_en virtio_net vmxnet3 atlantic alx atl1c bcmgenet; do
-    modprobe "$_mod" 2>/dev/null
-done
-```
-
-30+ Treiber werden geladen. `2>/dev/null` unterdrueckt Fehler fuer Module, die im jeweiligen Kernel nicht vorhanden sind.
-
-**Was ohne den Patch passiert:**
-- Keine Festplatten sichtbar (`/dev/sda`, `/dev/nvme0n1` existieren nicht)
-- Keine Netzwerkkarten sichtbar (kein `/sys/class/net/eth0`)
-- Keine Tastatur/Maus-Eingabe in der GUI
-- `linbo_link_blkdev` findet keine Block-Devices
-
-**Warum Vanilla-LINBO dieses Problem nicht hat:**
-In Vanilla-LINBO wird `hwsetup()` in init.sh ausgefuehrt, die alle notwendigen Module laedt. Da init.sh in Docker bei Zeile 605 abbricht, wird `hwsetup()` nie erreicht. Ausserdem haben manche Produktions-Kernel diese Treiber als Built-in.
-
----
-
-### 4.9 Patch 7 — UDEV_INPUT
-
-**Problem:**
-Der udevd-Daemon stirbt zwischen `init.sh` und `linbo.sh` (oder wurde nie gestartet, weil init.sh abbrach). Ohne udevd existiert `/run/udev/` nicht bzw. ist leer. Die Qt-GUI (`linbo_gui`) nutzt `libinput`, das auf die udev-Datenbank angewiesen ist, um Eingabegeraete zu identifizieren. Ohne udev-Datenbank ignoriert libinput alle Maus- und Tastatur-Events — die GUI ist sichtbar, aber nicht bedienbar.
-
-**Wie der Patch es loest:**
-Direkt vor dem Start von `linbo_gui` in `linbo.sh`:
-```bash
-if ! pidof udevd >/dev/null 2>&1; then
-    mkdir -p /run/udev
-    udevd --daemon 2>/dev/null
-    udevadm trigger --type=all --action=add 2>/dev/null
-    udevadm settle --timeout=5 2>/dev/null
-fi
-```
-
-**Was ohne den Patch passiert:**
-Die LINBO-GUI wird angezeigt, aber Maus-Klicks und Tastatur-Eingaben werden ignoriert. Buttons sind nicht klickbar. Der Client ist nur per SSH bedienbar.
-
-**Warum Vanilla-LINBO dieses Problem nicht hat:**
-In Vanilla-LINBO laeuft udevd durchgehend vom init-Prozess. Die Laufzeitumgebung von BusyBox init auf Bare-Metal haelt udevd am Leben.
-
----
-
-### 4.10 Patch 8 — DEVPTS_MOUNT
-
-**Problem:**
-Das devpts-Dateisystem (`/dev/pts`) wird normalerweise von init.sh gemountet — aber da init.sh bei Zeile 605 abbricht, passiert das nicht. Ohne `/dev/pts` kann dropbear (SSH-Daemon) keine Pseudo-Terminals allokieren. Die Folge:
-- `linbo-ssh` zeigt "PTY allocation request failed"
-- Das Web-Terminal faellt auf exec-Modus zurueck (kein Echo, kein Prompt)
-
-**Wie der Patch es loest:**
-Fuegt vor dem dropbear-Start in `init.sh` ein:
-```bash
-if [ ! -d /dev/pts ] || ! mountpoint -q /dev/pts 2>/dev/null; then
-    mkdir -p /dev/pts
-    mount -t devpts devpts /dev/pts 2>/dev/null
-fi
-```
-
-Das gleiche Mount wird auch in `docker_net_recovery.sh` (Patch 5) durchgefuehrt, als doppelte Absicherung.
-
-**Was ohne den Patch passiert:**
-SSH-Verbindungen zum Client funktionieren, aber ohne interaktives Terminal. Befehle muessen einzeln per `ssh host command` ausgefuehrt werden. Das Web-Terminal ist degradiert (kein echtes Terminal-Feeling).
-
-**Warum Vanilla-LINBO dieses Problem nicht hat:**
-In Vanilla-LINBO wird devpts im regulaeren init-Ablauf gemountet, da init.sh vollstaendig durchlaeuft.
-
----
-
-### 4.11 Patch 9 — BLKDEV_COMPAT
-
-**Problem:**
-Das Script `linbo_link_blkdev` erstellt Symlinks fuer Block-Devices im Format `disk0p1`, `disk0p2` etc. (mit `p`-Separator, wie bei NVMe: `/dev/nvme0n1p1`). Die LINBO-GUI (`linbo_gui`) normalisiert Device-Namen intern jedoch zu `disk01`, `disk02` (ohne `p`-Separator). Dadurch findet die GUI die Symlinks nicht und Partitionsoperationen (formatieren, mounten, syncen) schlagen fehl.
-
-**Wie der Patch es loest:**
-Nach dem Erstellen des `disk0pN`-Symlinks wird zusaetzlich ein `disk0N`-Symlink erstellt:
-```bash
-# Original: disk0p1 -> /dev/nvme0n1p1
-# Patch:    disk01  -> /dev/nvme0n1p1 (zusaetzlich)
-alt_link="${disk_link}${part_nr}"
-if [ ! -e "$alt_link" ]; then
-    ln -sf "$part" "$alt_link"
-fi
-```
-
-**Was ohne den Patch passiert:**
-Auf NVMe-Geraeten (und anderen Devices mit `p`-Separator in den Partitionsnamen) schlagen alle Partitionsoperationen der GUI fehl. Images koennen nicht synchronisiert, formatiert oder gestartet werden.
-
-**Warum Vanilla-LINBO dieses Problem nicht hat:**
-In aelteren linuxmuster-linbo7-Versionen wurde dieses Problem nicht bemerkt, weil die meisten Schulen SATA-Festplatten nutzen (dort gibt es keinen `p`-Separator: `/dev/sda1` wird zu `disk01`). Mit zunehmendem NVMe-Einsatz in neueren Geraeten wird dieses Problem auch in Vanilla-LINBO relevant — der Patch koennte als Upstream-Fix eingereicht werden.
-
----
-
-## 5. Modifizierte Vanilla-Dateien
-
-Von den vielen Dateien im linbofs64-Initramfs werden nur **3 Vanilla-Dateien** tatsaechlich modifiziert:
-
-| Datei | Patches | Aenderungsart |
-|-------|---------|---------------|
-| `init.sh` | 5 (SERVERID_GUARD, DHCP_FALLBACK, IFACE_WAIT, STORAGE_MODULES, DEVPTS_MOUNT) | sed-Insertionen an definierten Ankerpunkten |
-| `linbo.sh` | 3 (NET_DIAG, NET_RECOVERY, UDEV_INPUT) | sed-Insertionen und awk-Ersetzung |
-| `usr/bin/linbo_link_blkdev` | 1 (BLKDEV_COMPAT) | sed-Insertion nach Symlink-Erstellung |
-
-**Alles andere ist ADDITIV** — es werden nur neue Dateien hinzugefuegt:
-
-| Neue Datei | Zweck |
-|-----------|-------|
-| `docker_net_fallback.sh` | DHCP-Fallback-Script (Patch 2) |
-| `docker_net_recovery.sh` | Netzwerk-Recovery-Script (Patch 5) |
-
-Die Features Patchclass, Firmware-Detection, Web-Terminal, Frontend, Sync-Modus und alle anderen Docker-exklusiven Funktionen aendern **keinen einzigen Byte** an Vanilla-LINBO-Code. Sie sind rein additive Erweiterungen, die ueber die REST-API, WebSocket-Server und zusaetzliche Container bereitgestellt werden.
-
----
-
-## 6. Zusammenfassung
-
-### Die 9 Patches sind umgebungsbedingt, nicht fehlerbehebend
-
-Keiner der 9 Boot-Patches behebt einen Bug in Vanilla-LINBO. Sie kompensieren Unterschiede zwischen der erwarteten Bare-Metal-Umgebung (vorkonfigurierte Hardware, eigener DHCP-Server, stabiler udevd) und der Docker/KVM-Realitaet (Module statt Built-in, externer DHCP, init.sh-Abbruch bei Zeile 605).
-
-### Minimale Eingriffe in Vanilla-Code
-
-Nur 3 von hunderten Dateien im linbofs64 werden modifiziert. Alle Aenderungen sind per `try_patch()`-Framework nachvollziehbar, haben Fallback-Strategien und werden nach dem Build verifiziert.
+## 4. Boot-Kompatibilitaet
+
+### Vanilla LINBO funktioniert ohne Patches
+
+**Verifiziert am 2026-03-05** auf realer Hardware (Intel Core Ultra 5 125U, NVMe SSD, Intel NIC):
+Vanilla LINBO (ohne jegliche Docker-Patches) bootet korrekt mit dem Host-Kernel. Alle Funktionen funktionieren:
+- Netzwerk (DHCP, rsync, start.conf-Download)
+- GUI (Buttons klickbar, Maus/Tastatur)
+- SSH (PTY-Allokation, devpts)
+- Block-Device-Symlinks (NVMe disk0pN + disk0N)
+- Storage-Module (vom Host-Kernel automatisch geladen)
+
+### Was `update-linbofs.sh` macht
+
+Das Build-Script injiziert nur noch:
+1. **SSH-Keys** (Dropbear Host-Keys, Authorized Keys)
+2. **Passwort-Hash** (Argon2, fuer linbo-Zugang)
+3. **Host-Kernel-Module** (aus `/lib/modules/$(uname -r)`)
+4. **Firmware** (optional, aus `/etc/linuxmuster/linbo/firmware`)
+5. **GUI-Themes** (optional)
+6. **wpa_supplicant.conf** (optional, fuer WLAN)
+
+Keine Vanilla-Dateien (`init.sh`, `linbo.sh`, `linbo_link_blkdev`) werden modifiziert.
 
 ### Host-Kernel ist kein Docker-Spezifikum
 
 Die Nutzung des Host-Kernels statt des Paket-Kernels ist **kein** Docker-spezifischer Hack. Das produktive linuxmuster.net macht exakt das Gleiche — `update-linbofs.sh` kopiert `/boot/vmlinuz` nach `/srv/linbo/linbo64`. LINBO Docker macht dies nur expliziter und schuetzt aktiv gegen versehentliches Ueberschreiben.
 
+---
+
+## 5. Zusammenfassung
+
 ### Docker-exklusive Features sind Mehrwert
 
 Die 7 Docker-exklusiven Features (Patchclass, Firmware-Detection, Kernel Switching, Web Terminal, GRUB Theme UI, React Frontend, Sync-Modus) sind keine Abweichungen, sondern zusaetzliche Funktionalitaet. Sie aendern kein Vanilla-LINBO-Verhalten und koennen potenziell als Upstream-Beitraege in linuxmuster-linbo7 einfliessen.
 
-### Ziel
+### Keine Patches noetig
 
-Langfristig sollen die Docker-Patches minimiert werden (idealerweise durch Upstream-Fixes in init.sh/linbo.sh) und die Docker-exklusiven Features als optionale Module fuer Vanilla-LINBO bereitgestellt werden.
+LINBO Docker modifiziert **keine einzige Vanilla-Datei** im linbofs64-Archiv. Das Build-Script injiziert nur Keys, Module und optionale Konfiguration. Alles andere (REST-API, Frontend, Sync-Modus) laeuft serverseitig in Docker-Containern.
 
 ---
 
-*Letzte Aktualisierung: 2026-03-04*
+*Letzte Aktualisierung: 2026-03-05*
 *LINBO Docker Version: Aktueller Stand auf `main` Branch*

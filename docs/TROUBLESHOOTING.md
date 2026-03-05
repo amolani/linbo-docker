@@ -519,18 +519,8 @@ LINBO-GUI zeigt Buttons an, aber Maus-Klicks werden ignoriert. Cursor bewegt sic
 ### Ursache
 `init.sh` startet udevd in `hwsetup()`, aber udevd stirbt bevor `linbo.sh` die GUI startet. Ohne udevd fehlt die `/run/udev/` Datenbank. Qt/libinput braucht `ID_INPUT=1` Properties um Input-Geräte zu erkennen.
 
-### Lösung
-Patch 7 (DOCKER_UDEV_INPUT) in `scripts/server/update-linbofs.sh` fügt vor dem GUI-Start ein:
-```bash
-if ! pidof udevd >/dev/null 2>&1; then
-  mkdir -p /run/udev
-  udevd --daemon 2>/dev/null
-  udevadm trigger --type=all --action=add 2>/dev/null
-  udevadm settle --timeout=5 2>/dev/null
-fi
-```
-
-Nach Fix: `update-linbofs.sh` ausführen → TFTP restart → Client PXE-Reboot.
+### Status
+**Verifiziert (2026-03-05):** Vanilla LINBO (ohne Patches) funktioniert korrekt — udevd bleibt am Leben und GUI-Buttons sind klickbar. Kein Patch nötig.
 
 ### Debug
 ```bash
@@ -540,88 +530,27 @@ ls /run/udev/data/             # Muss Dateien enthalten
 udevadm info --query=property --name=/dev/input/event3  # Muss ID_INPUT=1 zeigen
 ```
 
-**Detaillierte Analyse:** `docs/debug/linbo/10-standard-funktionen.md`
-
 ---
 
-## 18. PTY Allocation Failed — SSH interaktive Shell (KRITISCH)
+## 18. PTY Allocation Failed — SSH interaktive Shell
 
 ### Problem
 ```bash
 linbo-ssh 10.0.150.2
 # PTY allocation request failed on channel 0
 # shell request failed on channel 0
-
-# Oder im Web-Terminal:
-# Verbindung hergestellt, aber keine Eingabe möglich
 ```
 
 ### Ursache
-LINBO-Clients booten ein minimales Linux (initramfs). Das `/dev/pts` Pseudo-Terminal-Dateisystem ist standardmäßig nicht gemountet. Ohne `/dev/pts` kann Dropbear (SSH-Server) keine PTY-Geräte (`/dev/pts/0`, `/dev/pts/1`, ...) erzeugen → interaktive Shells scheitern.
+LINBO-Clients booten ein minimales Linux (initramfs). Das `/dev/pts` Pseudo-Terminal-Dateisystem ist standardmäßig nicht gemountet.
 
-**Boot-Kette:**
-```
-init.sh → dropbear startet (Zeile ~561) → KEIN /dev/pts → PTY fail
-```
+### Status
+**Verifiziert (2026-03-05):** Vanilla LINBO mountet devpts korrekt — SSH-PTY funktioniert ohne Patches.
 
-### Permanente Lösung: Patch 8 (DOCKER_DEVPTS_MOUNT)
-In `scripts/server/update-linbofs.sh` wurde Patch 8 hinzugefügt, der `init.sh` im linbofs64-Archiv patcht. Der Patch mountet `/dev/pts` **direkt vor dem Dropbear-Start**:
-
+### Sofort-Fix (falls Problem auftritt)
 ```bash
-# Wird automatisch in init.sh eingefügt (vor "# start dropbear"):
-if [ ! -d /dev/pts ] || ! mountpoint -q /dev/pts 2>/dev/null; then
-  mkdir -p /dev/pts
-  mount -t devpts devpts /dev/pts 2>/dev/null
-fi
-```
-
-**Anwenden:**
-```bash
-# 1. linbofs64 neu bauen (auf dem Hauptserver)
-/root/linbo-docker/scripts/server/update-linbofs.sh
-
-# 2. Prüfen ob Patch im Archiv ist
-xz -d < /var/lib/docker/volumes/linbo_srv_data/_data/linbofs64 | \
-  cpio -t 2>/dev/null | grep init.sh && \
-  xz -d < /var/lib/docker/volumes/linbo_srv_data/_data/linbofs64 | \
-  cpio -i --to-stdout init.sh 2>/dev/null | grep -c "DOCKER_DEVPTS_MOUNT"
-# Sollte "1" oder mehr ausgeben
-
-# 3. TFTP-Container neustarten (damit neue linbofs64 ausgeliefert wird)
-docker compose restart tftp
-
-# 4. Client PXE-Reboot → neues linbofs64 wird geladen → /dev/pts automatisch da
-```
-
-### Sofort-Fix (Live-Client ohne Reboot)
-```bash
-# Manuell devpts mounten auf dem laufenden Client:
 linbo-ssh -tt root@10.0.150.2 'mkdir -p /dev/pts && mount -t devpts devpts /dev/pts'
-
-# Danach funktioniert interaktive Shell:
-linbo-ssh root@10.0.150.2     # OK
 ```
-
-### Verifikation
-```bash
-# PTY prüfen:
-linbo-ssh -tt root@10.0.150.2 'tty && exit'
-# Erwartet: /dev/pts/0
-
-# mountpoint prüfen:
-linbo-ssh root@10.0.150.2 'mountpoint /dev/pts'
-# Erwartet: /dev/pts is a mountpoint
-```
-
-### Häufiger Fehler: Patch in falscher Datei
-Der erste Versuch platzierte den devpts-Mount in `docker_net_recovery.sh`. **Das funktioniert nicht**, weil dieses Script bei normalem Boot (Netzwerk OK) übersprungen wird:
-```bash
-# docker_net_recovery.sh hat Early Return:
-if [ -n "$LINBOSERVER" ] && [ -s /start.conf ]; then
-    return 0  # ← Überspringt alles bei normalem Boot!
-fi
-```
-**Richtig:** Patch muss in `init.sh` stehen, direkt vor dem Dropbear-Start.
 
 ---
 
@@ -870,140 +799,34 @@ Keine manuellen Schritte nötig. Nach `git pull && docker compose up -d --build`
 
 ---
 
-## 25. TFTP Race Condition — Ungepatche linbofs64 wird ausgeliefert
+## 25. TFTP Race Condition — linbofs64 noch nicht gebaut
 
 ### Problem
-Bei einem frischen Deployment (`git clone` + `docker compose up`) bootet ein LINBO-Client, aber:
-- Kein Netzwerk nach GRUB-Handoff
-- Kein SSH, kein rsync, keine GUI
-- Client zeigt "Control Mode" oder bleibt hängen
+Bei einem frischen Deployment (`git clone` + `docker compose up`) bootet ein LINBO-Client, aber SSH-Keys fehlen.
 
 ### Ursache
-**Race Condition zwischen TFTP und API:**
+**Race Condition zwischen TFTP und API:** TFTP startet bevor API die linbofs64 mit SSH-Keys gebaut hat.
 
-```
-Zeitlinie:
-  0s  — Init-Container lädt vanilla linbofs64 herunter
-  5s  — TFTP startet → serviert UNGEPATCHE vanilla linbofs64!
- 30s  — API startet, erkennt .needs-rebuild → beginnt linbofs64-Patching
- 60s  — API fertig → .linbofs-patch-status geschrieben
- ???  — Client bootet im 5-60s Fenster → bekommt kaputte linbofs64
-```
+### Lösung: TFTP Entrypoint wartet auf Build-Marker
 
-Die vanilla linbofs64 aus dem linbo7-Paket hat keine Docker-Patches:
-- Kein Netzwerk-Recovery (Patch 3)
-- Kein udevd-Restart (Patch 7)
-- Kein devpts-Mount (Patch 8)
-- Keine SSH-Keys eingebettet
-
-### Lösung: TFTP Entrypoint wartet auf Patch-Marker
-
-Ein neuer Entrypoint-Script (`containers/tftp/entrypoint.sh`) blockiert den TFTP-Start, bis die gepatchte linbofs64 bereit ist:
+`containers/tftp/entrypoint.sh` blockiert den TFTP-Start, bis die linbofs64 gebaut ist:
 
 ```bash
 MARKER="/srv/linbo/.linbofs-patch-status"
-
-# Bestehende Installation: Marker existiert → sofort starten
-if [ -f "$MARKER" ]; then
-    exec "$@"
-fi
-
-# Fresh deploy: warten (max 300s)
+if [ -f "$MARKER" ]; then exec "$@"; fi
 while [ ! -f "$MARKER" ]; do sleep 2; done
 exec "$@"
 ```
 
-**Doppelte Sicherheit:** Zusätzlich `depends_on: api: condition: service_started` in `docker-compose.yml` — Docker startet TFTP erst, wenn API läuft.
-
-**Geänderte Dateien:**
-- `containers/tftp/entrypoint.sh` — **NEU** — Wartet auf `.linbofs-patch-status`
-- `containers/tftp/Dockerfile` — ENTRYPOINT/CMD Trennung
-- `docker-compose.yml` — TFTP `depends_on` um `api` erweitert
-
-### Startup-Reihenfolge nach Fix
+### Startup-Reihenfolge
 ```
 1. init        — lädt vanilla linbofs64 + boot files herunter
 2. cache       — Redis startet
 3. ssh         — generiert alle SSH-Keys (auto-provisioning)
-4. api         — startet, findet .needs-rebuild, patcht linbofs64 (8 Patches + Keys)
+4. api         — startet, baut linbofs64 (Keys + Module)
                  → schreibt .linbofs-patch-status
 5. tftp        — Entrypoint erkennt Marker → startet TFTP
-                 → serviert NUR gepatchte linbofs64
 6. web         — Frontend (wartet auf api healthy)
-```
-
-### Verifikation
-```bash
-# TFTP-Logs prüfen:
-docker logs linbo-tftp 2>&1 | grep -i "patch"
-
-# Fresh deploy:
-# "TFTP: Waiting for linbofs64 to be patched (max 300s)..."
-# "TFTP: linbofs64 patched after 42s, starting."
-
-# Bestehende Installation:
-# "TFTP: linbofs64 already patched, starting immediately."
-
-# Marker prüfen:
-docker exec linbo-api cat /srv/linbo/.linbofs-patch-status
-# Erwartet: Zeitstempel oder "ok"
-```
-
-### Edge Case: Timeout
-Wenn die API die linbofs64 nach 300s nicht gepatcht hat, startet TFTP trotzdem mit einer Warnung:
-```
-TFTP: WARNING — timeout after 300s, starting with unpatched linbofs64!
-```
-Dies verhindert, dass ein defekter API-Container den gesamten Boot-Dienst blockiert.
-
----
-
-## Patch-Übersicht: update-linbofs.sh (8 Patches)
-
-Alle Patches werden automatisch beim Bauen von linbofs64 angewendet. Sie modifizieren Dateien innerhalb des CPIO-Archivs.
-
-| # | Patch-Name | Datei | Beschreibung | Priorität |
-|---|-----------|-------|-------------|-----------|
-| 1 | DOCKER_STORAGE_MODULES | init.sh | Lädt virtio/scsi/nvme Module für VM-Disks | CRITICAL |
-| 2 | DOCKER_IFACE_WAIT | init.sh | Wartet bis Netzwerk-Interface bereit ist | CRITICAL |
-| 3 | DOCKER_NET_RECOVERY | init.sh | Netzwerk-Recovery + Dropbear-Port 2222 | CRITICAL |
-| 4 | DOCKER_SERVER_OVERRIDE | init.sh | Verhindert falschen SERVERID in standalone Docker | CRITICAL |
-| 5 | DOCKER_GUI_THEME | linbo_gui | Qt-GUI Theme-Anpassungen | LOW |
-| 6 | DOCKER_RSYNC_COMPAT | init.sh | rsync-Kompatibilität für Docker | MEDIUM |
-| 7 | DOCKER_UDEV_INPUT | linbo.sh | udevd Neustart vor GUI (Input-Geräte) | CRITICAL |
-| 8 | DOCKER_DEVPTS_MOUNT | init.sh | /dev/pts Mount vor Dropbear (PTY-Support) | CRITICAL |
-
-### Warum so viele Patches nötig sind: init.sh bricht ab
-
-**Root Cause (analysiert per SSH-Debug auf dem LINBO-Client):**
-
-Die originale `init.sh` aus dem linbo7-Paket hat folgenden Ablauf:
-```
-init_setup()     ← Zeile 602: LÄUFT (mountet /proc, /sys, /dev, startet klogd)
-exec > >(tee /tmp/init.log) 2>&1   ← Zeile 605: BRICHT AB!
-hwsetup()        ← Zeile 618: LÄUFT NIE (udevd, devpts, Hardware-Erkennung)
-network()        ← Zeile 628: LÄUFT NIE (DHCP, rsync, start.conf)
-```
-
-**Die `exec > >(tee ...)` Process Substitution scheitert in BusyBox init's sysinit Kontext.**
-Dies ist ein Bug in BusyBox ash, wenn stdout auf `/dev/console` zeigt. Beweis:
-- `/tmp/init.log` existiert nicht nach dem Boot
-- Console (`/dev/vcs1`) zeigt keine init.sh-Ausgabe nach init_setup
-- Direkt nach init_setup erscheint die DOCKER_NET_RECOVERY Ausgabe
-
-**Konsequenz:** Ohne `hwsetup()` fehlen udevd, devpts, Hardware-Erkennung. Ohne `network()` fehlt DHCP/rsync. Unsere Docker-Patches übernehmen diese Aufgaben:
-- Patch 3 (NET_RECOVERY) → ersetzt `network()`
-- Patch 7 (UDEV_INPUT) → ersetzt udevd-Teil von `hwsetup()`
-- Patch 8 (DEVPTS_MOUNT) → ersetzt devpts-Teil von `hwsetup()`
-
-**Hinweis:** Auf Produktions-linuxmuster.net fällt das nicht auf, weil `linbo-remote` immer exec-Modus nutzt (Kommando wird mitgegeben → kein PTY nötig).
-
-**Rebuild-Befehl:**
-```bash
-/root/linbo-docker/scripts/server/update-linbofs.sh
-# → Baut linbofs64 mit allen 8 Patches
-# → Danach: docker compose restart tftp
-# → Client PXE-Reboot nötig
 ```
 
 ---
@@ -1047,10 +870,10 @@ DC Worker laeuft auf 10.0.0.11 und verbindet sich zu Redis/API auf 10.0.0.13.
 - [x] PXE Boot Chain: Config → GRUB → start.conf via rsync (E2E getestet)
 - [x] SSH Web-Terminal (xterm.js) mit Tab-System
 - [x] Sync-Modus Toggle (Runtime-Einstellung)
-- [x] 8 Docker-Patches in update-linbofs.sh (inkl. PTY-Support)
+- [x] Vanilla LINBO Boot (keine Patches nötig)
 - [x] WebSocket Heartbeat (Server-seitig Ping/Pong)
 - [x] Auto-Key-Provisioning (SSH/Dropbear-Keys werden automatisch generiert)
-- [x] TFTP Race Condition Fix (wartet auf gepatchte linbofs64)
+- [x] TFTP Race Condition Fix (wartet auf linbofs64-Build)
 
 ### Bekannte Einschraenkungen
 - TFTP-Container kann mit Produktions-TFTP kollidieren
@@ -1069,7 +892,7 @@ DC Worker laeuft auf 10.0.0.11 und verbindet sich zu Redis/API auf 10.0.0.13.
 4. **Container starten:** `docker compose up -d`
    - Init lädt Boot-Dateien automatisch herunter
    - SSH-Container generiert alle SSH/Dropbear-Keys automatisch
-   - API patcht linbofs64 mit Docker-Patches + Keys
+   - API baut linbofs64 mit SSH-Keys + Kernel-Modulen
    - TFTP wartet auf gepatchte linbofs64 bevor es startet
 5. **Port-Konflikte prüfen:** Besonders TFTP (69/udp)
 6. **Fertig!** — Kein manuelles Key-Kopieren oder Setup nötig

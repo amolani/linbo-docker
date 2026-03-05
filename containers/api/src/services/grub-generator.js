@@ -218,7 +218,9 @@ async function generateConfigGrub(configRecord, options = {}) {
     });
   }
 
-  const filepath = path.join(GRUB_DIR, `${configId}.cfg`);
+  // "grub" is reserved for the main PXE grub.cfg — use _grub.cfg for the group config
+  const filename = configId === 'grub' ? '_grub.cfg' : `${configId}.cfg`;
+  const filepath = path.join(GRUB_DIR, filename);
   await atomicWrite(filepath, content);
 
   return { filepath, content };
@@ -315,7 +317,9 @@ async function regenerateAll(hosts, configs, options = {}) {
 
   for (const host of hosts) {
     if (!host.hostgroup) continue;
-    const target = `../${host.hostgroup}.cfg`;
+    // "grub" group config is written as _grub.cfg to avoid overwriting main PXE grub.cfg
+    const cfgFile = host.hostgroup === 'grub' ? '_grub.cfg' : `${host.hostgroup}.cfg`;
+    const target = `../${cfgFile}`;
 
     // hostname-based symlink
     if (host.hostname) {

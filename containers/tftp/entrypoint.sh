@@ -4,14 +4,14 @@ set -e
 MARKER="/srv/linbo/.linbofs-patch-status"
 TIMEOUT=300  # 5 minutes max wait
 
-# If linbofs64 is already patched (existing installation), start immediately
+# If linbofs64 is already built (existing installation), start immediately
 if [ -f "$MARKER" ]; then
-    echo "TFTP: linbofs64 already patched, starting immediately."
+    echo "TFTP: linbofs64 ready, starting."
     exec "$@"
 fi
 
-# Fresh deploy: wait until API has patched linbofs64
-echo "TFTP: Waiting for linbofs64 to be patched (max ${TIMEOUT}s)..."
+# Fresh deploy: wait until API has built linbofs64
+echo "TFTP: Waiting for linbofs64 build (max ${TIMEOUT}s)..."
 elapsed=0
 while [ ! -f "$MARKER" ] && [ $elapsed -lt $TIMEOUT ]; do
     sleep 2
@@ -19,9 +19,9 @@ while [ ! -f "$MARKER" ] && [ $elapsed -lt $TIMEOUT ]; do
 done
 
 if [ -f "$MARKER" ]; then
-    echo "TFTP: linbofs64 patched after ${elapsed}s, starting."
+    echo "TFTP: linbofs64 ready after ${elapsed}s, starting."
 else
-    echo "TFTP: WARNING — timeout after ${TIMEOUT}s, starting with unpatched linbofs64!"
+    echo "TFTP: WARNING — timeout after ${TIMEOUT}s, starting with existing linbofs64!"
 fi
 
 exec "$@"
