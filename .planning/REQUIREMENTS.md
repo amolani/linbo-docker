@@ -58,28 +58,28 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PROD-01 | TBD | Pending |
-| PROD-02 | TBD | Pending |
-| PROD-03 | TBD | Pending |
-| PROD-04 | TBD | Pending |
-| PROD-05 | TBD | Pending |
-| PROD-06 | TBD | Pending |
-| PROD-07 | TBD | Pending |
-| PROD-08 | TBD | Pending |
-| TEST-01 | TBD | Pending |
-| TEST-02 | TBD | Pending |
-| TEST-03 | TBD | Pending |
-| TEST-04 | TBD | Pending |
-| DEBT-01 | TBD | Pending |
-| DEBT-02 | TBD | Pending |
-| DEBT-03 | TBD | Pending |
-| DEBT-04 | TBD | Pending |
+| PROD-01 | Phase 1: Build Hygiene | Pending |
+| PROD-02 | Phase 2: Secrets Hardening | Pending |
+| PROD-03 | Phase 1: Build Hygiene | Pending |
+| PROD-04 | Phase 2: Secrets Hardening | Pending |
+| PROD-05 | Phase 2: Secrets Hardening | Pending |
+| PROD-06 | Phase 3: API Security | Pending |
+| PROD-07 | Phase 3: API Security | Pending |
+| PROD-08 | Phase 3: API Security | Pending |
+| TEST-01 | Phase 7: Backend Test Suites | Pending |
+| TEST-02 | Phase 7: Backend Test Suites | Pending |
+| TEST-03 | Phase 8: Integration and Frontend Tests | Pending |
+| TEST-04 | Phase 8: Integration and Frontend Tests | Pending |
+| DEBT-01 | Phase 5: Error Handling Cleanup | Pending |
+| DEBT-02 | Phase 4: System Router Split | Pending |
+| DEBT-03 | Phase 6: Isolated Debt Fixes | Pending |
+| DEBT-04 | Phase 6: Isolated Debt Fixes | Pending |
 
 **Coverage:**
 - v1 requirements: 16 total
-- Mapped to phases: 0
-- Unmapped: 16 ⚠️
+- Mapped to phases: 16
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-06*
-*Last updated: 2026-03-06 after initial definition*
+*Last updated: 2026-03-06 after roadmap creation*
