@@ -15,10 +15,9 @@ services:
       - linbo_kernel_data:/var/lib/linuxmuster/linbo
       - linbo_driver_data:/var/lib/linbo/drivers
       - ./themes:/opt/linbo-themes:ro
-      - /boot:/boot:ro
-      - /lib/modules:/lib/modules:ro
     environment:
-      - BOOT_FILES_URL=${BOOT_FILES_URL:-https://github.com/amolani/linbo-docker/releases/latest/download/linbo-boot-files.tar.gz}
+      - DEB_BASE_URL=${DEB_BASE_URL:-https://deb.linuxmuster.net}
+      - DEB_DIST=${DEB_DIST:-lmn73}
       - FORCE_UPDATE=${FORCE_BOOT_UPDATE:-false}
     networks:
       - linbo-net
@@ -109,7 +108,8 @@ services:
   # Redis Cache
   # =============================================================================
   cache:
-    image: redis:7-alpine
+    # Pinned 2026-03-06 — update periodically
+    image: redis:7.4.7-alpine
     container_name: linbo-cache
     ports:
       - "${REDIS_EXTERNAL_PORT:-6379}:6379"
@@ -143,8 +143,6 @@ services:
       - ./scripts/server:/usr/share/linuxmuster/linbo
       - ./config/rsyncd.secrets:/etc/rsyncd.secrets:ro
       - /lib/firmware:/lib/firmware:ro
-      - /boot:/boot:ro
-      - /lib/modules:/lib/modules:ro
     environment:
       # Server
       - NODE_ENV=${NODE_ENV:-production}

@@ -6,7 +6,8 @@
 # -----------------------------------------------------------------------------
 # Build Stage - Generate Prisma Client
 # -----------------------------------------------------------------------------
-FROM node:20-alpine AS builder
+# Pinned 2026-03-06 — update periodically
+FROM node:20.20.0-alpine3.21 AS builder
 
 WORKDIR /app
 
@@ -28,7 +29,8 @@ RUN npx prisma generate
 # -----------------------------------------------------------------------------
 # Production Stage
 # -----------------------------------------------------------------------------
-FROM node:20-alpine
+# Pinned 2026-03-06 — update periodically
+FROM node:20.20.0-alpine3.21
 
 LABEL maintainer="LINBO Docker Project"
 LABEL description="REST API Backend for LINBO with Prisma ORM"

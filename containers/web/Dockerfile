@@ -4,7 +4,8 @@
 # =============================================================================
 
 # Stage 1: Build the React application
-FROM node:20-alpine AS builder
+# Pinned 2026-03-06 — update periodically
+FROM node:20.20.0-alpine3.21 AS builder
 
 ARG GIT_HASH=unknown
 
@@ -25,7 +26,8 @@ ENV VITE_GIT_HASH=${GIT_HASH}
 RUN npm run build
 
 # Stage 2: Serve with Nginx
-FROM nginx:alpine
+# Pinned 2026-03-06 — update periodically
+FROM nginx:1.29.5-alpine
 
 LABEL maintainer="LINBO Docker Project"
 LABEL description="Web Frontend for LINBO Docker"

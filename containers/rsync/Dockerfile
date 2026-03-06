@@ -2,6 +2,7 @@
 # LINBO Docker - RSYNC Server
 # Provides image synchronization for LINBO clients
 # =============================================================================
+# Pinned 2026-03-06 — update periodically
 FROM ubuntu:24.04
 
 LABEL maintainer="LINBO Docker Project"

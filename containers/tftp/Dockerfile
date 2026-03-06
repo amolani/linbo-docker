@@ -2,6 +2,7 @@
 # LINBO Docker - TFTP Server
 # Provides PXE boot files (kernel, initramfs, GRUB)
 # =============================================================================
+# Pinned 2026-03-06 — update periodically
 FROM ubuntu:24.04
 
 LABEL maintainer="LINBO Docker Project"

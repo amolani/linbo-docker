@@ -1,4 +1,5 @@
-FROM alpine:3.19
+# Pinned 2026-03-06 — update periodically
+FROM alpine:3.19.9
 
 RUN apk add --no-cache dnsmasq curl inotify-tools
 
