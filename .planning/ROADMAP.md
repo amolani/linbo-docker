@@ -31,10 +31,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   1. Every Dockerfile uses a version-pinned base image (no `latest` tags)
   2. Running `docker build` from a directory with `node_modules/` produces the same image as without -- host artifacts are excluded by .dockerignore
   3. All container directories that have a Dockerfile also have a .dockerignore file
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 01-01: Pin base images and add .dockerignore files
+- [ ] 01-01-PLAN.md -- Pin base images to exact versions and add .dockerignore files
 
 ### Phase 2: Secrets Hardening
 **Goal**: No default credentials or tracked secrets can reach production
