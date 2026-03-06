@@ -12,7 +12,7 @@ This milestone hardens the existing LINBO Docker codebase for production use. Al
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Build Hygiene** - Pin Docker base images and add .dockerignore files for reproducible, clean builds
+- [x] **Phase 1: Build Hygiene** - Pin Docker base images and add .dockerignore files for reproducible, clean builds (completed 2026-03-06)
 - [ ] **Phase 2: Secrets Hardening** - Remove tracked secrets, enforce non-default credentials, fix deploy script auth
 - [ ] **Phase 3: API Security** - Add WebSocket JWT verification, login rate-limiting, and CORS restriction
 - [ ] **Phase 4: System Router Split** - Break system.js (1483 lines) into focused sub-routers
@@ -139,7 +139,7 @@ Note: Phase 5 and Phase 6 both depend on Phase 4 and can execute in either order
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Build Hygiene | 0/1 | Not started | - |
+| 1. Build Hygiene | 0/1 | Complete    | 2026-03-06 |
 | 2. Secrets Hardening | 0/2 | Not started | - |
 | 3. API Security | 0/2 | Not started | - |
 | 4. System Router Split | 0/1 | Not started | - |
