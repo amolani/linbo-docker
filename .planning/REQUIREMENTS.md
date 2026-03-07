@@ -10,7 +10,7 @@
 - [x] **PROD-01**: Docker Base-Images mit festen Version-Tags gepinnt (reproduzierbare Builds)
 - [x] **PROD-02**: API verweigert Start wenn JWT_SECRET oder INTERNAL_API_KEY Default-Werte haben (NODE_ENV=production)
 - [x] **PROD-03**: .dockerignore in allen Container-Verzeichnissen vorhanden (kein node_modules/Host-Artefakte)
-- [ ] **PROD-04**: Deploy-Script nutzt INTERNAL_API_KEY statt Default-Admin-Passwort für Rebuilds
+- [x] **PROD-04**: Deploy-Script nutzt INTERNAL_API_KEY statt Default-Admin-Passwort für Rebuilds
 - [x] **PROD-05**: rsyncd.secrets aus Git-Tracking entfernt, rsyncd.secrets.example bereitgestellt
 - [ ] **PROD-06**: WebSocket `/ws` Endpoint verifiziert JWT-Token bei Connection-Upgrade
 - [ ] **PROD-07**: Rate-Limiting auf POST /auth/login (5 Versuche/Minute/IP)
@@ -61,7 +61,7 @@
 | PROD-01 | Phase 1: Build Hygiene | Complete |
 | PROD-02 | Phase 2: Secrets Hardening | Complete |
 | PROD-03 | Phase 1: Build Hygiene | Complete |
-| PROD-04 | Phase 2: Secrets Hardening | Pending |
+| PROD-04 | Phase 2: Secrets Hardening | Complete |
 | PROD-05 | Phase 2: Secrets Hardening | Complete |
 | PROD-06 | Phase 3: API Security | Pending |
 | PROD-07 | Phase 3: API Security | Pending |
