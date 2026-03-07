@@ -44,11 +44,11 @@ Plans:
   1. API refuses to start with default JWT_SECRET or INTERNAL_API_KEY when NODE_ENV=production (exits with clear error message)
   2. Deploy script authenticates to the API using INTERNAL_API_KEY from environment, not a hardcoded default password
   3. `rsyncd.secrets` is in .gitignore, removed from tracking, and `rsyncd.secrets.example` exists with placeholder values
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 02-01: Startup validation and secrets cleanup
-- [ ] 02-02: Deploy script auth migration
+- [ ] 02-01-PLAN.md -- Startup validation for secrets (validateSecrets in index.js + tests) and rsyncd.secrets git cleanup
+- [ ] 02-02-PLAN.md -- Deploy script auth migration (INTERNAL_API_KEY from remote .env, multi-target support)
 
 ### Phase 3: API Security
 **Goal**: API endpoints are protected against unauthenticated WebSocket access, brute-force login, and cross-origin abuse
