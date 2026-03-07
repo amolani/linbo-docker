@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-03-07T19:37:11.525Z"
-last_activity: 2026-03-07 -- Completed 03-01 (WebSocket /ws auth at upgrade)
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-03-07T19:46:09Z"
+last_activity: 2026-03-07 -- Completed 03-02 (rate limiting + CORS hardening)
 progress:
   total_phases: 8
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 5
-  completed_plans: 4
-  percent: 80
+  completed_plans: 5
+  percent: 100
 ---
 
 # Project State
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-06)
 
 **Core value:** LINBO als eigenstaendige Docker-Loesung mit modernem Web-Interface, ohne den LINBO-Kern zu veraendern
-**Current focus:** Phase 3: API Security
+**Current focus:** Phase 3: API Security (complete)
 
 ## Current Position
 
-Phase: 3 of 8 (API Security)
-Plan: 1 of 2 in current phase
-Status: Phase 3 plan 03-01 complete
-Last activity: 2026-03-07 -- Completed 03-01 (WebSocket /ws auth at upgrade)
+Phase: 3 of 8 (API Security) -- COMPLETE
+Plan: 2 of 2 in current phase (all complete)
+Status: Phase 3 complete
+Last activity: 2026-03-07 -- Completed 03-02 (rate limiting + CORS hardening)
 
-Progress: [████████░░] 80%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: 3.25min
-- Total execution time: 0.22 hours
+- Total plans completed: 5
+- Average duration: 4min
+- Total execution time: 0.33 hours
 
 **By Phase:**
 
@@ -45,10 +45,10 @@ Progress: [████████░░] 80%
 |-------|-------|-------|----------|
 | 01-build-hygiene | 1 | 2min | 2min |
 | 02-secrets-hardening | 2 | 7min | 3.5min |
-| 03-api-security | 1 | 4min | 4min |
+| 03-api-security | 2 | 11min | 5.5min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (2min), 02-01 (4min), 02-02 (3min), 03-01 (4min)
+- Last 5 plans: 01-01 (2min), 02-01 (4min), 02-02 (3min), 03-01 (4min), 03-02 (7min)
 - Trend: stable
 
 *Updated after each plan completion*
@@ -70,6 +70,10 @@ Recent decisions affecting current work:
 - [02-01]: Test mode silently skips validation to avoid test suite interference
 - [Phase 02-02]: X-Internal-Key checked only when no Bearer token present (Bearer takes precedence)
 - [Phase 03-01]: verifyWsToken at module scope for testability, INTERNAL_API_KEY checked before JWT
+- [Phase 03-02]: Removed custom keyGenerator in favor of express-rate-limit v8 default IPv6 normalization
+- [Phase 03-02]: Trust proxy uses 'loopback, linklocal, uniquelocal' (not true) to prevent X-Forwarded-For spoofing
+- [Phase 03-02]: Rate limit only POST /login, not /register or /password (those require authenticateToken)
+- [Phase 03-02]: Factory pattern createLoginLimiter({store}) for testable rate limiting with store injection
 
 ### Pending Todos
 
@@ -81,6 +85,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-07T19:37:11.517Z
-Stopped at: Completed 03-01-PLAN.md
+Last session: 2026-03-07T19:46:09Z
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None
