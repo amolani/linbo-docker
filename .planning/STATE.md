@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 status: completed
 stopped_at: Phase 2 context gathered
-last_updated: "2026-03-07T17:43:46.129Z"
-last_activity: 2026-03-06 -- Completed 01-01 (pin Docker images, add .dockerignore)
+last_updated: "2026-03-07T18:17:40.136Z"
+last_activity: 2026-03-07 -- Completed 02-02 (deploy credentials removal + X-Internal-Key auth)
 progress:
   total_phases: 8
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
+  completed_phases: 2
+  total_plans: 3
+  completed_plans: 3
   percent: 100
 ---
 
@@ -21,33 +21,34 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-06)
 
 **Core value:** LINBO als eigenstaendige Docker-Loesung mit modernem Web-Interface, ohne den LINBO-Kern zu veraendern
-**Current focus:** Phase 1: Build Hygiene
+**Current focus:** Phase 2: Secrets Hardening
 
 ## Current Position
 
-Phase: 1 of 8 (Build Hygiene)
-Plan: 1 of 1 in current phase (COMPLETE)
-Status: Phase 1 complete
-Last activity: 2026-03-06 -- Completed 01-01 (pin Docker images, add .dockerignore)
+Phase: 2 of 8 (Secrets Hardening)
+Plan: 2 of 2 in current phase (COMPLETE)
+Status: Phase 2 plan 02-02 complete
+Last activity: 2026-03-07 -- Completed 02-02 (deploy credentials removal + X-Internal-Key auth)
 
 Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 2min
-- Total execution time: 0.03 hours
+- Total plans completed: 3
+- Average duration: 3min
+- Total execution time: 0.15 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-build-hygiene | 1 | 2min | 2min |
+| 02-secrets-hardening | 2 | 7min | 3.5min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (2min)
-- Trend: baseline
+- Last 5 plans: 01-01 (2min), 02-01 (4min), 02-02 (3min)
+- Trend: stable
 
 *Updated after each plan completion*
 
@@ -63,6 +64,10 @@ Recent decisions affecting current work:
 - [01-01]: No SHA256 digests for Docker image pins, version tags only
 - [01-01]: Ubuntu 24.04 kept as-is (no sub-patch tags on Docker Hub)
 - [01-01]: Minimal .dockerignore for contamination prevention, not build optimization
+- [02-01]: Validate only JWT_SECRET and INTERNAL_API_KEY (not ADMIN_PASSWORD or DB_PASSWORD per user decision)
+- [02-01]: _testing export pattern for unit test access to internal functions
+- [02-01]: Test mode silently skips validation to avoid test suite interference
+- [Phase 02-02]: X-Internal-Key checked only when no Bearer token present (Bearer takes precedence)
 
 ### Pending Todos
 
@@ -74,6 +79,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-07T17:43:46.120Z
-Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-secrets-hardening/02-CONTEXT.md
+Last session: 2026-03-07T18:16:24Z
+Stopped at: Completed 02-01-PLAN.md
+Resume file: .planning/phases/02-secrets-hardening/02-01-SUMMARY.md
