@@ -7,7 +7,6 @@
 .env.local
 .env.*.local
 *.secrets
-!config/rsyncd.secrets
 secrets/
 
 # Docker volumes data
