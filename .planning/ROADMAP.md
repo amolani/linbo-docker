@@ -58,11 +58,11 @@ Plans:
   1. WebSocket connections to `/ws` without a valid JWT token are rejected at the upgrade handshake (HTTP 401)
   2. After 5 failed login attempts from the same IP within one minute, further attempts return HTTP 429
   3. CORS is restricted to the web container origin by default; wildcard `*` is no longer the default
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 03-01: WebSocket JWT verification
-- [ ] 03-02: Rate limiting and CORS hardening
+- [ ] 03-01-PLAN.md -- WebSocket JWT/API-key verification at upgrade handshake with tests
+- [ ] 03-02-PLAN.md -- Login rate limiting (express-rate-limit + Redis), CORS default change, trust proxy config
 
 ### Phase 4: System Router Split
 **Goal**: The monolithic system.js route file is decomposed into focused, maintainable sub-routers
