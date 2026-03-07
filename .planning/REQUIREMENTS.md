@@ -12,7 +12,7 @@
 - [x] **PROD-03**: .dockerignore in allen Container-Verzeichnissen vorhanden (kein node_modules/Host-Artefakte)
 - [x] **PROD-04**: Deploy-Script nutzt INTERNAL_API_KEY statt Default-Admin-Passwort für Rebuilds
 - [x] **PROD-05**: rsyncd.secrets aus Git-Tracking entfernt, rsyncd.secrets.example bereitgestellt
-- [ ] **PROD-06**: WebSocket `/ws` Endpoint verifiziert JWT-Token bei Connection-Upgrade
+- [x] **PROD-06**: WebSocket `/ws` Endpoint verifiziert JWT-Token bei Connection-Upgrade
 - [ ] **PROD-07**: Rate-Limiting auf POST /auth/login (5 Versuche/Minute/IP)
 - [ ] **PROD-08**: CORS Default auf Web-Container Origin statt Wildcard `*`
 
@@ -63,7 +63,7 @@
 | PROD-03 | Phase 1: Build Hygiene | Complete |
 | PROD-04 | Phase 2: Secrets Hardening | Complete |
 | PROD-05 | Phase 2: Secrets Hardening | Complete |
-| PROD-06 | Phase 3: API Security | Pending |
+| PROD-06 | Phase 3: API Security | Complete |
 | PROD-07 | Phase 3: API Security | Pending |
 | PROD-08 | Phase 3: API Security | Pending |
 | TEST-01 | Phase 7: Backend Test Suites | Pending |
