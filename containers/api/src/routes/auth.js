@@ -23,6 +23,7 @@ const {
   hashPassword,
 } = require('../middleware/auth');
 const { validateBody, loginSchema, createUserSchema } = require('../middleware/validate');
+const { loginLimiter } = require('../middleware/rate-limit');
 
 // Audit middleware: optional (depends on Prisma)
 let auditAction;
@@ -39,6 +40,7 @@ try {
  */
 router.post(
   '/login',
+  loginLimiter,
   validateBody(loginSchema),
   auditAction('auth.login', {
     getTargetType: () => 'user',

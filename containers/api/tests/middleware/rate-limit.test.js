@@ -90,7 +90,7 @@ describe('loginLimiter', () => {
   test('requests from different IPs are counted independently', async () => {
     // Create a new app that uses X-Forwarded-For for IP detection
     const ipApp = express();
-    ipApp.set('trust proxy', true);
+    ipApp.set('trust proxy', 'loopback, linklocal, uniquelocal');
     ipApp.use(express.json());
     const ipLimiter = createLoginLimiter({ store: undefined });
     ipApp.post('/test-login', ipLimiter, (req, res) => {
