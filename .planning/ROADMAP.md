@@ -72,10 +72,10 @@ Plans:
   1. system.js no longer exists as a monolithic 1483-line file; each sub-router is under 300 lines
   2. All existing API endpoints under `/system/*` continue to work identically (no behavioral change)
   3. Sub-routers are individually importable: kernel, firmware, grub-theme, grub-config, linbo-update, worker, wlan
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 04-01: Extract sub-routers from system.js
+- [ ] 04-01-PLAN.md -- Extract 8 sub-routers (linbofs, kernel, firmware, wlan, grub-theme, grub-config, worker, linbo-update) into routes/system/ directory with aggregator
 
 ### Phase 5: Error Handling Cleanup
 **Goal**: Every catch block in the codebase either logs meaningfully or rethrows -- no silent swallowing
