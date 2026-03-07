@@ -26,7 +26,7 @@
 ### Tech-Debt
 
 - [ ] **DEBT-01**: Alle 31 silent catch-blocks durch kategorisiertes Logging ersetzen (debug/warn/rethrow)
-- [ ] **DEBT-02**: system.js (1483 Zeilen) in Sub-Router splitten: kernel, firmware, grub-theme, grub-config, linbo-update, worker, wlan
+- [x] **DEBT-02**: system.js (1483 Zeilen) in Sub-Router splitten: kernel, firmware, grub-theme, grub-config, linbo-update, worker, wlan
 - [ ] **DEBT-03**: operation.worker.js Prisma-optional Pattern anwenden (try/catch Guard statt top-level require)
 - [ ] **DEBT-04**: Redis KEYS-Command durch SCAN-basierte Iteration in delPattern() ersetzen
 
@@ -71,7 +71,7 @@
 | TEST-03 | Phase 8: Integration and Frontend Tests | Pending |
 | TEST-04 | Phase 8: Integration and Frontend Tests | Pending |
 | DEBT-01 | Phase 5: Error Handling Cleanup | Pending |
-| DEBT-02 | Phase 4: System Router Split | Pending |
+| DEBT-02 | Phase 4: System Router Split | Complete |
 | DEBT-03 | Phase 6: Isolated Debt Fixes | Pending |
 | DEBT-04 | Phase 6: Isolated Debt Fixes | Pending |
 

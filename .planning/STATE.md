@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Phase 4 context gathered
-last_updated: "2026-03-07T19:57:48.194Z"
-last_activity: 2026-03-07 -- Completed 03-02 (rate limiting + CORS hardening)
+stopped_at: Completed 04-01-PLAN.md
+last_updated: "2026-03-07T20:43:09.114Z"
+last_activity: 2026-03-07 -- Completed 04-01 (system.js router split)
 progress:
   total_phases: 8
-  completed_phases: 3
-  total_plans: 5
-  completed_plans: 5
+  completed_phases: 4
+  total_plans: 6
+  completed_plans: 6
   percent: 100
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-06)
 
 **Core value:** LINBO als eigenstaendige Docker-Loesung mit modernem Web-Interface, ohne den LINBO-Kern zu veraendern
-**Current focus:** Phase 3: API Security (complete)
+**Current focus:** Phase 4: System Router Split (complete)
 
 ## Current Position
 
-Phase: 3 of 8 (API Security) -- COMPLETE
-Plan: 2 of 2 in current phase (all complete)
-Status: Phase 3 complete
-Last activity: 2026-03-07 -- Completed 03-02 (rate limiting + CORS hardening)
+Phase: 4 of 8 (System Router Split) -- COMPLETE
+Plan: 1 of 1 in current phase (all complete)
+Status: Phase 4 complete
+Last activity: 2026-03-07 -- Completed 04-01 (system.js router split)
 
 Progress: [██████████] 100%
 
@@ -52,6 +52,7 @@ Progress: [██████████] 100%
 - Trend: stable
 
 *Updated after each plan completion*
+| Phase 04 P01 | 9min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -74,6 +75,9 @@ Recent decisions affecting current work:
 - [Phase 03-02]: Trust proxy uses 'loopback, linklocal, uniquelocal' (not true) to prevent X-Forwarded-For spoofing
 - [Phase 03-02]: Rate limit only POST /login, not /register or /password (those require authenticateToken)
 - [Phase 03-02]: Factory pattern createLoginLimiter({store}) for testable rate limiting with store injection
+- [Phase 04]: Co-locate Zod schemas with consumer sub-router, not in shared file
+- [Phase 04]: wlanConfigSchema in wlan.js (not firmware.js) despite original proximity
+- [Phase 04]: No shared utils file - each sub-router self-contained and independently importable
 
 ### Pending Todos
 
@@ -85,6 +89,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-07T19:57:48.185Z
-Stopped at: Phase 4 context gathered
-Resume file: .planning/phases/04-system-router-split/04-CONTEXT.md
+Last session: 2026-03-07T20:43:09.106Z
+Stopped at: Completed 04-01-PLAN.md
+Resume file: None
