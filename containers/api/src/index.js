@@ -65,6 +65,12 @@ function verifyWsToken(token) {
 const app = express();
 const server = http.createServer(app);
 
+// Trust proxies in private networks (Docker internal nginx)
+// This ensures req.ip returns the real client IP from X-Forwarded-For
+// instead of the Docker internal IP. Using specific ranges prevents
+// X-Forwarded-For spoofing from external clients.
+app.set('trust proxy', 'loopback, linklocal, uniquelocal');
+
 // =============================================================================
 // Middleware
 // =============================================================================
@@ -73,7 +79,7 @@ app.use(helmet({
 }));
 
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
+  origin: process.env.CORS_ORIGIN || 'http://localhost:8080',
   credentials: true,
 }));
 
@@ -221,6 +227,12 @@ function validateSecrets() {
     issues.push('INTERNAL_API_KEY is not set');
   } else if (INTERNAL_KEY_DEFAULTS.includes(internalKey)) {
     issues.push('INTERNAL_API_KEY is using a known default value');
+  }
+
+  // CORS wildcard warning (warn-only, never fatal)
+  const corsOrigin = process.env.CORS_ORIGIN;
+  if (corsOrigin === '*') {
+    console.warn('[security] WARNING: CORS_ORIGIN is set to wildcard "*". This allows any website to make API requests. Set a specific origin for production.');
   }
 
   if (issues.length === 0) return;

@@ -29,6 +29,11 @@ describe('validateSecrets', () => {
     process.env.NODE_ENV = originalEnv.NODE_ENV;
     process.env.JWT_SECRET = originalEnv.JWT_SECRET;
     process.env.INTERNAL_API_KEY = originalEnv.INTERNAL_API_KEY;
+    if (originalEnv.CORS_ORIGIN !== undefined) {
+      process.env.CORS_ORIGIN = originalEnv.CORS_ORIGIN;
+    } else {
+      delete process.env.CORS_ORIGIN;
+    }
 
     // Restore spies
     exitSpy.mockRestore();
@@ -122,5 +127,33 @@ describe('validateSecrets', () => {
     validateSecrets();
 
     expect(exitSpy).not.toHaveBeenCalled();
+  });
+
+  // Test 8: CORS_ORIGIN=* -> warn
+  test('logs warning when CORS_ORIGIN=* in production', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.CORS_ORIGIN = '*';
+    process.env.JWT_SECRET = 'my-real-production-jwt-secret-2026';
+    process.env.INTERNAL_API_KEY = 'my-real-production-internal-key-2026';
+
+    validateSecrets();
+
+    expect(exitSpy).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('CORS_ORIGIN')
+    );
+  });
+
+  // Test 9: CORS_ORIGIN set to specific origin -> no warn
+  test('does NOT warn when CORS_ORIGIN is a specific origin', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.CORS_ORIGIN = 'https://myapp.example.com';
+    process.env.JWT_SECRET = 'my-real-production-jwt-secret-2026';
+    process.env.INTERNAL_API_KEY = 'my-real-production-internal-key-2026';
+
+    validateSecrets();
+
+    expect(exitSpy).not.toHaveBeenCalled();
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 });
