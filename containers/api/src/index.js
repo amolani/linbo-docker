@@ -34,6 +34,31 @@ const WebSocket = require('ws');
 // Import route factory (async — called after Redis is ready)
 const createRouter = require('./routes');
 
+// Import verifyToken for WebSocket auth (used in upgrade handler)
+const { verifyToken } = require('./middleware/auth');
+
+/**
+ * Verify a WebSocket token (JWT or INTERNAL_API_KEY).
+ * Returns user object on success, null on failure.
+ * Used by the upgrade handler for /ws authentication.
+ */
+function verifyWsToken(token) {
+  if (!token) return null;
+
+  // Check INTERNAL_API_KEY first (plain string comparison)
+  const internalKey = process.env.INTERNAL_API_KEY;
+  if (internalKey && token === internalKey) {
+    return { id: 'internal', username: 'internal-service', role: 'admin' };
+  }
+
+  // Then try JWT verification
+  try {
+    return verifyToken(token);
+  } catch (err) {
+    return null;
+  }
+}
+
 // =============================================================================
 // Express App Setup
 // =============================================================================
@@ -395,7 +420,6 @@ async function startServer() {
 
   // Initialize Terminal WebSocket Server (noServer to avoid conflict with main WS)
   const terminalService = require('./services/terminal.service');
-  const { verifyToken } = require('./middleware/auth');
   const terminalWss = new WebSocket.Server({ noServer: true });
 
   terminalWss.on('connection', (ws, req) => {
@@ -508,7 +532,19 @@ async function startServer() {
         terminalWss.emit('connection', ws, request);
       });
     } else if (pathname === '/ws') {
+      // Authenticate before WebSocket upgrade (PROD-06)
+      const url = new URL(request.url, `http://${request.headers.host}`);
+      const token = url.searchParams.get('token');
+      const user = verifyWsToken(token);
+
+      if (!user) {
+        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+        socket.destroy();
+        return;
+      }
+
       wss.handleUpgrade(request, socket, head, (ws) => {
+        ws.user = user;
         wss.emit('connection', ws, request);
       });
     } else {
@@ -757,4 +793,4 @@ startServer().catch((err) => {
 module.exports = { app, server };
 
 // Test helpers
-module.exports._testing = { validateSecrets };
+module.exports._testing = { validateSecrets, verifyWsToken };
