@@ -1,9 +1,8 @@
 /**
  * LINBO Docker - Firmware Sub-Router
- * 8 endpoints: firmware-detect, firmware-entries GET/POST/remove/DELETE,
- * firmware-status, firmware-available, firmware-catalog, firmware-entries/bulk
+ * Endpoints: firmware-detect, firmware-entries, firmware-status,
+ * firmware-available, firmware-catalog, firmware-entries/bulk
  */
-
 const express = require('express');
 const router = express.Router();
 const { authenticateToken, requireRole } = require('../../middleware/auth');
@@ -29,10 +28,7 @@ const firmwareSearchSchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).optional().default(50),
 });
 
-/**
- * POST /system/firmware-detect
- * Auto-detect missing firmware on a LINBO client via SSH + dmesg
- */
+/** POST /system/firmware-detect -- Auto-detect missing firmware via SSH + dmesg */
 router.post(
   '/firmware-detect',
   authenticateToken,
@@ -68,10 +64,7 @@ router.post(
   }
 );
 
-/**
- * GET /system/firmware-entries
- * List configured firmware entries with validation status
- */
+/** GET /system/firmware-entries -- List configured firmware entries with validation status */
 router.get(
   '/firmware-entries',
   authenticateToken,
