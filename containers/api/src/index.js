@@ -152,6 +152,70 @@ app.get('/ready', async (req, res) => {
 // =============================================================================
 
 // =============================================================================
+// Startup Secrets Validation
+// =============================================================================
+
+// Known insecure default values that MUST be changed in production
+const JWT_SECRET_DEFAULTS = [
+  'linbo-docker-secret-change-in-production',
+  'your_jwt_secret_here_change_in_production',
+  'your_jwt_secret_here_change_me_in_production_use_openssl_rand',
+  'development_secret_change_in_production',
+];
+
+const INTERNAL_KEY_DEFAULTS = [
+  'linbo-internal-secret',
+  'linbo-internal-secret-change-in-production',
+];
+
+/**
+ * Validate that secrets are not using insecure defaults in production.
+ * - Production: exits with code 1 if defaults are detected
+ * - Development: logs warning but continues
+ * - Test: silently passes
+ */
+function validateSecrets() {
+  const env = process.env.NODE_ENV || 'development';
+
+  // In test mode, skip all validation
+  if (env === 'test') return;
+
+  const issues = [];
+
+  // Check JWT_SECRET
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret || jwtSecret.trim() === '') {
+    issues.push('JWT_SECRET is not set');
+  } else if (JWT_SECRET_DEFAULTS.includes(jwtSecret)) {
+    issues.push('JWT_SECRET is using a known default value');
+  }
+
+  // Check INTERNAL_API_KEY
+  const internalKey = process.env.INTERNAL_API_KEY;
+  if (!internalKey || internalKey.trim() === '') {
+    issues.push('INTERNAL_API_KEY is not set');
+  } else if (INTERNAL_KEY_DEFAULTS.includes(internalKey)) {
+    issues.push('INTERNAL_API_KEY is using a known default value');
+  }
+
+  if (issues.length === 0) return;
+
+  if (env === 'production') {
+    console.error(`FATAL: Insecure secrets detected in production mode:`);
+    for (const issue of issues) {
+      console.error(`  - ${issue}`);
+    }
+    console.error('Set secure values for JWT_SECRET and INTERNAL_API_KEY before running in production.');
+    process.exit(1);
+  } else {
+    // development or other non-production modes
+    for (const issue of issues) {
+      console.warn(`[secrets] WARNING: ${issue} (acceptable in ${env} mode)`);
+    }
+  }
+}
+
+// =============================================================================
 // Server Startup
 // =============================================================================
 const PORT = process.env.PORT || 3000;
@@ -159,6 +223,9 @@ const HOST = process.env.HOST || '0.0.0.0';
 
 async function startServer() {
   console.log('Starting LINBO Docker API Server...\n');
+
+  // Validate secrets before proceeding
+  validateSecrets();
 
   // Connect to database (optional — skipped in DB-free/sync mode)
   if (prisma) {
@@ -522,14 +589,23 @@ async function startServer() {
   // Startup sanity check: verify critical directories exist
   const sanityFs = require('fs');
   const { LINBO_DIR, IMAGES_DIR } = require('./lib/image-path');
+  const CONFIG_DIR = process.env.CONFIG_DIR || '/etc/linuxmuster/linbo';
+  const HOOKS_DIR = process.env.HOOKSDIR || `${CONFIG_DIR}/hooks`;
   const criticalPaths = [
     { path: LINBO_DIR, desc: 'LINBO root' },
     { path: `${LINBO_DIR}/boot/grub`, desc: 'GRUB config dir' },
     { path: IMAGES_DIR, desc: 'Images dir' },
+    { path: `${HOOKS_DIR}/update-linbofs.pre.d`, desc: 'Pre-hooks dir' },
+    { path: `${HOOKS_DIR}/update-linbofs.post.d`, desc: 'Post-hooks dir' },
   ];
   for (const { path: p, desc } of criticalPaths) {
     if (!sanityFs.existsSync(p)) {
-      console.warn(`  ⚠ WARNING: ${desc} missing: ${p}`);
+      try {
+        sanityFs.mkdirSync(p, { recursive: true });
+        console.log(`  ${desc}: ${p} (created)`);
+      } catch (mkErr) {
+        console.warn(`  ⚠ WARNING: ${desc} missing and could not create: ${p} — ${mkErr.message}`);
+      }
     } else {
       console.log(`  ${desc}: ${p} ✓`);
     }
@@ -547,30 +623,13 @@ async function startServer() {
       sanityFs.renameSync(rebuildMarker, runningMarker);
 
       const linbofsService = require('./services/linbofs.service');
-      const { isHostKernelAvailable } = require('./services/linbo-update.service');
 
-      isHostKernelAvailable().then(async (hk) => {
-        const opts = {};
-        if (hk.available) {
-          opts.env = {
-            USE_HOST_KERNEL: 'true',
-            HOST_MODULES_PATH: hk.modulesPath,
-            SKIP_KERNEL_COPY: 'true',
-          };
-        }
-        const result = await linbofsService.updateLinbofs(opts);
+      linbofsService.updateLinbofs().then(result => {
         if (result.success) {
           console.log('[AutoRebuild] linbofs64 rebuilt successfully');
-          // Preserve host kernel
-          if (hk.available) {
-            sanityFs.copyFileSync(hk.kernelPath, `${LINBO_DIR_REBUILD}/linbo64`);
-            sanityFs.writeFileSync(`${LINBO_DIR_REBUILD}/.host-kernel-version`, hk.kver);
-          }
-          // Success — remove running marker
           try { sanityFs.unlinkSync(runningMarker); } catch {}
         } else {
           console.error('[AutoRebuild] FAILED:', result.errors);
-          // Rename back so next restart retries
           try { sanityFs.renameSync(runningMarker, rebuildMarker); } catch {}
         }
       }).catch(err => {
@@ -696,3 +755,6 @@ startServer().catch((err) => {
 
 // Export for testing
 module.exports = { app, server };
+
+// Test helpers
+module.exports._testing = { validateSecrets };
