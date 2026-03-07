@@ -61,13 +61,21 @@ async function comparePassword(password, hash) {
 
 /**
  * Middleware: Authenticate JWT token from Authorization header
- * Also accepts INTERNAL_API_KEY as Bearer token for container-to-container auth
+ * Also accepts INTERNAL_API_KEY as Bearer token or X-Internal-Key header
+ * for container-to-container and script-based auth.
  */
 function authenticateToken(req, res, next) {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
+  // If no Bearer token, check X-Internal-Key header (system routes accept both)
   if (!token) {
+    const internalKeyHeader = req.headers['x-internal-key'];
+    const internalKey = process.env.INTERNAL_API_KEY;
+    if (internalKey && internalKeyHeader && internalKeyHeader === internalKey) {
+      req.user = { id: 'internal', username: 'internal-service', role: 'admin' };
+      return next();
+    }
     return res.status(401).json({
       error: {
         code: 'UNAUTHORIZED',
@@ -76,7 +84,7 @@ function authenticateToken(req, res, next) {
     });
   }
 
-  // Check for internal API key (container-to-container auth)
+  // Check for internal API key as Bearer token (existing behavior)
   const internalKey = process.env.INTERNAL_API_KEY;
   if (internalKey && token === internalKey) {
     req.user = { id: 'internal', username: 'internal-service', role: 'admin' };
