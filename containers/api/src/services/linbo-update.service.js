@@ -40,45 +40,6 @@ const LOCK_TTL = 120;
 const HEARTBEAT_INTERVAL = 30000;
 
 // =============================================================================
-// Host Kernel Detection
-// =============================================================================
-
-/**
- * Check if the Docker host kernel is available via bind mounts.
- * Docker standalone needs the host kernel (not the linbo7 package kernel)
- * for hardware compatibility — same as production linuxmuster.net.
- */
-async function isHostKernelAvailable() {
-  try {
-    const kver = os.release(); // same as `uname -r`
-    const kernelPath = `/boot/vmlinuz-${kver}`;
-    const modulesPath = `/lib/modules/${kver}`;
-
-    let kernelExists = false;
-    let modulesExist = false;
-
-    try {
-      await fs.access(kernelPath);
-      kernelExists = true;
-    } catch {}
-
-    try {
-      await fs.access(modulesPath);
-      modulesExist = true;
-    } catch {}
-
-    return {
-      available: kernelExists && modulesExist,
-      kver,
-      kernelPath: kernelExists ? kernelPath : null,
-      modulesPath: modulesExist ? modulesPath : null,
-    };
-  } catch {
-    return { available: false, kver: null, kernelPath: null, modulesPath: null };
-  }
-}
-
-// =============================================================================
 // Module State
 // =============================================================================
 
@@ -108,7 +69,7 @@ async function acquireLock() {
       if (current === lockRunId) {
         await redis.expire(LOCK_KEY, LOCK_TTL);
       }
-    } catch {}
+    } catch (err) { console.debug('[LinboUpdate] heartbeat expire failed:', err.message); }
   }, HEARTBEAT_INTERVAL);
 }
 
@@ -122,7 +83,7 @@ async function releaseLock() {
     const redis = getClient();
     const current = await redis.get(LOCK_KEY);
     if (current === lockRunId) await redis.del(LOCK_KEY);
-  } catch {}
+  } catch (err) { console.debug('[LinboUpdate] lock release failed:', err.message); }
   lockRunId = null;
 }
 
@@ -241,7 +202,7 @@ async function fetchPackages() {
     if (gz.ok) {
       body = zlib.gunzipSync(Buffer.from(await gz.arrayBuffer())).toString();
     }
-  } catch {}
+  } catch (err) { console.debug('[LinboUpdate] gzip decompression failed, using plain body:', err.message); }
 
   // Fallback to plain
   if (!body) {
@@ -286,7 +247,7 @@ async function checkVersion() {
     const content = await fs.readFile(path.join(LINBO_DIR, 'linbo-version.txt'), 'utf8');
     installedFull = content.trim();
     installed = parseInstalledVersion(installedFull);
-  } catch {}
+  } catch (err) { console.debug('[LinboUpdate] read installed version failed:', err.message); }
 
   // Fetch available version from APT
   let available = null;
@@ -398,7 +359,7 @@ async function downloadAndVerify(debUrl, expectedSha256, expectedSize) {
       setStatus('downloading', {
         progress: Math.min(progress, 60),
         message: `Downloading... ${Math.round(downloadedBytes / 1024 / 1024)}MB`,
-      }).catch(() => {});
+      }).catch(() => {}); // WS broadcast: no clients is normal
       callback(null, chunk);
     },
   });
@@ -411,11 +372,11 @@ async function downloadAndVerify(debUrl, expectedSha256, expectedSize) {
 
   const actualHash = hash.digest('hex');
   if (expectedSha256 && actualHash !== expectedSha256) {
-    await fs.unlink(debPath).catch(() => {});
+    await fs.unlink(debPath).catch(err => console.debug('[LinboUpdate] cleanup: unlink deb failed:', err.message));
     throw new Error(`SHA256 mismatch: expected ${expectedSha256}, got ${actualHash}`);
   }
   if (expectedSize && downloadedBytes !== expectedSize) {
-    await fs.unlink(debPath).catch(() => {});
+    await fs.unlink(debPath).catch(err => console.debug('[LinboUpdate] cleanup: unlink deb failed:', err.message));
     throw new Error(`Size mismatch: expected ${expectedSize}, got ${downloadedBytes}`);
   }
 
@@ -516,7 +477,7 @@ async function provisionBootFiles(extractDir, version) {
     const target = path.join(LINBO_DIR, file);
     const link = path.join(guiDir, file);
     if (await exists(target)) {
-      try { await fs.unlink(link); } catch {}
+      try { await fs.unlink(link); } catch (err) { console.debug('[LinboUpdate] cleanup: unlink symlink failed:', err.message); }
       await fs.symlink(target, link);
     }
   }
@@ -524,7 +485,7 @@ async function provisionBootFiles(extractDir, version) {
   const iconsDir = path.join(LINBO_DIR, 'icons');
   const iconsLink = path.join(guiDir, 'icons');
   if (await exists(iconsDir)) {
-    try { await fs.unlink(iconsLink); } catch {}
+    try { await fs.unlink(iconsLink); } catch (err) { console.debug('[LinboUpdate] cleanup: unlink icons symlink failed:', err.message); }
     await fs.symlink(iconsDir, iconsLink);
   }
 
@@ -550,12 +511,10 @@ async function provisionKernels(extractDir, version) {
     }
   }
 
-  // Store linbofs64.xz template as .pkg reference only — do NOT copy to /srv/linbo/.
-  // The host's linbofs64 is rebuilt by update-linbofs.sh with host kernel modules.
-  // Overwriting /srv/linbo/linbofs64.xz would replace the host-customized template.
+  // Store linbofs64.xz template for update-linbofs.sh to use as base for rebuilds
   const linbofsSrc = path.join(kernelsSrc, 'linbofs64.xz');
   if (await exists(linbofsSrc)) {
-    await fs.copyFile(linbofsSrc, path.join(kernelsDst, 'linbofs64.xz.pkg'));
+    await fs.copyFile(linbofsSrc, path.join(kernelsDst, 'linbofs64.xz'));
   }
 
   // Build manifest
@@ -590,8 +549,7 @@ async function buildManifest(kernelsDst, version) {
     }
   }
 
-  // Use the .pkg reference template (not /srv/linbo/linbofs64.xz which we no longer overwrite)
-  const templatePath = path.join(kernelsDst, 'linbofs64.xz.pkg');
+  const templatePath = path.join(kernelsDst, 'linbofs64.xz');
   if (await exists(templatePath)) {
     manifest.template.sha256 = await sha256File(templatePath);
     manifest.template.size = (await fs.stat(templatePath)).size;
@@ -616,8 +574,8 @@ async function provisionKernelSets(kernelsDst, manifestPath) {
     }
   }
 
-  // Copy .pkg template reference (if available) into the set
-  const templatePath = path.join(kernelsDst, 'linbofs64.xz.pkg');
+  // Copy linbofs64.xz template into the set
+  const templatePath = path.join(kernelsDst, 'linbofs64.xz');
   if (await exists(templatePath)) {
     await fs.copyFile(templatePath, path.join(tempSetDir, 'linbofs64.xz'));
   }
@@ -641,7 +599,7 @@ async function provisionKernelSets(kernelsDst, manifestPath) {
     } else {
       await fs.unlink(currentLink);
     }
-  } catch {}
+  } catch (err) { console.debug('[LinboUpdate] cleanup: unlink current link failed:', err.message); }
   await fs.symlink(`sets/${manifestHash}`, currentLink);
 
   // Cleanup old sets
@@ -652,46 +610,17 @@ async function provisionKernelSets(kernelsDst, manifestPath) {
         await fs.rm(path.join(setsDir, entry), { recursive: true, force: true });
       }
     }
-  } catch {}
+  } catch (err) { console.debug('[LinboUpdate] cleanup: readdir old set failed:', err.message); }
 }
 
 async function rebuildLinbofs(version) {
   await setStatus('rebuilding', { progress: 85, message: 'Rebuilding linbofs64...', version });
 
-  // Detect host kernel — use it for module injection if available
-  const hostKernel = await isHostKernelAvailable();
-  const linbofsOpts = {};
-
-  if (hostKernel.available) {
-    console.log(`[LinboUpdate] Host kernel detected: ${hostKernel.kver}`);
-    linbofsOpts.env = {
-      USE_HOST_KERNEL: 'true',
-      HOST_MODULES_PATH: hostKernel.modulesPath,
-      SKIP_KERNEL_COPY: 'true',
-    };
-  }
-
-  const result = await linbofsService.updateLinbofs(linbofsOpts);
+  const result = await linbofsService.updateLinbofs();
   if (!result.success) {
     console.error('[LinboUpdate] linbofs rebuild output:', result.output);
     console.error('[LinboUpdate] linbofs rebuild errors:', result.errors);
     throw new Error(`linbofs rebuild failed: ${result.errors}`);
-  }
-
-  // After rebuild: ensure host kernel is preserved as /srv/linbo/linbo64
-  if (hostKernel.available) {
-    try {
-      await fs.copyFile(hostKernel.kernelPath, path.join(LINBO_DIR, 'linbo64'));
-      await fs.chmod(path.join(LINBO_DIR, 'linbo64'), 0o644);
-      const { stdout } = await execAsync(`md5sum "${path.join(LINBO_DIR, 'linbo64')}" | awk '{print $1}'`);
-      await fs.writeFile(path.join(LINBO_DIR, 'linbo64.md5'), stdout.trim());
-      // Write host kernel version marker for drift detection
-      await fs.writeFile(path.join(LINBO_DIR, '.host-kernel-version'), hostKernel.kver);
-      console.log(`[LinboUpdate] Host kernel preserved: ${hostKernel.kver}`);
-    } catch (err) {
-      console.error(`[LinboUpdate] WARNING: Failed to preserve host kernel: ${err.message}`);
-      // Non-fatal if running as non-root; init container (root) will fix it on restart
-    }
   }
 }
 
@@ -833,7 +762,7 @@ module.exports = {
   startUpdate,
   getStatus,
   cancelUpdate,
-  isHostKernelAvailable,
+
   // Exported for testing
   _testing: {
     parseDebianStanza,

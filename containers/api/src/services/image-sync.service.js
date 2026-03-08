@@ -448,7 +448,7 @@ async function _downloadFileWithResume(jobId, imageName, filename, stagingDir, c
   if (response.status === 200 && offset > 0) {
     // Server returned full file — remote file changed, restart
     console.log(`[ImageSync] Remote file changed for ${imageName}, restarting download`);
-    await fsp.unlink(partPath).catch(() => {});
+    await fsp.unlink(partPath).catch(err => console.debug('[ImageSync] cleanup: unlink partial file failed:', err.message));
     offset = 0;
   } else if (response.status === 206) {
     console.log(`[ImageSync] Resuming ${imageName} from ${_formatBytes(offset)}`);
@@ -493,14 +493,14 @@ async function _downloadFileWithResume(jobId, imageName, filename, stagingDir, c
           speed: Math.round(speed),
           eta,
           bytesDownloaded,
-        }).catch(() => {});
+        }).catch(() => {}); // WS broadcast: no clients is normal
 
         // Update current job in Redis
         client.set(KEY.CURRENT, JSON.stringify({
           jobId, imageName, status: 'downloading',
           progress: percentage, speed: Math.round(speed), eta,
           bytesDownloaded, totalBytes,
-        })).catch(() => {});
+        })).catch(err => console.debug('[ImageSync] Redis progress update failed:', err.message));
 
         // WebSocket broadcast
         ws.broadcast('image.sync.progress', {
