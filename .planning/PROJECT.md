@@ -39,14 +39,18 @@ LINBO als eigenständige, Docker-basierte Lösung mit modernem Web-Interface bet
 
 <!-- Current scope. Building toward these. -->
 
-- [ ] **PROD-01**: Pinned Docker Base-Images für reproduzierbare Builds
-- [ ] **PROD-02**: Startup-Validierung (JWT-Secret, API-Key nicht Default)
-- [ ] **PROD-03**: .dockerignore für saubere Builds (kein node_modules vom Host)
-- [ ] **PROD-04**: Deploy-Script nutzt INTERNAL_API_KEY statt Default-Passwort
-- [ ] **TEST-01**: Tests für Image-Sync Service (Resume, Verify, Atomic Swap)
-- [ ] **TEST-02**: Tests für Terminal Service (Session-Lifecycle, Cleanup)
-- [ ] **TEST-03**: Tests für WebSocket (Connection, Auth, Heartbeat)
-- [ ] **TEST-04**: Frontend-Test Coverage erhöhen (Pages, Components, Stores)
+(Defined in REQUIREMENTS.md for v1.1)
+
+### Validated (v1.0 Hardening)
+
+- ✓ **PROD-01**: Pinned Docker Base-Images für reproduzierbare Builds — v1.0 Phase 1
+- ✓ **PROD-02**: Startup-Validierung (JWT-Secret, API-Key nicht Default) — v1.0 Phase 2
+- ✓ **PROD-03**: .dockerignore für saubere Builds (kein node_modules vom Host) — v1.0 Phase 1
+- ✓ **PROD-04**: Deploy-Script nutzt INTERNAL_API_KEY statt Default-Passwort — v1.0 Phase 2
+- ✓ **TEST-01**: Tests für Image-Sync Service (Resume, Verify, Atomic Swap) — v1.0 Phase 7
+- ✓ **TEST-02**: Tests für Terminal Service (Session-Lifecycle, Cleanup) — v1.0 Phase 7
+- ✓ **TEST-03**: Tests für WebSocket (Connection, Auth, Heartbeat) — v1.0 Phase 8
+- ✓ **TEST-04**: Frontend-Test Coverage erhöhen (Pages, Components, Stores) — v1.0 Phase 8
 
 ### Out of Scope
 
@@ -58,6 +62,16 @@ LINBO als eigenständige, Docker-basierte Lösung mit modernem Web-Interface bet
 - Host-GRUB .img — Eigene Phase
 - Sophomorix/LDAP — Nicht geplant, LMN-seitig
 - LINBO-Kern modifizieren — Prinzip: nur Hooks, nie init.sh/linbo.sh ändern
+
+## Current Milestone: v1.1 Fresh Install & Production Readiness
+
+**Goal:** Eine frische VM kann von `git clone` bis zum funktionierenden LINBO Docker Deployment kommen — mit zuverlässigem Bootstrap, klarer Konfiguration und vollständiger Dokumentation.
+
+**Target features:**
+- Bootstrap-Flow optimieren (Init Container, Paketquellen, linbofs64-Build)
+- Konfigurationsmanagement (.env, Authority API, Netzwerk)
+- Fehlerbehandlung im Setup-Prozess (fehlende Pakete, Netz-Probleme, falsche Keys)
+- Install Guide und Architektur-Dokumentation für Admins
 
 ## Context
 
@@ -87,4 +101,4 @@ LINBO als eigenständige, Docker-basierte Lösung mit modernem Web-Interface bet
 | Postsync für Patchclass | Standard-LINBO-Mechanismus, kein Upstream-PR nötig | ✓ Good |
 
 ---
-*Last updated: 2026-03-06 after project initialization*
+*Last updated: 2026-03-08 after milestone v1.1 start*
