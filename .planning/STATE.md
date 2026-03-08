@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Phase 7 context gathered
-last_updated: "2026-03-08T13:12:11.365Z"
+stopped_at: Completed 07-02-PLAN.md
+last_updated: "2026-03-08T13:31:46.528Z"
 last_activity: 2026-03-08 -- Completed 06-01 (worker Prisma-optional + Redis SCAN migration)
 progress:
   total_phases: 8
   completed_phases: 6
-  total_plans: 9
-  completed_plans: 9
+  total_plans: 11
+  completed_plans: 10
   percent: 100
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-06)
 
 **Core value:** LINBO als eigenstaendige Docker-Loesung mit modernem Web-Interface, ohne den LINBO-Kern zu veraendern
-**Current focus:** Phase 6: Isolated Debt Fixes -- IN PROGRESS
+**Current focus:** Phase 7: Backend Test Suites -- IN PROGRESS
 
 ## Current Position
 
-Phase: 6 of 8 (Isolated Debt Fixes)
-Plan: 1 of 1 in current phase (complete)
-Status: Phase 6 plan 01 complete
-Last activity: 2026-03-08 -- Completed 06-01 (worker Prisma-optional + Redis SCAN migration)
+Phase: 7 of 8 (Backend Test Suites)
+Plan: 2 of 2 in current phase (07-02 complete)
+Status: Phase 7 plan 02 complete
+Last activity: 2026-03-08 -- Completed 07-02 (terminal service unit tests)
 
-Progress: [██████████] 100%
+Progress: [█████████░] 91%
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Progress: [██████████] 100%
 | Phase 05 P01 | 4min | 2 tasks | 8 files |
 | Phase 05 P02 | 5min | 2 tasks | 11 files |
 | Phase 06 P01 | 4min | 2 tasks | 4 files |
+| Phase 07 P02 | 4min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -89,6 +90,7 @@ Recent decisions affecting current work:
 - [Phase 05-02]: File cleanup catches use console.debug; GRUB deletion and kernel rebuild use console.warn
 - [Phase 06-01]: if-else guard pattern instead of module-level return (Babel/Jest compatibility)
 - [Phase 06-01]: scanStream COUNT hint of 100 with pipeline-delete per batch and backpressure control
+- [Phase 07]: mock-prefixed variables required for Jest Babel hoisting in ssh2 mock factories
 
 ### Pending Todos
 
@@ -100,6 +102,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-08T13:12:11.354Z
-Stopped at: Phase 7 context gathered
-Resume file: .planning/phases/07-backend-test-suites/07-CONTEXT.md
+Last session: 2026-03-08T13:31:46.519Z
+Stopped at: Completed 07-02-PLAN.md
+Resume file: None
