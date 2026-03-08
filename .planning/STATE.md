@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Fresh Install & Production Readiness
-status: completed
-stopped_at: Completed 10-01-PLAN.md (Phase 10 complete)
-last_updated: "2026-03-08T18:38:19.400Z"
-last_activity: 2026-03-08 -- Completed Phase 10 Configuration & Install Script
+status: in-progress
+stopped_at: Completed 11-01-PLAN.md (Phase 11 complete)
+last_updated: "2026-03-08T18:55:43Z"
+last_activity: 2026-03-08 -- Completed Phase 11 Production Hardening & Observability
 progress:
   total_phases: 12
-  completed_phases: 10
-  total_plans: 16
-  completed_plans: 16
-  percent: 100
+  completed_phases: 11
+  total_plans: 17
+  completed_plans: 17
+  percent: 92
 ---
 
 # Project State
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-08)
 
 **Core value:** LINBO als eigenstaendige Docker-Loesung mit modernem Web-Interface, ohne den LINBO-Kern zu veraendern
-**Current focus:** Phase 10 complete -- ready for Phase 11
+**Current focus:** Phase 11 complete -- ready for Phase 12
 
 ## Current Position
 
-Phase: 10 of 12 (Configuration & Install Script) -- COMPLETE
+Phase: 11 of 12 (Production Hardening & Observability) -- COMPLETE
 Plan: 1 of 1 complete
 Status: Phase complete
-Last activity: 2026-03-08 -- Completed Phase 10 Configuration & Install Script
+Last activity: 2026-03-08 -- Completed Phase 11 Production Hardening & Observability
 
-Progress: [██████████] 100%
+Progress: [█████████░] 92%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3 (v1.1)
-- Average duration: 2.7min
-- Total execution time: 8min
+- Total plans completed: 4 (v1.1)
+- Average duration: 2.75min
+- Total execution time: 11min
 
 **By Phase:**
 
@@ -45,9 +45,10 @@ Progress: [██████████] 100%
 |-------|-------|-------|----------|
 | 09 | 2 | 5min | 2.5min |
 | 10 | 1 | 3min | 3min |
+| 11 | 1 | 3min | 3min |
 
 *Updated after each plan completion*
-| Phase 10 P01 | 3min | 3 tasks | 2 files |
+| Phase 11 P01 | 3min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -63,6 +64,8 @@ Recent decisions affecting current work:
 - 09-02: Rewired main flow with 6 checkpoint guards, structured error reporting, persistent .deb caching, and success summary
 - 10-01: Created setup.sh wizard (561 lines) with 7 prerequisite checks, IP auto-detection, cryptographic secrets, port conflict detection, atomic .env write
 - 10-01: Consolidated .env.example from 240 lines to 33 lines (user-facing variables only)
+- 11-01: Created wait-ready.sh (150 lines) health gate and doctor.sh (215 lines, 24 checks, 6 categories) diagnostics
+- 11-01: Added deploy.resources.limits to all 8 docker-compose services (64M-512M memory, 0.5-2.0 CPUs)
 
 ### Pending Todos
 
@@ -74,6 +77,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-08T18:25:03.337Z
-Stopped at: Completed 10-01-PLAN.md (Phase 10 complete)
+Last session: 2026-03-08T18:55:43Z
+Stopped at: Completed 11-01-PLAN.md (Phase 11 complete)
 Resume file: None

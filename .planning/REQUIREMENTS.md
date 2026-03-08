@@ -44,7 +44,7 @@ Requirements for Fresh Install & Production Readiness. Each maps to roadmap phas
 ### Error Handling
 
 - [x] **ERR-01**: Init Container zeigt actionable Fehlermeldungen bei APT-Fehlern, SHA256-Mismatches und Permission-Problemen
-- [ ] **ERR-02**: `make wait-ready` blockiert bis alle Container bereit sind oder zeigt an was hängt
+- [x] **ERR-02**: `make wait-ready` blockiert bis alle Container bereit sind oder zeigt an was hängt
 - [x] **ERR-03**: Port-Konflikte (TFTP 69/udp, rsync 873) werden vor dem Start erkannt mit klarer Lösung
 
 ### Documentation
@@ -55,8 +55,8 @@ Requirements for Fresh Install & Production Readiness. Each maps to roadmap phas
 
 ### Production Hardening
 
-- [ ] **HARD-01**: Docker Compose definiert Memory/CPU Limits für alle Container
-- [ ] **HARD-02**: `make doctor` prüft Container-Health, Volume-Permissions, SSH-Keys, linbofs64-Status, Redis und PXE-Erreichbarkeit
+- [x] **HARD-01**: Docker Compose definiert Memory/CPU Limits für alle Container
+- [x] **HARD-02**: `make doctor` prüft Container-Health, Volume-Permissions, SSH-Keys, linbofs64-Status, Redis und PXE-Erreichbarkeit
 
 ## v2 Requirements
 
@@ -136,9 +136,9 @@ Requirements for Fresh Install & Production Readiness. Each maps to roadmap phas
 | BOOT-03 | Phase 10: Configuration & Install Script | Complete |
 | BOOT-04 | Phase 10: Configuration & Install Script | Complete |
 | ERR-03 | Phase 10: Configuration & Install Script | Complete |
-| ERR-02 | Phase 11: Production Hardening & Observability | Pending |
-| HARD-01 | Phase 11: Production Hardening & Observability | Pending |
-| HARD-02 | Phase 11: Production Hardening & Observability | Pending |
+| ERR-02 | Phase 11: Production Hardening & Observability | Complete |
+| HARD-01 | Phase 11: Production Hardening & Observability | Complete |
+| HARD-02 | Phase 11: Production Hardening & Observability | Complete |
 | DOC-01 | Phase 12: Admin Documentation | Pending |
 | DOC-02 | Phase 12: Admin Documentation | Pending |
 | DOC-03 | Phase 12: Admin Documentation | Pending |
