@@ -108,14 +108,14 @@ Plans:
 **Depends on**: Phase 5, Phase 6
 **Requirements**: TEST-01, TEST-02
 **Success Criteria** (what must be TRUE):
-  1. Image-sync service tests cover: resume download from byte offset, SHA256 verification pass/fail, atomic directory swap, and queue ordering
+  1. Image-sync service tests cover: resume download from byte offset, MD5 hash verification pass/fail, atomic directory swap, and queue ordering
   2. Terminal service tests cover: session create/destroy lifecycle, PTY-to-exec fallback, idle timeout triggers cleanup, and no orphaned sessions after cleanup
   3. All tests pass in CI without network access or running containers (mocked dependencies)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 07-01: Image-sync service tests
-- [ ] 07-02: Terminal service tests
+- [ ] 07-01-PLAN.md -- Shared Redis mock module and image-sync service unit tests (resume, MD5 verify, atomic swap, queue)
+- [ ] 07-02-PLAN.md -- Terminal service unit tests (session lifecycle, PTY fallback, idle timeout, destroyAll)
 
 ### Phase 8: Integration and Frontend Tests
 **Goal**: WebSocket behavior and frontend state management are verified by automated tests
