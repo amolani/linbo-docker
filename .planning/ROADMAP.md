@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 2: Secrets Hardening** - Remove tracked secrets, enforce non-default credentials, fix deploy script auth
 - [x] **Phase 3: API Security** - Add WebSocket JWT verification, login rate-limiting, and CORS restriction (completed 2026-03-07)
 - [ ] **Phase 4: System Router Split** - Break system.js (1483 lines) into focused sub-routers
-- [ ] **Phase 5: Error Handling Cleanup** - Replace all 31 silent catch blocks with categorized logging
+- [ ] **Phase 5: Error Handling Cleanup** - Replace all 48 silent catch blocks with categorized logging
 - [ ] **Phase 6: Isolated Debt Fixes** - Apply Prisma-optional guard to worker and replace Redis KEYS with SCAN
 - [ ] **Phase 7: Backend Test Suites** - Unit tests for image-sync and terminal services
 - [ ] **Phase 8: Integration and Frontend Tests** - WebSocket integration tests and frontend store tests
@@ -85,10 +85,11 @@ Plans:
   1. Zero silent catch blocks remain in the codebase (grep for empty catch bodies returns nothing)
   2. Each former silent catch now uses categorized logging: debug (expected/harmless), warn (degraded but functional), or rethrow (caller must handle)
   3. Log output during normal API startup and operation does not produce spurious warnings (only actual issues trigger warn-level)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 05-01: Audit and categorize all silent catch blocks
+- [ ] 05-01-PLAN.md -- Categorize 29 silent catches in service files (linbo-update, sync, image-sync, terminal, settings, deviceImport, remote, sync-operations)
+- [ ] 05-02-PLAN.md -- Categorize 19 silent catches in routes, middleware, and index.js (Prisma-optional, configs, internal once-flag, startup/shutdown)
 
 ### Phase 6: Isolated Debt Fixes
 **Goal**: Worker resilience in sync mode and Redis performance at scale are resolved
@@ -143,7 +144,7 @@ Note: Phase 5 and Phase 6 both depend on Phase 4 and can execute in either order
 | 2. Secrets Hardening | 0/2 | Not started | - |
 | 3. API Security | 2/2 | Complete   | 2026-03-07 |
 | 4. System Router Split | 0/1 | Not started | - |
-| 5. Error Handling Cleanup | 0/1 | Not started | - |
+| 5. Error Handling Cleanup | 0/2 | Not started | - |
 | 6. Isolated Debt Fixes | 0/1 | Not started | - |
 | 7. Backend Test Suites | 0/2 | Not started | - |
 | 8. Integration and Frontend Tests | 0/2 | Not started | - |
