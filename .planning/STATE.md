@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-stopped_at: Phase 6 context gathered
-last_updated: "2026-03-08T12:04:40.304Z"
-last_activity: 2026-03-08 -- Completed 05-02 (route/middleware/index catch block cleanup)
+status: in-progress
+stopped_at: Completed 06-01-PLAN.md
+last_updated: "2026-03-08T12:35:00Z"
+last_activity: 2026-03-08 -- Completed 06-01 (worker Prisma-optional + Redis SCAN migration)
 progress:
   total_phases: 8
   completed_phases: 5
-  total_plans: 8
-  completed_plans: 8
+  total_plans: 9
+  completed_plans: 9
   percent: 100
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-06)
 
 **Core value:** LINBO als eigenstaendige Docker-Loesung mit modernem Web-Interface, ohne den LINBO-Kern zu veraendern
-**Current focus:** Phase 5: Error Handling Cleanup -- COMPLETE
+**Current focus:** Phase 6: Isolated Debt Fixes -- IN PROGRESS
 
 ## Current Position
 
-Phase: 5 of 8 (Error Handling Cleanup) -- COMPLETE
-Plan: 2 of 2 in current phase (all complete)
-Status: Phase 5 complete
-Last activity: 2026-03-08 -- Completed 05-02 (route/middleware/index catch block cleanup)
+Phase: 6 of 8 (Isolated Debt Fixes)
+Plan: 1 of 1 in current phase (complete)
+Status: Phase 6 plan 01 complete
+Last activity: 2026-03-08 -- Completed 06-01 (worker Prisma-optional + Redis SCAN migration)
 
 Progress: [██████████] 100%
 
@@ -55,6 +55,7 @@ Progress: [██████████] 100%
 | Phase 04 P01 | 9min | 2 tasks | 10 files |
 | Phase 05 P01 | 4min | 2 tasks | 8 files |
 | Phase 05 P02 | 5min | 2 tasks | 11 files |
+| Phase 06 P01 | 4min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -86,6 +87,8 @@ Recent decisions affecting current work:
 - [Phase 05-02]: Prisma-optional catches use console.debug with static sync-mode message
 - [Phase 05-02]: Once-flag pattern (_redisWarnLogged) for internal.js Redis fallback logging
 - [Phase 05-02]: File cleanup catches use console.debug; GRUB deletion and kernel rebuild use console.warn
+- [Phase 06-01]: if-else guard pattern instead of module-level return (Babel/Jest compatibility)
+- [Phase 06-01]: scanStream COUNT hint of 100 with pipeline-delete per batch and backpressure control
 
 ### Pending Todos
 
@@ -97,6 +100,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-08T12:04:40.296Z
-Stopped at: Phase 6 context gathered
-Resume file: .planning/phases/06-isolated-debt-fixes/06-CONTEXT.md
+Last session: 2026-03-08T12:35:00Z
+Stopped at: Completed 06-01-PLAN.md
+Resume file: .planning/phases/06-isolated-debt-fixes/06-01-SUMMARY.md

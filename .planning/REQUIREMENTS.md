@@ -27,8 +27,8 @@
 
 - [x] **DEBT-01**: Alle 31 silent catch-blocks durch kategorisiertes Logging ersetzen (debug/warn/rethrow)
 - [x] **DEBT-02**: system.js (1483 Zeilen) in Sub-Router splitten: kernel, firmware, grub-theme, grub-config, linbo-update, worker, wlan
-- [ ] **DEBT-03**: operation.worker.js Prisma-optional Pattern anwenden (try/catch Guard statt top-level require)
-- [ ] **DEBT-04**: Redis KEYS-Command durch SCAN-basierte Iteration in delPattern() ersetzen
+- [x] **DEBT-03**: operation.worker.js Prisma-optional Pattern anwenden (try/catch Guard statt top-level require)
+- [x] **DEBT-04**: Redis KEYS-Command durch SCAN-basierte Iteration in delPattern() ersetzen
 
 ## v2 Requirements
 
@@ -72,8 +72,8 @@
 | TEST-04 | Phase 8: Integration and Frontend Tests | Pending |
 | DEBT-01 | Phase 5: Error Handling Cleanup | Complete |
 | DEBT-02 | Phase 4: System Router Split | Complete |
-| DEBT-03 | Phase 6: Isolated Debt Fixes | Pending |
-| DEBT-04 | Phase 6: Isolated Debt Fixes | Pending |
+| DEBT-03 | Phase 6: Isolated Debt Fixes | Complete |
+| DEBT-04 | Phase 6: Isolated Debt Fixes | Complete |
 
 **Coverage:**
 - v1 requirements: 16 total
