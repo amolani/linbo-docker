@@ -43,7 +43,7 @@ Requirements for Fresh Install & Production Readiness. Each maps to roadmap phas
 
 ### Error Handling
 
-- [ ] **ERR-01**: Init Container zeigt actionable Fehlermeldungen bei APT-Fehlern, SHA256-Mismatches und Permission-Problemen
+- [x] **ERR-01**: Init Container zeigt actionable Fehlermeldungen bei APT-Fehlern, SHA256-Mismatches und Permission-Problemen
 - [ ] **ERR-02**: `make wait-ready` blockiert bis alle Container bereit sind oder zeigt an was hängt
 - [ ] **ERR-03**: Port-Konflikte (TFTP 69/udp, rsync 873) werden vor dem Start erkannt mit klarer Lösung
 
@@ -130,7 +130,7 @@ Requirements for Fresh Install & Production Readiness. Each maps to roadmap phas
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ERR-01 | Phase 9: Init Container Hardening | Pending |
+| ERR-01 | Phase 9: Init Container Hardening | Complete |
 | BOOT-01 | Phase 10: Configuration & Install Script | Pending |
 | BOOT-02 | Phase 10: Configuration & Install Script | Pending |
 | BOOT-03 | Phase 10: Configuration & Install Script | Pending |
