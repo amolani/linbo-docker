@@ -6,7 +6,10 @@
 const express = require('express');
 const router = express.Router();
 let prisma;
-try { prisma = require('../lib/prisma').prisma; } catch { prisma = null; }
+try { prisma = require('../lib/prisma').prisma; } catch { console.debug('[Internal] Prisma not available, running in sync mode'); prisma = null; }
+
+// Once-flag: suppress repeated Redis host lookup warnings
+let _redisWarnLogged = false;
 const ws = require('../lib/websocket');
 const redisLib = require('../lib/redis');
 let macctService, provisioningService;
@@ -751,7 +754,12 @@ async function findHostByIp(clientIp) {
         if (host.ip === clientIp) return host;
       }
     }
-  } catch {}
+  } catch (err) {
+    if (!_redisWarnLogged) {
+      console.debug('[Internal] Redis host lookup failed, using Prisma fallback:', err.message);
+      _redisWarnLogged = true;
+    }
+  }
 
   // Fallback to Prisma if available
   if (prisma) {
@@ -768,7 +776,9 @@ async function findHostByIp(clientIp) {
           hostgroup: host.config?.name,
         };
       }
-    } catch {}
+    } catch (err) {
+      console.debug('[Internal] Prisma host lookup also failed:', err.message);
+    }
   }
 
   return null;

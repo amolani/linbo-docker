@@ -23,6 +23,7 @@ try {
   connectWithRetry = prismaLib.connectWithRetry;
   disconnectPrisma = prismaLib.disconnect;
 } catch {
+  console.debug('[Startup] Prisma not available, running in sync mode');
   prisma = null;
   connectWithRetry = async () => {};
   disconnectPrisma = async () => {};
@@ -590,7 +591,9 @@ async function startServer() {
     const settingsService2 = require('./services/settings.service');
     const syncSetting = await settingsService2.get('sync_enabled');
     if (syncSetting === 'true') isSyncMode = true;
-  } catch {}
+  } catch (err) {
+    console.debug('[Startup] settings service unavailable, determining sync mode:', err.message);
+  }
   if (isSyncMode) {
     try {
       const imageSyncService = require('./services/image-sync.service');
@@ -675,14 +678,14 @@ async function startServer() {
       linbofsService.updateLinbofs().then(result => {
         if (result.success) {
           console.log('[AutoRebuild] linbofs64 rebuilt successfully');
-          try { sanityFs.unlinkSync(runningMarker); } catch {}
+          try { sanityFs.unlinkSync(runningMarker); } catch (err) { console.debug('[AutoRebuild] cleanup: unlink running marker failed:', err.message); }
         } else {
           console.error('[AutoRebuild] FAILED:', result.errors);
-          try { sanityFs.renameSync(runningMarker, rebuildMarker); } catch {}
+          try { sanityFs.renameSync(runningMarker, rebuildMarker); } catch (err) { console.debug('[AutoRebuild] restore rebuild marker failed:', err.message); }
         }
       }).catch(err => {
         console.error('[AutoRebuild] Error:', err.message);
-        try { sanityFs.renameSync(runningMarker, rebuildMarker); } catch {}
+        try { sanityFs.renameSync(runningMarker, rebuildMarker); } catch (err) { console.debug('[AutoRebuild] restore rebuild marker on error failed:', err.message); }
       });
     } else if (sanityFs.existsSync(runningMarker)) {
       // Previous rebuild was interrupted — retry
@@ -734,7 +737,9 @@ async function shutdown(signal) {
       const termService = require('./services/terminal.service');
       termService.destroyAll();
       console.log('Terminal sessions closed');
-    } catch {}
+    } catch (err) {
+      console.debug('[Shutdown] terminal cleanup failed:', err.message);
+    }
 
     // Close Terminal WebSocket connections
     if (server._terminalWss) {
