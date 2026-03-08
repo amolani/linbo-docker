@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Phase 8 context gathered
-last_updated: "2026-03-08T14:18:13.652Z"
-last_activity: 2026-03-08 -- Completed 07-01 (image-sync service unit tests)
+stopped_at: Completed 08-02-PLAN.md
+last_updated: "2026-03-08T14:39:29.928Z"
+last_activity: 2026-03-08 -- Completed 08-02 (Zustand store unit tests)
 progress:
   total_phases: 8
   completed_phases: 7
-  total_plans: 11
-  completed_plans: 11
-  percent: 91
+  total_plans: 13
+  completed_plans: 12
+  percent: 92
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-06)
 
 **Core value:** LINBO als eigenstaendige Docker-Loesung mit modernem Web-Interface, ohne den LINBO-Kern zu veraendern
-**Current focus:** Phase 7: Backend Test Suites -- IN PROGRESS
+**Current focus:** Phase 8: Integration and Frontend Tests -- IN PROGRESS
 
 ## Current Position
 
-Phase: 7 of 8 (Backend Test Suites)
-Plan: 2 of 2 in current phase (07-02 complete)
-Status: Phase 7 complete (both plans done)
-Last activity: 2026-03-08 -- Completed 07-01 (image-sync service unit tests)
+Phase: 8 of 8 (Integration and Frontend Tests)
+Plan: 2 of 2 in current phase (08-02 complete)
+Status: Phase 8 plan 02 complete (Zustand store unit tests)
+Last activity: 2026-03-08 -- Completed 08-02 (Zustand store unit tests)
 
-Progress: [█████████░] 91%
+Progress: [█████████░] 92%
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ Progress: [█████████░] 91%
 | Phase 06 P01 | 4min | 2 tasks | 4 files |
 | Phase 07 P01 | 6min | 2 tasks | 2 files |
 | Phase 07 P02 | 4min | 1 tasks | 1 files |
+| Phase 08 P02 | 2min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -95,6 +96,9 @@ Recent decisions affecting current work:
 - [Phase 07-01]: Stream module mocked via jest.requireActual inside factory to provide real Transform but stubbed Readable.fromWeb
 - [Phase 07-01]: Fire-and-forget _runDownload tested via flushAsync helper (multiple setImmediate rounds)
 - [Phase 07]: mock-prefixed variables required for Jest Babel hoisting in ssh2 mock factories
+- [Phase 08]: [Phase 08-02]: MockWebSocket with instance tracking array for WebSocket-dependent store tests
+- [Phase 08]: [Phase 08-02]: vi.stubGlobal for WebSocket mock before module import (module-scope WS_URL)
+- [Phase 08]: [Phase 08-02]: axios.create mock in axios mock factory to satisfy apiClient import chain
 
 ### Pending Todos
 
@@ -106,6 +110,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-08T14:18:13.644Z
-Stopped at: Phase 8 context gathered
-Resume file: .planning/phases/08-integration-and-frontend-tests/08-CONTEXT.md
+Last session: 2026-03-08T14:39:29.919Z
+Stopped at: Completed 08-02-PLAN.md
+Resume file: None

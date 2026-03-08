@@ -21,7 +21,7 @@
 - [x] **TEST-01**: Unit-Tests für Image-Sync Service (Resume-Download, SHA256-Verify, Atomic Directory Swap, Queue)
 - [x] **TEST-02**: Unit-Tests für Terminal Service (Session-Create/Destroy, PTY/Exec-Fallback, Idle-Timeout, Cleanup)
 - [ ] **TEST-03**: Integration-Tests für WebSocket (Connection mit/ohne Auth, Heartbeat, Channel-Subscription, Broadcast)
-- [ ] **TEST-04**: Frontend-Tests für kritische Zustand-Stores (wsStore Reconnect, hostStore Merge, configStore Cache)
+- [x] **TEST-04**: Frontend-Tests für kritische Zustand-Stores (wsStore Reconnect, hostStore Merge, configStore Cache)
 
 ### Tech-Debt
 
@@ -69,7 +69,7 @@
 | TEST-01 | Phase 7: Backend Test Suites | Complete |
 | TEST-02 | Phase 7: Backend Test Suites | Complete |
 | TEST-03 | Phase 8: Integration and Frontend Tests | Pending |
-| TEST-04 | Phase 8: Integration and Frontend Tests | Pending |
+| TEST-04 | Phase 8: Integration and Frontend Tests | Complete |
 | DEBT-01 | Phase 5: Error Handling Cleanup | Complete |
 | DEBT-02 | Phase 4: System Router Split | Complete |
 | DEBT-03 | Phase 6: Isolated Debt Fixes | Complete |
