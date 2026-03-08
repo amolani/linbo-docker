@@ -110,7 +110,7 @@ Plans:
 - Integer phases (9, 10, 11, 12): Planned milestone work
 - Decimal phases (10.1, 10.2): Urgent insertions if needed
 
-- [ ] **Phase 9: Init Container Hardening** - Structured error reporting, idempotent checkpoints, retry logic for network failures
+- [x] **Phase 9: Init Container Hardening** - Structured error reporting, idempotent checkpoints, retry logic for network failures (completed 2026-03-08)
 - [ ] **Phase 10: Configuration & Install Script** - setup.sh with prerequisites, .env generation, IP auto-detect, port conflict detection
 - [ ] **Phase 11: Production Hardening & Observability** - wait-ready health gate, resource limits, make doctor diagnostics
 - [ ] **Phase 12: Admin Documentation** - Install guide, architecture overview, network diagram for sysadmins
@@ -129,8 +129,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 09-01-PLAN.md -- Error reporting infrastructure, pre-flight checks, and checkpoint helper functions
-- [ ] 09-02-PLAN.md -- Rewire main flow with checkpoint guards, structured errors, and success summary
+- [x] 09-01-PLAN.md -- Error reporting infrastructure, pre-flight checks, and checkpoint helper functions
+- [x] 09-02-PLAN.md -- Rewire main flow with checkpoint guards, structured errors, and success summary
 
 ### Phase 10: Configuration & Install Script
 **Goal**: An admin runs `./setup.sh` once and gets a complete, validated `.env` file with auto-detected network settings, secure secrets, and pre-checked system prerequisites
@@ -193,7 +193,7 @@ Note: Phase 12 (Documentation) depends on all three prior phases being stable, s
 | 6. Isolated Debt Fixes | v1.0 | 1/1 | Complete | 2026-03-08 |
 | 7. Backend Test Suites | v1.0 | 2/2 | Complete | 2026-03-08 |
 | 8. Integration and Frontend Tests | v1.0 | 2/2 | Complete | 2026-03-08 |
-| 9. Init Container Hardening | v1.1 | 0/2 | Not started | - |
+| 9. Init Container Hardening | v1.1 | 2/2 | Complete | 2026-03-08 |
 | 10. Configuration & Install Script | v1.1 | 0/? | Not started | - |
 | 11. Production Hardening & Observability | v1.1 | 0/? | Not started | - |
 | 12. Admin Documentation | v1.1 | 0/? | Not started | - |
