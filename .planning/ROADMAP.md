@@ -126,11 +126,11 @@ Plans:
   2. When SHA256 verification fails for a downloaded file, the error message shows expected vs actual hash and tells the admin to retry or check the APT mirror
   3. When a permission error occurs (EACCES), the error message identifies the path and suggests the chown command to fix it
   4. After a partial failure (e.g., network timeout mid-download), re-running `docker compose up init` resumes from the last completed checkpoint without repeating successful steps
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 09-01: TBD
-- [ ] 09-02: TBD
+- [ ] 09-01-PLAN.md -- Error reporting infrastructure, pre-flight checks, and checkpoint helper functions
+- [ ] 09-02-PLAN.md -- Rewire main flow with checkpoint guards, structured errors, and success summary
 
 ### Phase 10: Configuration & Install Script
 **Goal**: An admin runs `./setup.sh` once and gets a complete, validated `.env` file with auto-detected network settings, secure secrets, and pre-checked system prerequisites
@@ -193,7 +193,7 @@ Note: Phase 12 (Documentation) depends on all three prior phases being stable, s
 | 6. Isolated Debt Fixes | v1.0 | 1/1 | Complete | 2026-03-08 |
 | 7. Backend Test Suites | v1.0 | 2/2 | Complete | 2026-03-08 |
 | 8. Integration and Frontend Tests | v1.0 | 2/2 | Complete | 2026-03-08 |
-| 9. Init Container Hardening | v1.1 | 0/? | Not started | - |
+| 9. Init Container Hardening | v1.1 | 0/2 | Not started | - |
 | 10. Configuration & Install Script | v1.1 | 0/? | Not started | - |
 | 11. Production Hardening & Observability | v1.1 | 0/? | Not started | - |
 | 12. Admin Documentation | v1.1 | 0/? | Not started | - |
