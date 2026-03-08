@@ -155,11 +155,10 @@ Plans:
   1. `make wait-ready` blocks until all containers report healthy, or prints which container is not ready and why (with last 5 log lines) after a configurable timeout
   2. Every container in docker-compose.yml has explicit memory and CPU limits that prevent a single container from consuming all host resources
   3. `make doctor` checks container health, volume permissions (write test), SSH key presence, linbofs64 build status, Redis connectivity, and PXE port reachability -- printing PASS/FAIL for each check with fix suggestions for failures
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 11-01: TBD
-- [ ] 11-02: TBD
+- [ ] 11-01-PLAN.md -- wait-ready health gate, docker-compose resource limits, doctor diagnostics script
 
 ### Phase 12: Admin Documentation
 **Goal**: A sysadmin with no prior exposure to the project can follow the documentation from VM setup to verified PXE boot without needing developer assistance
@@ -194,5 +193,5 @@ Note: Phase 12 (Documentation) depends on all three prior phases being stable, s
 | 8. Integration and Frontend Tests | v1.0 | 2/2 | Complete | 2026-03-08 |
 | 9. Init Container Hardening | v1.1 | 2/2 | Complete | 2026-03-08 |
 | 10. Configuration & Install Script | v1.1 | Complete    | 2026-03-08 | 2026-03-08 |
-| 11. Production Hardening & Observability | v1.1 | 0/? | Not started | - |
+| 11. Production Hardening & Observability | v1.1 | 0/1 | Not started | - |
 | 12. Admin Documentation | v1.1 | 0/? | Not started | - |
