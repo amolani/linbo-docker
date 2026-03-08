@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-stopped_at: Phase 5 context gathered
-last_updated: "2026-03-08T11:00:46.456Z"
-last_activity: 2026-03-07 -- Completed 04-01 (system.js router split)
+status: in_progress
+stopped_at: Completed 05-01-PLAN.md
+last_updated: "2026-03-08T11:28:26Z"
+last_activity: 2026-03-08 -- Completed 05-01 (service catch block cleanup)
 progress:
   total_phases: 8
   completed_phases: 4
-  total_plans: 6
-  completed_plans: 6
-  percent: 100
+  total_plans: 8
+  completed_plans: 7
+  percent: 88
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-06)
 
 **Core value:** LINBO als eigenstaendige Docker-Loesung mit modernem Web-Interface, ohne den LINBO-Kern zu veraendern
-**Current focus:** Phase 4: System Router Split (complete)
+**Current focus:** Phase 5: Error Handling Cleanup
 
 ## Current Position
 
-Phase: 4 of 8 (System Router Split) -- COMPLETE
-Plan: 1 of 1 in current phase (all complete)
-Status: Phase 4 complete
-Last activity: 2026-03-07 -- Completed 04-01 (system.js router split)
+Phase: 5 of 8 (Error Handling Cleanup)
+Plan: 1 of 2 in current phase (05-01 complete, 05-02 remaining)
+Status: Phase 5 in progress
+Last activity: 2026-03-08 -- Completed 05-01 (service catch block cleanup)
 
-Progress: [██████████] 100%
+Progress: [████████░░] 88%
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ Progress: [██████████] 100%
 
 *Updated after each plan completion*
 | Phase 04 P01 | 9min | 2 tasks | 10 files |
+| Phase 05 P01 | 4min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -78,6 +79,9 @@ Recent decisions affecting current work:
 - [Phase 04]: Co-locate Zod schemas with consumer sub-router, not in shared file
 - [Phase 04]: wlanConfigSchema in wlan.js (not firmware.js) despite original proximity
 - [Phase 04]: No shared utils file - each sub-router self-contained and independently importable
+- [Phase 05-01]: console.debug for file cleanup, data-fetch fallbacks, Redis heartbeats, health checks
+- [Phase 05-01]: console.warn for GRUB config generation failures and SSH gui_ctl restore
+- [Phase 05-01]: WS broadcast catches kept silent with comment-only pattern
 
 ### Pending Todos
 
@@ -89,6 +93,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-08T11:00:46.447Z
-Stopped at: Phase 5 context gathered
-Resume file: .planning/phases/05-error-handling-cleanup/05-CONTEXT.md
+Last session: 2026-03-08T11:28:26Z
+Stopped at: Completed 05-01-PLAN.md
+Resume file: .planning/phases/05-error-handling-cleanup/05-02-PLAN.md
