@@ -14,7 +14,9 @@ const router = express.Router();
 let prisma = null;
 try {
   prisma = require('../lib/prisma').prisma;
-} catch {}
+} catch {
+  console.debug('[Auth] Prisma not available, running in sync mode');
+}
 
 const {
   generateToken,

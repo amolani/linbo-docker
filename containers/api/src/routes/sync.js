@@ -39,7 +39,9 @@ router.get('/mode', async (req, res) => {
   try {
     const syncSetting = await settingsService.get('sync_enabled');
     if (syncSetting === 'true') syncEnabled = true;
-  } catch {}
+  } catch (err) {
+    console.debug('[Sync] settings check failed:', err.message);
+  }
 
   const standaloneEnabled = !!process.env.DATABASE_URL;
 

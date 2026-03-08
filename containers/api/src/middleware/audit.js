@@ -7,7 +7,9 @@
 let prisma = null;
 try {
   prisma = require('../lib/prisma').prisma;
-} catch {}
+} catch {
+  console.debug('[Audit] Prisma not available, running in sync mode');
+}
 
 const { v4: uuidv4 } = require('uuid');
 

@@ -126,7 +126,7 @@ router.post(
             break;
           }
         }
-      })().catch(() => {});
+      })().catch(err => console.warn('[Kernel] background rebuild failed:', err.message));
 
       res.json({ data: result });
     } catch (error) {

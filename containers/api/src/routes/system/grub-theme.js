@@ -25,7 +25,7 @@ const themeUpload = multer({
 
 async function cleanupTemp(filePath) {
   if (filePath) {
-    await fs.unlink(filePath).catch(() => {});
+    await fs.unlink(filePath).catch(err => console.debug('[GrubTheme] cleanup: unlink temp file failed:', err.message));
   }
 }
 

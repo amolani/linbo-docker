@@ -34,7 +34,7 @@ const upload = multer({
  */
 async function cleanupTemp(filePath) {
   if (filePath) {
-    await fs.unlink(filePath).catch(() => {});
+    await fs.unlink(filePath).catch(err => console.debug('[Patchclass] cleanup: unlink temp file failed:', err.message));
   }
 }
 

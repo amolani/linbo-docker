@@ -405,8 +405,8 @@ router.delete(
       // 2. Delete start.conf file + .md5
       try {
         const startConfPath = path.join(LINBO_DIR, `start.conf.${config.name}`);
-        await fsPromises.unlink(startConfPath).catch(() => {});
-        await fsPromises.unlink(`${startConfPath}.md5`).catch(() => {});
+        await fsPromises.unlink(startConfPath).catch(err => console.debug('[Configs] cleanup: unlink start.conf failed:', err.message));
+        await fsPromises.unlink(`${startConfPath}.md5`).catch(err => console.debug('[Configs] cleanup: unlink md5 failed:', err.message));
         cleanupResults.startConf = true;
       } catch (err) {
         console.error(`[Configs] Delete: failed to remove start.conf.${config.name}:`, err.message);
@@ -421,12 +421,12 @@ router.delete(
         for (const host of hostsInConfig) {
           if (host.ipAddress) {
             const ipLink = path.join(LINBO_DIR, `start.conf-${host.ipAddress}`);
-            await fsPromises.unlink(ipLink).catch(() => {});
+            await fsPromises.unlink(ipLink).catch(err => console.debug('[Configs] cleanup: unlink IP link failed:', err.message));
             cleanupResults.symlinks++;
           }
           // Also remove host GRUB symlink
           if (host.hostname) {
-            await grubService.deleteHostGrubConfig(host.hostname).catch(() => {});
+            await grubService.deleteHostGrubConfig(host.hostname).catch(err => console.warn('[Configs] GRUB host config deletion failed:', err.message));
           }
         }
       } catch (err) {

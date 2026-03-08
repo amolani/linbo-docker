@@ -12,7 +12,9 @@ const bcrypt = require('bcryptjs');
 let prisma = null;
 try {
   prisma = require('../lib/prisma').prisma;
-} catch {}
+} catch {
+  console.debug('[Auth] Prisma not available, running in sync mode');
+}
 
 const JWT_SECRET = process.env.JWT_SECRET || 'linbo-docker-secret-change-in-production';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
