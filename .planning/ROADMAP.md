@@ -111,7 +111,7 @@ Plans:
 - Decimal phases (10.1, 10.2): Urgent insertions if needed
 
 - [x] **Phase 9: Init Container Hardening** - Structured error reporting, idempotent checkpoints, retry logic for network failures (completed 2026-03-08)
-- [ ] **Phase 10: Configuration & Install Script** - setup.sh with prerequisites, .env generation, IP auto-detect, port conflict detection
+- [x] **Phase 10: Configuration & Install Script** - setup.sh with prerequisites, .env generation, IP auto-detect, port conflict detection (completed 2026-03-08)
 - [ ] **Phase 11: Production Hardening & Observability** - wait-ready health gate, resource limits, make doctor diagnostics
 - [ ] **Phase 12: Admin Documentation** - Install guide, architecture overview, network diagram for sysadmins
 
@@ -145,7 +145,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 10-01-PLAN.md -- setup.sh configuration wizard, .env generation, prerequisites, port detection, .env.example consolidation
+- [x] 10-01-PLAN.md -- setup.sh configuration wizard, .env generation, prerequisites, port detection, .env.example consolidation
 
 ### Phase 11: Production Hardening & Observability
 **Goal**: Admins can verify system health after deployment and containers run within defined resource boundaries
@@ -193,6 +193,6 @@ Note: Phase 12 (Documentation) depends on all three prior phases being stable, s
 | 7. Backend Test Suites | v1.0 | 2/2 | Complete | 2026-03-08 |
 | 8. Integration and Frontend Tests | v1.0 | 2/2 | Complete | 2026-03-08 |
 | 9. Init Container Hardening | v1.1 | 2/2 | Complete | 2026-03-08 |
-| 10. Configuration & Install Script | v1.1 | 0/1 | Planned | - |
+| 10. Configuration & Install Script | v1.1 | 1/1 | Complete | 2026-03-08 |
 | 11. Production Hardening & Observability | v1.1 | 0/? | Not started | - |
 | 12. Admin Documentation | v1.1 | 0/? | Not started | - |

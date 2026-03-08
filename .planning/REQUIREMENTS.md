@@ -36,16 +36,16 @@ Requirements for Fresh Install & Production Readiness. Each maps to roadmap phas
 
 ### Bootstrap Flow
 
-- [ ] **BOOT-01**: Admin kann `./setup.sh` ausführen und bekommt eine funktionierende `.env` mit validierten Werten
-- [ ] **BOOT-02**: Setup-Script prüft Prerequisites (Docker-Version, Ports, Disk, Netzwerk) und zeigt klare Pass/Fail-Meldungen
-- [ ] **BOOT-03**: Setup-Script erkennt automatisch die LINBO_SERVER_IP auf dem PXE-Netzwerk-Interface
-- [ ] **BOOT-04**: `.env`-Generierung erstellt sichere Secrets (JWT_SECRET, INTERNAL_API_KEY) automatisch
+- [x] **BOOT-01**: Admin kann `./setup.sh` ausführen und bekommt eine funktionierende `.env` mit validierten Werten
+- [x] **BOOT-02**: Setup-Script prüft Prerequisites (Docker-Version, Ports, Disk, Netzwerk) und zeigt klare Pass/Fail-Meldungen
+- [x] **BOOT-03**: Setup-Script erkennt automatisch die LINBO_SERVER_IP auf dem PXE-Netzwerk-Interface
+- [x] **BOOT-04**: `.env`-Generierung erstellt sichere Secrets (JWT_SECRET, INTERNAL_API_KEY) automatisch
 
 ### Error Handling
 
 - [x] **ERR-01**: Init Container zeigt actionable Fehlermeldungen bei APT-Fehlern, SHA256-Mismatches und Permission-Problemen
 - [ ] **ERR-02**: `make wait-ready` blockiert bis alle Container bereit sind oder zeigt an was hängt
-- [ ] **ERR-03**: Port-Konflikte (TFTP 69/udp, rsync 873) werden vor dem Start erkannt mit klarer Lösung
+- [x] **ERR-03**: Port-Konflikte (TFTP 69/udp, rsync 873) werden vor dem Start erkannt mit klarer Lösung
 
 ### Documentation
 
@@ -131,11 +131,11 @@ Requirements for Fresh Install & Production Readiness. Each maps to roadmap phas
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | ERR-01 | Phase 9: Init Container Hardening | Complete |
-| BOOT-01 | Phase 10: Configuration & Install Script | Pending |
-| BOOT-02 | Phase 10: Configuration & Install Script | Pending |
-| BOOT-03 | Phase 10: Configuration & Install Script | Pending |
-| BOOT-04 | Phase 10: Configuration & Install Script | Pending |
-| ERR-03 | Phase 10: Configuration & Install Script | Pending |
+| BOOT-01 | Phase 10: Configuration & Install Script | Complete |
+| BOOT-02 | Phase 10: Configuration & Install Script | Complete |
+| BOOT-03 | Phase 10: Configuration & Install Script | Complete |
+| BOOT-04 | Phase 10: Configuration & Install Script | Complete |
+| ERR-03 | Phase 10: Configuration & Install Script | Complete |
 | ERR-02 | Phase 11: Production Hardening & Observability | Pending |
 | HARD-01 | Phase 11: Production Hardening & Observability | Pending |
 | HARD-02 | Phase 11: Production Hardening & Observability | Pending |
