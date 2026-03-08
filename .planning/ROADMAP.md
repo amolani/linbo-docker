@@ -98,10 +98,10 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. operation.worker.js runs without error in sync mode (no Prisma, Redis-only) -- the try/catch guard prevents crash on missing Prisma
   2. Redis key cleanup uses SCAN-based iteration instead of KEYS command; `delPattern()` no longer blocks Redis during large key sets
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 06-01: Worker Prisma guard and Redis SCAN migration
+- [ ] 06-01-PLAN.md -- Worker Prisma-optional sync-mode guard and Redis SCAN migration for delPattern
 
 ### Phase 7: Backend Test Suites
 **Goal**: Critical backend services have comprehensive unit test coverage
