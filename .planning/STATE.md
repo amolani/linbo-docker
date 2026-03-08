@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 08-02-PLAN.md
-last_updated: "2026-03-08T14:39:29.928Z"
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-03-08T14:41:26.790Z"
 last_activity: 2026-03-08 -- Completed 08-02 (Zustand store unit tests)
 progress:
   total_phases: 8
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 13
-  completed_plans: 12
+  completed_plans: 13
   percent: 92
 ---
 
@@ -59,6 +59,7 @@ Progress: [█████████░] 92%
 | Phase 07 P01 | 6min | 2 tasks | 2 files |
 | Phase 07 P02 | 4min | 1 tasks | 1 files |
 | Phase 08 P02 | 2min | 3 tasks | 3 files |
+| Phase 08 P01 | 4min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -99,6 +100,8 @@ Recent decisions affecting current work:
 - [Phase 08]: [Phase 08-02]: MockWebSocket with instance tracking array for WebSocket-dependent store tests
 - [Phase 08]: [Phase 08-02]: vi.stubGlobal for WebSocket mock before module import (module-scope WS_URL)
 - [Phase 08]: [Phase 08-02]: axios.create mock in axios mock factory to satisfy apiClient import chain
+- [Phase 08]: [Phase 08-01]: Message queue pattern in connectWs to prevent race conditions with server-sent welcome messages
+- [Phase 08]: [Phase 08-01]: Server-side isAlive=false injection for missed heartbeat termination test
 
 ### Pending Todos
 
@@ -110,6 +113,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-08T14:39:29.919Z
-Stopped at: Completed 08-02-PLAN.md
+Last session: 2026-03-08T14:41:26.780Z
+Stopped at: Completed 08-01-PLAN.md
 Resume file: None
