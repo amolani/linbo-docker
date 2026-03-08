@@ -137,11 +137,23 @@ async function del(key) {
  */
 async function delPattern(pattern) {
   const client = getClient();
-  const keys = await client.keys(pattern);
-  if (keys.length > 0) {
-    await client.del(...keys);
-  }
-  return keys.length;
+  let deleted = 0;
+
+  return new Promise((resolve, reject) => {
+    const stream = client.scanStream({ match: pattern, count: 100 });
+
+    stream.on('data', (keys) => {
+      if (keys.length === 0) return;
+      deleted += keys.length;
+      stream.pause();
+      client.pipeline(keys.map((k) => ['del', k])).exec()
+        .then(() => stream.resume())
+        .catch((err) => { stream.destroy(); reject(err); });
+    });
+
+    stream.on('end', () => resolve(deleted));
+    stream.on('error', reject);
+  });
 }
 
 /**

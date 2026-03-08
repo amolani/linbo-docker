@@ -14,6 +14,7 @@ const mockPipeline = {
 const mockClient = {
   scanStream: jest.fn(),
   pipeline: jest.fn(() => mockPipeline),
+  on: jest.fn().mockReturnThis(),
 };
 
 jest.mock('ioredis', () => {
