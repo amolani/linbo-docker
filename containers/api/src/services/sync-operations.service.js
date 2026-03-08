@@ -534,7 +534,7 @@ async function scheduleOnbootCommands(filter, cmdString, opts = {}) {
   const hosts = await resolveHosts(filter);
 
   // Ensure linbocmd dir exists
-  await fs.mkdir(LINBOCMD_DIR, { recursive: true }).catch(() => {});
+  await fs.mkdir(LINBOCMD_DIR, { recursive: true }).catch(err => console.debug('[SyncOps] mkdir LINBOCMD_DIR failed:', err.message));
 
   // Build final command string with flags
   let finalCommands = cmdString;

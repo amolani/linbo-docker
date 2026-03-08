@@ -545,7 +545,7 @@ async function executeDirectCommands(hostIds, commandString, options = {}) {
                 'gui_ctl restore',
                 { timeout: 5000 }
               )
-              .catch(() => {});
+              .catch(err => console.warn('[Remote] gui_ctl restore failed:', err.message));
           }
 
           // Session als completed markieren

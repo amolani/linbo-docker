@@ -564,13 +564,13 @@ async function importFromCsv(csvContent, options = {}) {
         await configService.createHostSymlinks(config.id);
 
         // GRUB-Config für Config
-        await grubService.generateConfigGrubConfig(config.name).catch(() => {});
+        await grubService.generateConfigGrubConfig(config.name).catch(err => console.warn('[DeviceImport] GRUB config generation failed:', err.message));
 
         // GRUB-Configs für Hosts
         for (const host of config.hosts) {
           await grubService
             .generateHostGrubConfig(host.hostname, config.name)
-            .catch(() => {});
+            .catch(err => console.warn('[DeviceImport] host GRUB config generation failed:', err.message));
         }
       }
 

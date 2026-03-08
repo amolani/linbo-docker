@@ -26,7 +26,7 @@ if (linboKeyPath) {
       try {
         linboClientKey = fs.readFileSync(fallbackPath);
         console.warn(`[Terminal] Using fallback key ${fallbackPath} — may not work for LINBO clients`);
-      } catch {}
+      } catch {} // Already logged warn on line above
     }
   }
 }
@@ -194,8 +194,8 @@ function cleanup(sessionId, reason) {
   if (session.idleTimer) clearTimeout(session.idleTimer);
   sessions.delete(sessionId);
 
-  try { session.stream.end(); } catch {}
-  try { session.client.end(); } catch {}
+  try { session.stream.end(); } catch (err) { console.debug('[Terminal] cleanup: stream end failed:', err.message); }
+  try { session.client.end(); } catch (err) { console.debug('[Terminal] cleanup: client end failed:', err.message); }
 
   console.log(`[Terminal] Session ${sessionId} closed: ${reason}`);
   if (session.onClose) session.onClose(reason);
