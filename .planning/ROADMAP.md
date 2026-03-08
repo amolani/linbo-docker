@@ -142,11 +142,10 @@ Plans:
   3. LINBO_SERVER_IP is auto-detected from the network interface on the PXE subnet; the admin confirms or overrides the detected value
   4. JWT_SECRET and INTERNAL_API_KEY are generated as cryptographically secure random strings (not default/placeholder values)
   5. Before starting containers, the script detects if TFTP (69/udp) or rsync (873) ports are already in use and names the conflicting process with a suggested resolution
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 10-01: TBD
-- [ ] 10-02: TBD
+- [ ] 10-01-PLAN.md -- setup.sh configuration wizard, .env generation, prerequisites, port detection, .env.example consolidation
 
 ### Phase 11: Production Hardening & Observability
 **Goal**: Admins can verify system health after deployment and containers run within defined resource boundaries
@@ -194,6 +193,6 @@ Note: Phase 12 (Documentation) depends on all three prior phases being stable, s
 | 7. Backend Test Suites | v1.0 | 2/2 | Complete | 2026-03-08 |
 | 8. Integration and Frontend Tests | v1.0 | 2/2 | Complete | 2026-03-08 |
 | 9. Init Container Hardening | v1.1 | 2/2 | Complete | 2026-03-08 |
-| 10. Configuration & Install Script | v1.1 | 0/? | Not started | - |
+| 10. Configuration & Install Script | v1.1 | 0/1 | Planned | - |
 | 11. Production Hardening & Observability | v1.1 | 0/? | Not started | - |
 | 12. Admin Documentation | v1.1 | 0/? | Not started | - |
