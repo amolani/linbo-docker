@@ -18,7 +18,7 @@
 
 ### Test Coverage
 
-- [ ] **TEST-01**: Unit-Tests für Image-Sync Service (Resume-Download, SHA256-Verify, Atomic Directory Swap, Queue)
+- [x] **TEST-01**: Unit-Tests für Image-Sync Service (Resume-Download, SHA256-Verify, Atomic Directory Swap, Queue)
 - [x] **TEST-02**: Unit-Tests für Terminal Service (Session-Create/Destroy, PTY/Exec-Fallback, Idle-Timeout, Cleanup)
 - [ ] **TEST-03**: Integration-Tests für WebSocket (Connection mit/ohne Auth, Heartbeat, Channel-Subscription, Broadcast)
 - [ ] **TEST-04**: Frontend-Tests für kritische Zustand-Stores (wsStore Reconnect, hostStore Merge, configStore Cache)
@@ -66,7 +66,7 @@
 | PROD-06 | Phase 3: API Security | Complete |
 | PROD-07 | Phase 3: API Security | Complete |
 | PROD-08 | Phase 3: API Security | Complete |
-| TEST-01 | Phase 7: Backend Test Suites | Pending |
+| TEST-01 | Phase 7: Backend Test Suites | Complete |
 | TEST-02 | Phase 7: Backend Test Suites | Complete |
 | TEST-03 | Phase 8: Integration and Frontend Tests | Pending |
 | TEST-04 | Phase 8: Integration and Frontend Tests | Pending |

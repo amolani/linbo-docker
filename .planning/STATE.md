@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 07-02-PLAN.md
-last_updated: "2026-03-08T13:31:46.528Z"
-last_activity: 2026-03-08 -- Completed 06-01 (worker Prisma-optional + Redis SCAN migration)
+stopped_at: Completed 07-01-PLAN.md and 07-02-PLAN.md
+last_updated: "2026-03-08T13:33:00.000Z"
+last_activity: 2026-03-08 -- Completed 07-01 (image-sync service unit tests)
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 11
-  completed_plans: 10
+  completed_plans: 11
   percent: 100
 ---
 
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-03-06)
 
 Phase: 7 of 8 (Backend Test Suites)
 Plan: 2 of 2 in current phase (07-02 complete)
-Status: Phase 7 plan 02 complete
-Last activity: 2026-03-08 -- Completed 07-02 (terminal service unit tests)
+Status: Phase 7 complete (both plans done)
+Last activity: 2026-03-08 -- Completed 07-01 (image-sync service unit tests)
 
 Progress: [█████████░] 91%
 
@@ -56,6 +56,7 @@ Progress: [█████████░] 91%
 | Phase 05 P01 | 4min | 2 tasks | 8 files |
 | Phase 05 P02 | 5min | 2 tasks | 11 files |
 | Phase 06 P01 | 4min | 2 tasks | 4 files |
+| Phase 07 P01 | 6min | 2 tasks | 2 files |
 | Phase 07 P02 | 4min | 1 tasks | 1 files |
 
 ## Accumulated Context
@@ -90,6 +91,9 @@ Recent decisions affecting current work:
 - [Phase 05-02]: File cleanup catches use console.debug; GRUB deletion and kernel rebuild use console.warn
 - [Phase 06-01]: if-else guard pattern instead of module-level return (Babel/Jest compatibility)
 - [Phase 06-01]: scanStream COUNT hint of 100 with pipeline-delete per batch and backpressure control
+- [Phase 07-01]: Shared Redis mock uses Map-backed store + array-backed lists, general enough for Phase 8 reuse
+- [Phase 07-01]: Stream module mocked via jest.requireActual inside factory to provide real Transform but stubbed Readable.fromWeb
+- [Phase 07-01]: Fire-and-forget _runDownload tested via flushAsync helper (multiple setImmediate rounds)
 - [Phase 07]: mock-prefixed variables required for Jest Babel hoisting in ssh2 mock factories
 
 ### Pending Todos
@@ -102,6 +106,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-08T13:31:46.519Z
-Stopped at: Completed 07-02-PLAN.md
+Last session: 2026-03-08T13:33:00.000Z
+Stopped at: Completed 07-01-PLAN.md (Phase 7 fully complete)
 Resume file: None
