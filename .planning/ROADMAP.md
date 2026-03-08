@@ -125,11 +125,11 @@ Plans:
   1. WebSocket tests verify: connection with valid JWT succeeds, connection without JWT is rejected, heartbeat keeps connection alive, channel subscription delivers broadcasts
   2. Frontend store tests verify: wsStore reconnect logic, hostStore merge behavior on partial updates, configStore cache invalidation
   3. All frontend tests run headlessly without a running API (mocked network layer)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 08-01: WebSocket integration tests
-- [ ] 08-02: Frontend store tests
+- [ ] 08-01-PLAN.md -- WebSocket integration tests (JWT auth, rejection, heartbeat, channel subscription, broadcasts)
+- [ ] 08-02-PLAN.md -- Frontend store tests (wsStore reconnect, hostStore merge, serverConfigStore cache)
 
 ## Progress
 
