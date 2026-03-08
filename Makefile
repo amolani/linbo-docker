@@ -2,7 +2,7 @@
 # LINBO Docker - Development Makefile
 # =============================================================================
 
-.PHONY: help up down rebuild logs health deploy test status clean
+.PHONY: help up down rebuild logs health deploy test status clean wait-ready doctor
 
 # Default target
 help:
@@ -19,6 +19,8 @@ help:
 	@echo "  make deploy      - Deploy to test server (10.0.0.13)"
 	@echo "  make deploy-full - Deploy + rebuild linbofs + GRUB"
 	@echo "  make status      - Show git + Docker status"
+	@echo "  make wait-ready  - Wait until all containers are healthy"
+	@echo "  make doctor      - Run system diagnostics"
 	@echo "  make db-push     - Apply Prisma schema changes"
 	@echo "  make clean       - Prune Docker build cache + images"
 
@@ -56,6 +58,12 @@ health:
 	@echo "=== Test Server (10.0.0.13) ==="
 	@curl -sf http://10.0.0.13:3000/health | python3 -m json.tool 2>/dev/null || echo "API: DOWN"
 	@curl -sf -o /dev/null -w "Web: HTTP %{http_code}\n" http://10.0.0.13:8080 2>/dev/null || echo "Web: DOWN"
+
+wait-ready:
+	./scripts/wait-ready.sh
+
+doctor:
+	./scripts/doctor.sh
 
 status:
 	@echo "=== Git Status ==="
