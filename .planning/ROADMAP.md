@@ -1,150 +1,199 @@
-# Roadmap: LINBO Docker Hardening
+# Roadmap: LINBO Docker
 
-## Overview
+## Milestones
 
-This milestone hardens the existing LINBO Docker codebase for production use. All 16 requirements address build hygiene, secret management, API security, tech-debt reduction, and test coverage -- in that order. The dependency chain flows from safe infrastructure changes (build files, secrets) through behavioral changes (API security, refactoring) to verification (tests). Tests come last because they must test the final behavior, not behavior that will change mid-milestone.
+- Complete **v1.0 Hardening** - Phases 1-8 (shipped 2026-03-08)
+- Current **v1.1 Fresh Install & Production Readiness** - Phases 9-12 (in progress)
 
 ## Phases
+
+<details>
+<summary>v1.0 Hardening (Phases 1-8) - SHIPPED 2026-03-08</summary>
 
 **Phase Numbering:**
 - Integer phases (1, 2, 3): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
-Decimal phases appear between their surrounding integers in numeric order.
-
 - [x] **Phase 1: Build Hygiene** - Pin Docker base images and add .dockerignore files for reproducible, clean builds (completed 2026-03-06)
-- [ ] **Phase 2: Secrets Hardening** - Remove tracked secrets, enforce non-default credentials, fix deploy script auth
+- [x] **Phase 2: Secrets Hardening** - Remove tracked secrets, enforce non-default credentials, fix deploy script auth
 - [x] **Phase 3: API Security** - Add WebSocket JWT verification, login rate-limiting, and CORS restriction (completed 2026-03-07)
-- [ ] **Phase 4: System Router Split** - Break system.js (1483 lines) into focused sub-routers
+- [x] **Phase 4: System Router Split** - Break system.js (1483 lines) into focused sub-routers
 - [x] **Phase 5: Error Handling Cleanup** - Replace all 48 silent catch blocks with categorized logging (completed 2026-03-08)
-- [ ] **Phase 6: Isolated Debt Fixes** - Apply Prisma-optional guard to worker and replace Redis KEYS with SCAN
-- [ ] **Phase 7: Backend Test Suites** - Unit tests for image-sync and terminal services
-- [ ] **Phase 8: Integration and Frontend Tests** - WebSocket integration tests and frontend store tests
-
-## Phase Details
+- [x] **Phase 6: Isolated Debt Fixes** - Apply Prisma-optional guard to worker and replace Redis KEYS with SCAN
+- [x] **Phase 7: Backend Test Suites** - Unit tests for image-sync and terminal services
+- [x] **Phase 8: Integration and Frontend Tests** - WebSocket integration tests and frontend store tests
 
 ### Phase 1: Build Hygiene
 **Goal**: Docker builds are reproducible and free of host contamination
 **Depends on**: Nothing (first phase)
 **Requirements**: PROD-01, PROD-03
-**Success Criteria** (what must be TRUE):
-  1. Every Dockerfile uses a version-pinned base image (no `latest` tags)
-  2. Running `docker build` from a directory with `node_modules/` produces the same image as without -- host artifacts are excluded by .dockerignore
-  3. All container directories that have a Dockerfile also have a .dockerignore file
 **Plans**: 1 plan
 
 Plans:
-- [ ] 01-01-PLAN.md -- Pin base images to exact versions and add .dockerignore files
+- [x] 01-01: Pin base images to exact versions and add .dockerignore files
 
 ### Phase 2: Secrets Hardening
 **Goal**: No default credentials or tracked secrets can reach production
 **Depends on**: Phase 1
 **Requirements**: PROD-02, PROD-04, PROD-05
-**Success Criteria** (what must be TRUE):
-  1. API refuses to start with default JWT_SECRET or INTERNAL_API_KEY when NODE_ENV=production (exits with clear error message)
-  2. Deploy script authenticates to the API using INTERNAL_API_KEY from environment, not a hardcoded default password
-  3. `rsyncd.secrets` is in .gitignore, removed from tracking, and `rsyncd.secrets.example` exists with placeholder values
 **Plans**: 2 plans
 
 Plans:
-- [ ] 02-01-PLAN.md -- Startup validation for secrets (validateSecrets in index.js + tests) and rsyncd.secrets git cleanup
-- [ ] 02-02-PLAN.md -- Deploy script auth migration (INTERNAL_API_KEY from remote .env, multi-target support)
+- [x] 02-01: Startup validation for secrets and rsyncd.secrets git cleanup
+- [x] 02-02: Deploy script auth migration (INTERNAL_API_KEY from remote .env)
 
 ### Phase 3: API Security
 **Goal**: API endpoints are protected against unauthenticated WebSocket access, brute-force login, and cross-origin abuse
 **Depends on**: Phase 2
 **Requirements**: PROD-06, PROD-07, PROD-08
-**Success Criteria** (what must be TRUE):
-  1. WebSocket connections to `/ws` without a valid JWT token are rejected at the upgrade handshake (HTTP 401)
-  2. After 5 failed login attempts from the same IP within one minute, further attempts return HTTP 429
-  3. CORS is restricted to the web container origin by default; wildcard `*` is no longer the default
 **Plans**: 2 plans
 
 Plans:
-- [ ] 03-01-PLAN.md -- WebSocket JWT/API-key verification at upgrade handshake with tests
-- [ ] 03-02-PLAN.md -- Login rate limiting (express-rate-limit + Redis), CORS default change, trust proxy config
+- [x] 03-01: WebSocket JWT/API-key verification at upgrade handshake
+- [x] 03-02: Login rate limiting, CORS default change, trust proxy config
 
 ### Phase 4: System Router Split
 **Goal**: The monolithic system.js route file is decomposed into focused, maintainable sub-routers
 **Depends on**: Phase 3
 **Requirements**: DEBT-02
-**Success Criteria** (what must be TRUE):
-  1. system.js no longer exists as a monolithic 1483-line file; each sub-router is under 300 lines
-  2. All existing API endpoints under `/system/*` continue to work identically (no behavioral change)
-  3. Sub-routers are individually importable: kernel, firmware, grub-theme, grub-config, linbo-update, worker, wlan
 **Plans**: 1 plan
 
 Plans:
-- [ ] 04-01-PLAN.md -- Extract 8 sub-routers (linbofs, kernel, firmware, wlan, grub-theme, grub-config, worker, linbo-update) into routes/system/ directory with aggregator
+- [x] 04-01: Extract 8 sub-routers into routes/system/ directory
 
 ### Phase 5: Error Handling Cleanup
-**Goal**: Every catch block in the codebase either logs meaningfully or rethrows -- no silent swallowing
+**Goal**: Every catch block in the codebase either logs meaningfully or rethrows
 **Depends on**: Phase 4
 **Requirements**: DEBT-01
-**Success Criteria** (what must be TRUE):
-  1. Zero silent catch blocks remain in the codebase (grep for empty catch bodies returns nothing)
-  2. Each former silent catch now uses categorized logging: debug (expected/harmless), warn (degraded but functional), or rethrow (caller must handle)
-  3. Log output during normal API startup and operation does not produce spurious warnings (only actual issues trigger warn-level)
 **Plans**: 2 plans
 
 Plans:
-- [ ] 05-01-PLAN.md -- Categorize 29 silent catches in service files (linbo-update, sync, image-sync, terminal, settings, deviceImport, remote, sync-operations)
-- [ ] 05-02-PLAN.md -- Categorize 19 silent catches in routes, middleware, and index.js (Prisma-optional, configs, internal once-flag, startup/shutdown)
+- [x] 05-01: Categorize 29 silent catches in service files
+- [x] 05-02: Categorize 19 silent catches in routes, middleware, and index.js
 
 ### Phase 6: Isolated Debt Fixes
-**Goal**: Worker resilience in sync mode and Redis performance at scale are resolved
+**Goal**: Worker resilience in sync mode and Redis performance at scale
 **Depends on**: Phase 4
 **Requirements**: DEBT-03, DEBT-04
-**Success Criteria** (what must be TRUE):
-  1. operation.worker.js runs without error in sync mode (no Prisma, Redis-only) -- the try/catch guard prevents crash on missing Prisma
-  2. Redis key cleanup uses SCAN-based iteration instead of KEYS command; `delPattern()` no longer blocks Redis during large key sets
 **Plans**: 1 plan
 
 Plans:
-- [ ] 06-01-PLAN.md -- Worker Prisma-optional sync-mode guard and Redis SCAN migration for delPattern
+- [x] 06-01: Worker Prisma-optional guard and Redis SCAN migration
 
 ### Phase 7: Backend Test Suites
 **Goal**: Critical backend services have comprehensive unit test coverage
 **Depends on**: Phase 5, Phase 6
 **Requirements**: TEST-01, TEST-02
-**Success Criteria** (what must be TRUE):
-  1. Image-sync service tests cover: resume download from byte offset, MD5 hash verification pass/fail, atomic directory swap, and queue ordering
-  2. Terminal service tests cover: session create/destroy lifecycle, PTY-to-exec fallback, idle timeout triggers cleanup, and no orphaned sessions after cleanup
-  3. All tests pass in CI without network access or running containers (mocked dependencies)
 **Plans**: 2 plans
 
 Plans:
-- [ ] 07-01-PLAN.md -- Shared Redis mock module and image-sync service unit tests (resume, MD5 verify, atomic swap, queue)
-- [ ] 07-02-PLAN.md -- Terminal service unit tests (session lifecycle, PTY fallback, idle timeout, destroyAll)
+- [x] 07-01: Shared Redis mock and image-sync service unit tests
+- [x] 07-02: Terminal service unit tests
 
 ### Phase 8: Integration and Frontend Tests
 **Goal**: WebSocket behavior and frontend state management are verified by automated tests
 **Depends on**: Phase 3, Phase 7
 **Requirements**: TEST-03, TEST-04
-**Success Criteria** (what must be TRUE):
-  1. WebSocket tests verify: connection with valid JWT succeeds, connection without JWT is rejected, heartbeat keeps connection alive, channel subscription delivers broadcasts
-  2. Frontend store tests verify: wsStore reconnect logic, hostStore merge behavior on partial updates, configStore cache invalidation
-  3. All frontend tests run headlessly without a running API (mocked network layer)
 **Plans**: 2 plans
 
 Plans:
-- [ ] 08-01-PLAN.md -- WebSocket integration tests (JWT auth, rejection, heartbeat, channel subscription, broadcasts)
-- [ ] 08-02-PLAN.md -- Frontend store tests (wsStore reconnect, hostStore merge, serverConfigStore cache)
+- [x] 08-01: WebSocket integration tests
+- [x] 08-02: Frontend store tests
+
+</details>
+
+## v1.1 Fresh Install & Production Readiness (In Progress)
+
+**Milestone Goal:** A competent sysadmin can go from `git clone` to a working LINBO Docker deployment on a fresh VM -- with reliable bootstrap, clear configuration, production-grade observability, and complete documentation.
+
+**Phase Numbering:**
+- Integer phases (9, 10, 11, 12): Planned milestone work
+- Decimal phases (10.1, 10.2): Urgent insertions if needed
+
+- [ ] **Phase 9: Init Container Hardening** - Structured error reporting, idempotent checkpoints, retry logic for network failures
+- [ ] **Phase 10: Configuration & Install Script** - setup.sh with prerequisites, .env generation, IP auto-detect, port conflict detection
+- [ ] **Phase 11: Production Hardening & Observability** - wait-ready health gate, resource limits, make doctor diagnostics
+- [ ] **Phase 12: Admin Documentation** - Install guide, architecture overview, network diagram for sysadmins
+
+## Phase Details
+
+### Phase 9: Init Container Hardening
+**Goal**: The init container reports exactly what failed, why, and what to do about it -- and can recover from partial failures without manual cleanup
+**Depends on**: Nothing (first v1.1 phase, no dependency on v1.0 phases)
+**Requirements**: ERR-01
+**Success Criteria** (what must be TRUE):
+  1. When an APT fetch fails, the admin sees a structured error message naming the package, the error type, and a concrete fix (e.g., "check DNS" or "set HTTP_PROXY")
+  2. When SHA256 verification fails for a downloaded file, the error message shows expected vs actual hash and tells the admin to retry or check the APT mirror
+  3. When a permission error occurs (EACCES), the error message identifies the path and suggests the chown command to fix it
+  4. After a partial failure (e.g., network timeout mid-download), re-running `docker compose up init` resumes from the last completed checkpoint without repeating successful steps
+**Plans**: TBD
+
+Plans:
+- [ ] 09-01: TBD
+- [ ] 09-02: TBD
+
+### Phase 10: Configuration & Install Script
+**Goal**: An admin runs `./setup.sh` once and gets a complete, validated `.env` file with auto-detected network settings, secure secrets, and pre-checked system prerequisites
+**Depends on**: Phase 9
+**Requirements**: BOOT-01, BOOT-02, BOOT-03, BOOT-04, ERR-03
+**Success Criteria** (what must be TRUE):
+  1. Running `./setup.sh` on a fresh VM produces a `.env` file with all required variables populated -- no manual editing needed for standard deployments
+  2. The script checks Docker version, available disk space, DNS resolution, and network connectivity, showing a clear PASS/FAIL for each prerequisite
+  3. LINBO_SERVER_IP is auto-detected from the network interface on the PXE subnet; the admin confirms or overrides the detected value
+  4. JWT_SECRET and INTERNAL_API_KEY are generated as cryptographically secure random strings (not default/placeholder values)
+  5. Before starting containers, the script detects if TFTP (69/udp) or rsync (873) ports are already in use and names the conflicting process with a suggested resolution
+**Plans**: TBD
+
+Plans:
+- [ ] 10-01: TBD
+- [ ] 10-02: TBD
+
+### Phase 11: Production Hardening & Observability
+**Goal**: Admins can verify system health after deployment and containers run within defined resource boundaries
+**Depends on**: Phase 10
+**Requirements**: ERR-02, HARD-01, HARD-02
+**Success Criteria** (what must be TRUE):
+  1. `make wait-ready` blocks until all containers report healthy, or prints which container is not ready and why (with last 5 log lines) after a configurable timeout
+  2. Every container in docker-compose.yml has explicit memory and CPU limits that prevent a single container from consuming all host resources
+  3. `make doctor` checks container health, volume permissions (write test), SSH key presence, linbofs64 build status, Redis connectivity, and PXE port reachability -- printing PASS/FAIL for each check with fix suggestions for failures
+**Plans**: TBD
+
+Plans:
+- [ ] 11-01: TBD
+- [ ] 11-02: TBD
+
+### Phase 12: Admin Documentation
+**Goal**: A sysadmin with no prior exposure to the project can follow the documentation from VM setup to verified PXE boot without needing developer assistance
+**Depends on**: Phase 9, Phase 10, Phase 11
+**Requirements**: DOC-01, DOC-02, DOC-03
+**Success Criteria** (what must be TRUE):
+  1. The install guide (`docs/INSTALL.md`) walks an admin from bare Ubuntu/Debian VM through prerequisites, setup.sh, container startup, and verification of the first PXE boot -- with no gaps requiring guesswork
+  2. The architecture document explains each container's role, which ports it uses, which volumes it mounts, and the startup dependency order -- readable by an admin who has never seen the codebase
+  3. The network diagram shows all connections between PXE client and LINBO Docker (TFTP, HTTP, rsync, SSH) with port numbers and required firewall rules -- usable as a reference when configuring network infrastructure
+**Plans**: TBD
+
+Plans:
+- [ ] 12-01: TBD
+- [ ] 12-02: TBD
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
+Phases execute in numeric order: 9 -> 10 -> 11 -> 12
 
-Note: Phase 5 and Phase 6 both depend on Phase 4 and can execute in either order. Phase 7 depends on both Phase 5 and Phase 6. Phase 8 depends on Phase 3 and Phase 7.
+Note: Phase 12 (Documentation) depends on all three prior phases being stable, since docs must describe final behavior.
 
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 1. Build Hygiene | 0/1 | Complete    | 2026-03-06 |
-| 2. Secrets Hardening | 0/2 | Not started | - |
-| 3. API Security | 2/2 | Complete   | 2026-03-07 |
-| 4. System Router Split | 0/1 | Not started | - |
-| 5. Error Handling Cleanup | 0/2 | Complete    | 2026-03-08 |
-| 6. Isolated Debt Fixes | 0/1 | Not started | - |
-| 7. Backend Test Suites | 0/2 | Not started | - |
-| 8. Integration and Frontend Tests | 0/2 | Not started | - |
+| Phase | Milestone | Plans Complete | Status | Completed |
+|-------|-----------|----------------|--------|-----------|
+| 1. Build Hygiene | v1.0 | 1/1 | Complete | 2026-03-06 |
+| 2. Secrets Hardening | v1.0 | 2/2 | Complete | 2026-03-07 |
+| 3. API Security | v1.0 | 2/2 | Complete | 2026-03-07 |
+| 4. System Router Split | v1.0 | 1/1 | Complete | 2026-03-07 |
+| 5. Error Handling Cleanup | v1.0 | 2/2 | Complete | 2026-03-08 |
+| 6. Isolated Debt Fixes | v1.0 | 1/1 | Complete | 2026-03-08 |
+| 7. Backend Test Suites | v1.0 | 2/2 | Complete | 2026-03-08 |
+| 8. Integration and Frontend Tests | v1.0 | 2/2 | Complete | 2026-03-08 |
+| 9. Init Container Hardening | v1.1 | 0/? | Not started | - |
+| 10. Configuration & Install Script | v1.1 | 0/? | Not started | - |
+| 11. Production Hardening & Observability | v1.1 | 0/? | Not started | - |
+| 12. Admin Documentation | v1.1 | 0/? | Not started | - |

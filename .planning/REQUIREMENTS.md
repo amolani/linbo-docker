@@ -51,7 +51,7 @@ Requirements for Fresh Install & Production Readiness. Each maps to roadmap phas
 
 - [ ] **DOC-01**: Install Guide (`docs/INSTALL.md`) führt Admin von Prerequisites bis zum ersten PXE-Boot
 - [ ] **DOC-02**: Architektur-Übersicht erklärt Container-Rollen, Ports, Volumes und Startup-Reihenfolge für Admins
-- [ ] **DOC-03**: Netzwerk-Diagramm zeigt alle Verbindungen (Client ↔ TFTP/HTTP/rsync/SSH) mit Ports und Firewall-Regeln
+- [ ] **DOC-03**: Netzwerk-Diagramm zeigt alle Verbindungen (Client <-> TFTP/HTTP/rsync/SSH) mit Ports und Firewall-Regeln
 
 ### Production Hardening
 
@@ -86,21 +86,21 @@ Requirements for Fresh Install & Production Readiness. Each maps to roadmap phas
 ### Operations (v1.2+)
 
 - **OPS-01**: Backup/Restore Script (`make backup` / `make restore`)
-- **OPS-02**: Upgrade-Dokumentation (git pull → rebuild → rollback)
+- **OPS-02**: Upgrade-Dokumentation (git pull -> rebuild -> rollback)
 - **OPS-03**: Sync Mode Setup Guide (Authority API Anbindung)
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Web-based Setup Wizard | Over-engineering — Setup läuft einmal, Shell-Script reicht |
-| Auto-Update Mechanism | Gefährlich bei Netzwerk-Boot-Infrastruktur — manuelles Update sicherer |
-| Multi-Site Management | Enorme Komplexität (Auth-Federation, Cross-Site Networking) — v3+ |
+| Web-based Setup Wizard | Over-engineering -- Setup laeuft einmal, Shell-Script reicht |
+| Auto-Update Mechanism | Gefaehrlich bei Netzwerk-Boot-Infrastruktur -- manuelles Update sicherer |
+| Multi-Site Management | Enorme Komplexitaet (Auth-Federation, Cross-Site Networking) -- v3+ |
 | Custom DHCP als Default | Konflikte mit existierenden DHCP-Servern in Schulnetzen |
 | Helm Chart / Kubernetes | Zielgruppe ist Bare-Metal/Single-VM, TFTP braucht host network |
-| CLI Config Editor | Web-UI existiert bereits für Config-Editing |
+| CLI Config Editor | Web-UI existiert bereits fuer Config-Editing |
 | Internationalisierung | Deutsche Zielgruppe, i18n erst bei Bedarf |
-| LINBO-Kern modifizieren | Prinzip: nur Hooks, nie init.sh/linbo.sh ändern |
+| LINBO-Kern modifizieren | Prinzip: nur Hooks, nie init.sh/linbo.sh aendern |
 | Sophomorix/LDAP Integration | LMN-seitig, nicht Docker-Scope |
 
 ## Traceability
@@ -130,25 +130,25 @@ Requirements for Fresh Install & Production Readiness. Each maps to roadmap phas
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BOOT-01 | - | Pending |
-| BOOT-02 | - | Pending |
-| BOOT-03 | - | Pending |
-| BOOT-04 | - | Pending |
-| ERR-01 | - | Pending |
-| ERR-02 | - | Pending |
-| ERR-03 | - | Pending |
-| DOC-01 | - | Pending |
-| DOC-02 | - | Pending |
-| DOC-03 | - | Pending |
-| HARD-01 | - | Pending |
-| HARD-02 | - | Pending |
+| ERR-01 | Phase 9: Init Container Hardening | Pending |
+| BOOT-01 | Phase 10: Configuration & Install Script | Pending |
+| BOOT-02 | Phase 10: Configuration & Install Script | Pending |
+| BOOT-03 | Phase 10: Configuration & Install Script | Pending |
+| BOOT-04 | Phase 10: Configuration & Install Script | Pending |
+| ERR-03 | Phase 10: Configuration & Install Script | Pending |
+| ERR-02 | Phase 11: Production Hardening & Observability | Pending |
+| HARD-01 | Phase 11: Production Hardening & Observability | Pending |
+| HARD-02 | Phase 11: Production Hardening & Observability | Pending |
+| DOC-01 | Phase 12: Admin Documentation | Pending |
+| DOC-02 | Phase 12: Admin Documentation | Pending |
+| DOC-03 | Phase 12: Admin Documentation | Pending |
 
 **Coverage:**
-- v1.0 requirements: 16 total — 16 complete ✓
+- v1.0 requirements: 16 total -- 16 complete
 - v1.1 requirements: 12 total
-- Mapped to phases: 0
-- Unmapped: 12 ⚠️
+- Mapped to phases: 12/12
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-06*
-*Last updated: 2026-03-08 after v1.1 milestone definition*
+*Last updated: 2026-03-08 after v1.1 roadmap creation*
