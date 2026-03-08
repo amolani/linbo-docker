@@ -3,7 +3,7 @@
 **Defined:** 2026-03-06
 **Core Value:** LINBO als eigenständige Docker-Lösung mit modernem Web-Interface, ohne den LINBO-Kern zu verändern
 
-## v1 Requirements
+## v1.0 Requirements (Complete)
 
 ### Production-Readiness
 
@@ -30,6 +30,34 @@
 - [x] **DEBT-03**: operation.worker.js Prisma-optional Pattern anwenden (try/catch Guard statt top-level require)
 - [x] **DEBT-04**: Redis KEYS-Command durch SCAN-basierte Iteration in delPattern() ersetzen
 
+## v1.1 Requirements
+
+Requirements for Fresh Install & Production Readiness. Each maps to roadmap phases.
+
+### Bootstrap Flow
+
+- [ ] **BOOT-01**: Admin kann `./setup.sh` ausführen und bekommt eine funktionierende `.env` mit validierten Werten
+- [ ] **BOOT-02**: Setup-Script prüft Prerequisites (Docker-Version, Ports, Disk, Netzwerk) und zeigt klare Pass/Fail-Meldungen
+- [ ] **BOOT-03**: Setup-Script erkennt automatisch die LINBO_SERVER_IP auf dem PXE-Netzwerk-Interface
+- [ ] **BOOT-04**: `.env`-Generierung erstellt sichere Secrets (JWT_SECRET, INTERNAL_API_KEY) automatisch
+
+### Error Handling
+
+- [ ] **ERR-01**: Init Container zeigt actionable Fehlermeldungen bei APT-Fehlern, SHA256-Mismatches und Permission-Problemen
+- [ ] **ERR-02**: `make wait-ready` blockiert bis alle Container bereit sind oder zeigt an was hängt
+- [ ] **ERR-03**: Port-Konflikte (TFTP 69/udp, rsync 873) werden vor dem Start erkannt mit klarer Lösung
+
+### Documentation
+
+- [ ] **DOC-01**: Install Guide (`docs/INSTALL.md`) führt Admin von Prerequisites bis zum ersten PXE-Boot
+- [ ] **DOC-02**: Architektur-Übersicht erklärt Container-Rollen, Ports, Volumes und Startup-Reihenfolge für Admins
+- [ ] **DOC-03**: Netzwerk-Diagramm zeigt alle Verbindungen (Client ↔ TFTP/HTTP/rsync/SSH) mit Ports und Firewall-Regeln
+
+### Production Hardening
+
+- [ ] **HARD-01**: Docker Compose definiert Memory/CPU Limits für alle Container
+- [ ] **HARD-02**: `make doctor` prüft Container-Health, Volume-Permissions, SSH-Keys, linbofs64-Status, Redis und PXE-Erreichbarkeit
+
 ## v2 Requirements
 
 ### Security Hardening
@@ -45,16 +73,39 @@
 - **FEAT-03**: Image Versioning
 - **FEAT-04**: Host-GRUB .img Generation
 
+### Open-Source Readiness (v1.2+)
+
+- **OSS-01**: GITHUB_TOKEN-Abhängigkeit für @edulution-io/ui-kit aufgelöst (vendoring oder replacement)
+- **OSS-02**: deploy/docker-compose.yml konsolidiert oder entfernt
+
+### User Experience (v1.2+)
+
+- **UX-01**: Guided First-Login Experience (Checklist/Banner nach erstem Login)
+- **UX-02**: Configuration Drift Detection (.env vs running container)
+
+### Operations (v1.2+)
+
+- **OPS-01**: Backup/Restore Script (`make backup` / `make restore`)
+- **OPS-02**: Upgrade-Dokumentation (git pull → rebuild → rollback)
+- **OPS-03**: Sync Mode Setup Guide (Authority API Anbindung)
+
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
+| Web-based Setup Wizard | Over-engineering — Setup läuft einmal, Shell-Script reicht |
+| Auto-Update Mechanism | Gefährlich bei Netzwerk-Boot-Infrastruktur — manuelles Update sicherer |
+| Multi-Site Management | Enorme Komplexität (Auth-Federation, Cross-Site Networking) — v3+ |
+| Custom DHCP als Default | Konflikte mit existierenden DHCP-Servern in Schulnetzen |
+| Helm Chart / Kubernetes | Zielgruppe ist Bare-Metal/Single-VM, TFTP braucht host network |
+| CLI Config Editor | Web-UI existiert bereits für Config-Editing |
+| Internationalisierung | Deutsche Zielgruppe, i18n erst bei Bedarf |
 | LINBO-Kern modifizieren | Prinzip: nur Hooks, nie init.sh/linbo.sh ändern |
 | Sophomorix/LDAP Integration | LMN-seitig, nicht Docker-Scope |
-| Mobile App | Web-first, responsive reicht |
-| Multi-Instance API | Single-Container Constraint akzeptiert (Module-Level State) |
 
 ## Traceability
+
+### v1.0 (Complete)
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
@@ -75,11 +126,29 @@
 | DEBT-03 | Phase 6: Isolated Debt Fixes | Complete |
 | DEBT-04 | Phase 6: Isolated Debt Fixes | Complete |
 
+### v1.1 (Current)
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| BOOT-01 | - | Pending |
+| BOOT-02 | - | Pending |
+| BOOT-03 | - | Pending |
+| BOOT-04 | - | Pending |
+| ERR-01 | - | Pending |
+| ERR-02 | - | Pending |
+| ERR-03 | - | Pending |
+| DOC-01 | - | Pending |
+| DOC-02 | - | Pending |
+| DOC-03 | - | Pending |
+| HARD-01 | - | Pending |
+| HARD-02 | - | Pending |
+
 **Coverage:**
-- v1 requirements: 16 total
-- Mapped to phases: 16
-- Unmapped: 0
+- v1.0 requirements: 16 total — 16 complete ✓
+- v1.1 requirements: 12 total
+- Mapped to phases: 0
+- Unmapped: 12 ⚠️
 
 ---
 *Requirements defined: 2026-03-06*
-*Last updated: 2026-03-06 after roadmap creation*
+*Last updated: 2026-03-08 after v1.1 milestone definition*
