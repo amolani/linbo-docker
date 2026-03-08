@@ -170,9 +170,10 @@ checkpoint_set() {
     mv "${_marker_tmp}" "${_marker}"
 }
 
-# Clear all checkpoint markers
+# Clear all checkpoint markers and cached downloads
 checkpoint_clear_all() {
     rm -rf "${CHECKPOINT_DIR}"
+    rm -rf "${CACHE_DIR}"
 }
 
 # Check if checkpoint exists AND its version matches expected
@@ -375,7 +376,16 @@ fetch_packages_index() {
     elif curl -fsSL -o "${PACKAGES_CACHE}" "${PACKAGES_URL}" 2>/dev/null; then
         true
     else
-        echo "ERROR: Failed to fetch APT Packages index from ${PACKAGES_URL}"
+        _curl_exit=$?
+        _cause=$(classify_curl_error "${_curl_exit}")
+        _dl_host=$(echo "${PACKAGES_URL}" | sed 's|https\{0,1\}://||;s|/.*||')
+        _diag=$(run_network_diagnostics "${_dl_host}")
+        error_block \
+            "APT index fetch failed" \
+            "URL: ${PACKAGES_URL}" \
+            "${_cause}" \
+            "${_diag}" \
+            "Check network connectivity, DNS, or configure HTTP_PROXY"
         rm -f "${PACKAGES_CACHE}" "${PACKAGES_CACHE}.gz"
         return 1
     fi
@@ -852,35 +862,84 @@ provision_themes() {
 }
 
 # =============================================================================
-# Main Flow
+# Main Flow (checkpoint-aware, resumable)
 # =============================================================================
 
+# --- Step 0: Setup ---
 echo "=== LINBO Init (APT-based) ==="
 echo "Target directory: ${LINBO_DIR}"
 echo "Kernel directory: ${KERNEL_DIR}"
 echo "APT source: ${DEB_BASE_URL} (dist: ${DEB_DIST})"
 
-# 1. Read installed version
-INSTALLED_VERSION=""
-if [ -f "${VERSION_FILE}" ]; then
-    INSTALLED_VERSION=$(cat "${VERSION_FILE}")
-    echo "Installed: ${INSTALLED_VERSION}"
+# --- Step 1: Pre-flight checks ---
+echo ""
+echo "=== Pre-flight checks ==="
+
+if ! check_write_permission "${LINBO_DIR}"; then
+    exit 1
 fi
 
-# 2. Fetch APT Packages index
-PACKAGES_CACHE=""
-fetch_packages_index || exit 1
+if ! check_disk_space; then
+    exit 1
+fi
 
-# 3. Parse package info for both packages
+if ! check_dns; then
+    exit 1
+fi
+
+echo "  All pre-flight checks passed"
+
+# --- Step 2: FORCE_UPDATE handling ---
+if [ "${FORCE_UPDATE}" = "true" ]; then
+    echo ""
+    echo "Forcing full update -- all checkpoints cleared"
+    checkpoint_clear_all
+fi
+
+# --- Step 3: APT index fetch (checkpointed as "apt-index") ---
+echo ""
+PACKAGES_CACHE=""
+
+if checkpoint_exists "apt-index" && [ "${FORCE_UPDATE}" != "true" ]; then
+    echo "Skipping: APT index already fetched"
+    # Still need to fetch for version info parsing
+    if ! fetch_packages_index; then
+        exit 1
+    fi
+else
+    echo "=== Fetching APT index ==="
+    if ! fetch_packages_index; then
+        exit 1
+    fi
+    checkpoint_set "apt-index" "fetched"
+fi
+
+# Parse package info (always needed for version/filename/sha256)
 echo ""
 echo "=== Checking packages ==="
 
-parse_package_info "${LINBO_PKG}" || exit 1
+if ! parse_package_info "${LINBO_PKG}"; then
+    error_block \
+        "Package not found" \
+        "Package: ${LINBO_PKG}" \
+        "Package not found in APT index" \
+        "" \
+        "Check DEB_BASE_URL and DEB_DIST environment variables"
+    exit 1
+fi
 LINBO_VERSION="${PKG_VERSION}"
 LINBO_FILENAME="${PKG_FILENAME}"
 LINBO_SHA256="${PKG_SHA256}"
 
-parse_package_info "${GUI_PKG}" || exit 1
+if ! parse_package_info "${GUI_PKG}"; then
+    error_block \
+        "Package not found" \
+        "Package: ${GUI_PKG}" \
+        "Package not found in APT index" \
+        "" \
+        "Check DEB_BASE_URL and DEB_DIST environment variables"
+    exit 1
+fi
 GUI_VERSION="${PKG_VERSION}"
 GUI_FILENAME="${PKG_FILENAME}"
 GUI_SHA256="${PKG_SHA256}"
@@ -888,85 +947,202 @@ GUI_SHA256="${PKG_SHA256}"
 # Cleanup Packages cache
 rm -f "${PACKAGES_CACHE}"
 
-# 4. Version compare — skip if same and not forced
-# Extract version from installed string (format: "LINBO 4.3.29-0: Psycho Killer")
+# --- Step 4: Version detection and checkpoint invalidation ---
+INSTALLED_VERSION=""
+if [ -f "${VERSION_FILE}" ]; then
+    INSTALLED_VERSION=$(cat "${VERSION_FILE}")
+fi
+
 INSTALLED_VER=""
 if [ -n "${INSTALLED_VERSION}" ]; then
     INSTALLED_VER=$(echo "${INSTALLED_VERSION}" | sed -n 's/^LINBO[[:space:]]*\([^:[:space:]]*\).*/\1/p')
+    echo ""
+    echo "Installed: ${INSTALLED_VER}"
 fi
 
+if [ -n "${INSTALLED_VER}" ] && [ "${INSTALLED_VER}" != "${LINBO_VERSION}" ]; then
+    echo ""
+    echo "Version change detected: ${INSTALLED_VER} -> ${LINBO_VERSION}, clearing checkpoints"
+    # Clear all checkpoints except apt-index (we just fetched it)
+    for _ckpt_file in "${CHECKPOINT_DIR}"/*; do
+        [ -f "${_ckpt_file}" ] || continue
+        _ckpt_name=$(basename "${_ckpt_file}")
+        if [ "${_ckpt_name}" != "apt-index" ]; then
+            rm -f "${_ckpt_file}"
+        fi
+    done
+fi
+
+# Check if all work is already done (same version, not forced, all checkpoints present)
 if [ -n "${INSTALLED_VER}" ] && [ "${INSTALLED_VER}" = "${LINBO_VERSION}" ] && [ "${FORCE_UPDATE}" != "true" ]; then
-    echo ""
-    echo "Already up to date (version: ${LINBO_VERSION})"
-    echo "Set FORCE_UPDATE=true to force re-install"
-    provision_kernels
-    provision_themes
-    exit 0
+    if checkpoint_exists "boot-files" && checkpoint_exists "kernels" && checkpoint_exists "themes"; then
+        echo ""
+        echo "Already up to date (version: ${LINBO_VERSION}), all checkpoints present"
+        echo "Set FORCE_UPDATE=true to force re-install"
+        # Still run kernels and themes in case volume state drifted
+        provision_kernels
+        provision_themes
+        END_TIME=$(date +%s)
+        DURATION=$((END_TIME - START_TIME))
+        print_success_summary "${LINBO_VERSION}" "${DURATION}"
+        exit 0
+    fi
 fi
 
-if [ -n "${INSTALLED_VER}" ]; then
-    echo ""
+if [ -n "${INSTALLED_VER}" ] && [ "${INSTALLED_VER}" != "${LINBO_VERSION}" ]; then
     echo "Update available: ${INSTALLED_VER} -> ${LINBO_VERSION}"
-else
+elif [ -z "${INSTALLED_VER}" ]; then
     echo ""
     echo "Fresh install: ${LINBO_VERSION}"
 fi
 
-# 5. Download and extract both .deb packages
-TEMP_DIR=$(mktemp -d)
-mkdir -p "${LINBO_DIR}"
-
-echo ""
-echo "=== Downloading packages ==="
-
-LINBO_EXTRACT="${TEMP_DIR}/linbo7"
-download_and_extract_deb "${LINBO_FILENAME}" "${LINBO_SHA256}" "${LINBO_EXTRACT}" || exit 1
-
-GUI_EXTRACT="${TEMP_DIR}/gui7"
-download_and_extract_deb "${GUI_FILENAME}" "${GUI_SHA256}" "${GUI_EXTRACT}" || exit 1
-
-# 6. Provision boot files (GRUB merge, kernels, template, misc)
-provision_boot_files "${LINBO_EXTRACT}" "${LINBO_VERSION}"
-
-# 7. Provision GUI (tar.lz + symlinks)
-provision_gui "${GUI_EXTRACT}"
-
-# 8. Set .needs-rebuild marker → API rebuilds linbofs64 with SSH keys
-echo ""
-echo "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "${LINBO_DIR}/.needs-rebuild"
-chmod 664 "${LINBO_DIR}/.needs-rebuild"
-chown 1001:1001 "${LINBO_DIR}/.needs-rebuild"
-echo "Rebuild marker set — API will rebuild linbofs64 on startup"
-
-# 9. Write version markers
-# Package ships linbo-version with full string like "LINBO 4.3.31-0: Psycho Killer"
-LINBO_VERSION_SRC="${LINBO_EXTRACT}/srv/linbo/linbo-version"
-if [ -f "${LINBO_VERSION_SRC}" ]; then
-    cp "${LINBO_VERSION_SRC}" "${VERSION_FILE}"
-    cp "${LINBO_VERSION_SRC}" "${LINBO_DIR}/linbo-version.txt"
-else
-    echo "LINBO ${LINBO_VERSION}" > "${VERSION_FILE}"
-    echo "LINBO ${LINBO_VERSION}" > "${LINBO_DIR}/linbo-version.txt"
+# --- Step 5: Resume detection ---
+RESUMING=false
+if has_any_checkpoint; then
+    RESUMING=true
+    echo ""
+    echo "=== Resuming from partial install (version ${LINBO_VERSION}) ==="
 fi
 
-# Also write .boot-files-installed marker for backwards compat
-echo "${LINBO_VERSION}" > "${LINBO_DIR}/.boot-files-installed"
-
-# 10. Set permissions
-chmod -R 755 "${LINBO_DIR}"
-chown -R 1001:1001 "${LINBO_DIR}"
-
-# Cleanup temp
-rm -rf "${TEMP_DIR}"
-
+# --- Step 6: Download LINBO .deb (checkpointed as "linbo-deb") ---
 echo ""
-echo "=== Boot files installed successfully ==="
-echo "Version: ${LINBO_VERSION}"
-echo "Files:"
-ls -la "${LINBO_DIR}/" | head -15
+LINBO_DEB_BASENAME=$(basename "${LINBO_FILENAME}")
 
-# 11. Provision kernel variants (atomic symlink-swap into /var/lib/linuxmuster/linbo)
-provision_kernels
+if checkpoint_exists "linbo-deb" && checkpoint_version_match "linbo-deb" "${LINBO_VERSION}"; then
+    echo "Skipping: LINBO .deb already downloaded (${LINBO_VERSION}, SHA256 OK)"
+else
+    echo "=== Downloading LINBO package ==="
+    mkdir -p "${CACHE_DIR}"
+    if ! download_and_cache_deb "${LINBO_FILENAME}" "${LINBO_SHA256}" "linuxmuster-linbo7" "debs"; then
+        exit 1
+    fi
+    checkpoint_set "linbo-deb" "${LINBO_VERSION}"
+fi
+
+# --- Step 7: Download GUI .deb (checkpointed as "gui-deb") ---
+GUI_DEB_BASENAME=$(basename "${GUI_FILENAME}")
+
+if checkpoint_exists "gui-deb" && checkpoint_version_match "gui-deb" "${LINBO_VERSION}"; then
+    echo "Skipping: GUI .deb already downloaded (${LINBO_VERSION}, SHA256 OK)"
+else
+    echo "=== Downloading GUI package ==="
+    mkdir -p "${CACHE_DIR}"
+    if ! download_and_cache_deb "${GUI_FILENAME}" "${GUI_SHA256}" "linuxmuster-linbo-gui7" "debs"; then
+        exit 1
+    fi
+    checkpoint_set "gui-deb" "${LINBO_VERSION}"
+fi
+
+# --- Step 8: Extract and provision boot files (checkpointed as "boot-files") ---
+echo ""
+
+if checkpoint_exists "boot-files" && checkpoint_version_match "boot-files" "${LINBO_VERSION}"; then
+    echo "Skipping: Boot files already provisioned (${LINBO_VERSION})"
+else
+    echo "=== Extracting and provisioning boot files ==="
+    TEMP_DIR=$(mktemp -d)
+    mkdir -p "${LINBO_DIR}"
+
+    # Extract LINBO .deb from cache
+    LINBO_EXTRACT="${TEMP_DIR}/linbo7"
+    if ! dpkg-deb -x "${CACHE_DIR}/debs/${LINBO_DEB_BASENAME}" "${LINBO_EXTRACT}"; then
+        error_block \
+            "Extraction failed" \
+            "Package: ${LINBO_DEB_BASENAME}
+File:    ${CACHE_DIR}/debs/${LINBO_DEB_BASENAME}" \
+            "dpkg-deb could not extract the LINBO package" \
+            "" \
+            "Delete the cached file and retry: rm ${CACHE_DIR}/debs/${LINBO_DEB_BASENAME}"
+        rm -rf "${TEMP_DIR}"
+        exit 1
+    fi
+
+    # Provision boot files
+    if ! provision_boot_files "${LINBO_EXTRACT}" "${LINBO_VERSION}"; then
+        error_block \
+            "Boot file provisioning failed" \
+            "Version: ${LINBO_VERSION}" \
+            "Could not provision boot files from extracted package" \
+            "" \
+            "Check disk space and permissions on ${LINBO_DIR}"
+        rm -rf "${TEMP_DIR}"
+        exit 1
+    fi
+
+    # Extract GUI .deb from cache
+    GUI_EXTRACT="${TEMP_DIR}/gui7"
+    if ! dpkg-deb -x "${CACHE_DIR}/debs/${GUI_DEB_BASENAME}" "${GUI_EXTRACT}"; then
+        error_block \
+            "Extraction failed" \
+            "Package: ${GUI_DEB_BASENAME}
+File:    ${CACHE_DIR}/debs/${GUI_DEB_BASENAME}" \
+            "dpkg-deb could not extract the GUI package" \
+            "" \
+            "Delete the cached file and retry: rm ${CACHE_DIR}/debs/${GUI_DEB_BASENAME}"
+        rm -rf "${TEMP_DIR}"
+        exit 1
+    fi
+
+    # Provision GUI
+    if ! provision_gui "${GUI_EXTRACT}"; then
+        error_block \
+            "GUI provisioning failed" \
+            "Version: ${LINBO_VERSION}" \
+            "Could not provision GUI from extracted package" \
+            "" \
+            "Check disk space and permissions on ${LINBO_DIR}"
+        rm -rf "${TEMP_DIR}"
+        exit 1
+    fi
+
+    # Set .needs-rebuild marker
+    echo "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "${LINBO_DIR}/.needs-rebuild"
+    chmod 664 "${LINBO_DIR}/.needs-rebuild"
+    chown 1001:1001 "${LINBO_DIR}/.needs-rebuild"
+    echo "Rebuild marker set -- API will rebuild linbofs64 on startup"
+
+    # Write version markers
+    LINBO_VERSION_SRC="${LINBO_EXTRACT}/srv/linbo/linbo-version"
+    if [ -f "${LINBO_VERSION_SRC}" ]; then
+        cp "${LINBO_VERSION_SRC}" "${VERSION_FILE}"
+        cp "${LINBO_VERSION_SRC}" "${LINBO_DIR}/linbo-version.txt"
+    else
+        echo "LINBO ${LINBO_VERSION}" > "${VERSION_FILE}"
+        echo "LINBO ${LINBO_VERSION}" > "${LINBO_DIR}/linbo-version.txt"
+    fi
+
+    # Write .boot-files-installed marker for backwards compat
+    echo "${LINBO_VERSION}" > "${LINBO_DIR}/.boot-files-installed"
+
+    # Set permissions
+    chmod -R 755 "${LINBO_DIR}"
+    chown -R 1001:1001 "${LINBO_DIR}"
+
+    # Cleanup temp
+    rm -rf "${TEMP_DIR}"
+
+    checkpoint_set "boot-files" "${LINBO_VERSION}"
+    echo ""
+    echo "Boot files provisioned successfully"
+fi
+
+# --- Step 9: Provision kernels (checkpointed as "kernels") ---
+echo ""
+
+if checkpoint_exists "kernels" && checkpoint_version_match "kernels" "${LINBO_VERSION}"; then
+    echo "Skipping: Kernels already provisioned (${LINBO_VERSION})"
+else
+    if ! provision_kernels; then
+        error_block \
+            "Kernel provisioning failed" \
+            "Version: ${LINBO_VERSION}" \
+            "Could not provision kernel variants" \
+            "" \
+            "Check disk space and permissions on ${KERNEL_DIR}"
+        exit 1
+    fi
+    checkpoint_set "kernels" "${LINBO_VERSION}"
+fi
 
 # Fix permissions on driver volume
 DRIVER_DIR="/var/lib/linbo/drivers"
@@ -975,7 +1151,19 @@ if [ -d "${DRIVER_DIR}" ]; then
     echo "Driver volume permissions set (1001:1001)"
 fi
 
-# 12. Provision GUI themes
-provision_themes
+# --- Step 10: Provision themes (checkpointed as "themes") ---
+echo ""
+
+if checkpoint_exists "themes" && checkpoint_version_match "themes" "${LINBO_VERSION}"; then
+    echo "Skipping: Themes already provisioned (${LINBO_VERSION})"
+else
+    provision_themes
+    checkpoint_set "themes" "${LINBO_VERSION}"
+fi
+
+# --- Step 11: Success summary ---
+END_TIME=$(date +%s)
+DURATION=$((END_TIME - START_TIME))
+print_success_summary "${LINBO_VERSION}" "${DURATION}"
 
 exit 0
