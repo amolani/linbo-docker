@@ -2,7 +2,7 @@
 # LINBO Docker - Development Makefile
 # =============================================================================
 
-.PHONY: help up down rebuild logs health deploy test status clean wait-ready doctor linbofs-audit linbofs-diff
+.PHONY: help up down rebuild logs health deploy test status clean wait-ready doctor linbofs-audit linbofs-diff validate-hooks new-hook
 
 # Default target
 help:
@@ -21,10 +21,12 @@ help:
 	@echo "  make status      - Show git + Docker status"
 	@echo "  make wait-ready  - Wait until all containers are healthy"
 	@echo "  make doctor      - Run system diagnostics"
-	@echo "  make linbofs-audit - Inspect built linbofs64 contents"
-	@echo "  make linbofs-diff  - Compare template vs built linbofs64"
-	@echo "  make db-push     - Apply Prisma schema changes"
-	@echo "  make clean       - Prune Docker build cache + images"
+	@echo "  make linbofs-audit   - Inspect built linbofs64 contents"
+	@echo "  make linbofs-diff    - Compare template vs built linbofs64"
+	@echo "  make validate-hooks  - Validate all installed hooks"
+	@echo "  make new-hook        - Create hook scaffold (NAME=... TYPE=pre|post)"
+	@echo "  make db-push         - Apply Prisma schema changes"
+	@echo "  make clean           - Prune Docker build cache + images"
 
 # ---------------------------------------------------------------------------
 # Docker Operations
@@ -90,6 +92,19 @@ linbofs-audit:
 
 linbofs-diff:
 	@docker exec linbo-api bash /usr/share/linuxmuster/linbo/linbofs-diff.sh
+
+# ---------------------------------------------------------------------------
+# Hook Management
+# ---------------------------------------------------------------------------
+
+validate-hooks:
+	@docker exec linbo-api bash /usr/share/linuxmuster/linbo/validate-hook.sh --all
+
+new-hook:
+ifndef NAME
+	$(error NAME is required. Usage: make new-hook NAME=my-hook TYPE=pre)
+endif
+	@docker exec linbo-api bash /usr/share/linuxmuster/linbo/new-hook.sh "$(NAME)" "$(or $(TYPE),pre)"
 
 # ---------------------------------------------------------------------------
 # Deploy
