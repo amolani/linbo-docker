@@ -55,8 +55,8 @@
 **Plans**: 2 plans
 
 Plans:
-- [ ] 13-01-PLAN.md — Pin LMN original, create linbofs-audit.sh and linbofs-diff.sh, add Makefile targets
-- [ ] 13-02-PLAN.md — Document CPIO+XZ format in update-linbofs.sh header, add 3-column divergence table to UNTERSCHIEDE-ZU-LINBO.md
+- [x] 13-01-PLAN.md — Pin LMN original, create linbofs-audit.sh and linbofs-diff.sh, add Makefile targets
+- [x] 13-02-PLAN.md — Document CPIO+XZ format in update-linbofs.sh header, add 3-column divergence table to UNTERSCHIEDE-ZU-LINBO.md
 
 ### Phase 14: Hook Observability
 **Goal**: Every hook execution is recorded, inspectable via API, and new hooks can be validated and scaffolded safely before installation
@@ -68,11 +68,11 @@ Plans:
   3. Running `validate-hook.sh` against a hook script reports missing shebang, missing executable bit, or use of absolute paths that should be relative — and exits non-zero on failures
   4. Running `make new-hook NAME=... TYPE=...` creates a valid hook skeleton with exported variable documentation and error handling boilerplate
   5. `.linbofs-patch-status` includes a hook warning summary so monitoring that file alone reveals whether any hooks failed or warned during the last build
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 14-01: TBD
-- [ ] 14-02: TBD
+- [ ] 14-01-PLAN.md — Shell-side: manifest recording in exec_hooks(), validate-hook.sh, new-hook.sh, Makefile targets, patch-status extension
+- [ ] 14-02-PLAN.md — API-side: hook.service.js, GET /system/hooks route, build log retention in linbofs.service.js
 
 ### Phase 15: Update Regression Hardening
 **Goal**: A linbo7 package update either completes with verified integrity or fails loudly before clients attempt to boot a broken linbofs64
@@ -109,6 +109,6 @@ Phases execute in numeric order: 13 -> 14 -> 15
 | 10. Configuration & Install Script | v1.1 | 1/1 | Complete | 2026-03-08 |
 | 11. Production Hardening & Observability | v1.1 | 1/1 | Complete | 2026-03-08 |
 | 12. Admin Documentation | v1.1 | 2/2 | Complete | 2026-03-10 |
-| 13. Pipeline Diff Documentation | 2/2 | Complete    | 2026-03-10 | - |
-| 14. Hook Observability | v1.2 | 0/? | Not started | - |
+| 13. Pipeline Diff Documentation | v1.2 | 2/2 | Complete | 2026-03-10 |
+| 14. Hook Observability | v1.2 | 0/2 | Not started | - |
 | 15. Update Regression Hardening | v1.2 | 0/? | Not started | - |
