@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Fresh Install & Production Readiness
-status: completed
-stopped_at: Completed 11-01-PLAN.md (Phase 11 complete)
-last_updated: "2026-03-08T19:00:51.327Z"
-last_activity: 2026-03-08 -- Completed Phase 11 Production Hardening & Observability
+status: executing
+stopped_at: Completed 12-02-PLAN.md
+last_updated: "2026-03-10T08:33:35.888Z"
+last_activity: 2026-03-10 -- Completed Phase 12 Plan 02 (Admin Guide)
 progress:
   total_phases: 12
-  completed_phases: 11
-  total_plans: 17
-  completed_plans: 17
-  percent: 92
+  completed_phases: 12
+  total_plans: 19
+  completed_plans: 19
+  percent: 95
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-08)
 
 **Core value:** LINBO als eigenstaendige Docker-Loesung mit modernem Web-Interface, ohne den LINBO-Kern zu veraendern
-**Current focus:** Phase 11 complete -- ready for Phase 12
+**Current focus:** Phase 12 Admin Documentation in progress
 
 ## Current Position
 
-Phase: 11 of 12 (Production Hardening & Observability) -- COMPLETE
-Plan: 1 of 1 complete
-Status: Phase complete
-Last activity: 2026-03-08 -- Completed Phase 11 Production Hardening & Observability
+Phase: 12 of 12 (Admin Documentation)
+Plan: 2 of 2 (12-02 complete, 12-01 pending)
+Status: In progress
+Last activity: 2026-03-10 -- Completed Phase 12 Plan 02 (Admin Guide)
 
-Progress: [█████████░] 92%
+Progress: [██████████] 95%
 
 ## Performance Metrics
 
@@ -49,6 +49,7 @@ Progress: [█████████░] 92%
 
 *Updated after each plan completion*
 | Phase 11 P01 | 3min | 2 tasks | 4 files |
+| Phase 12 P02 | 3min | 1 task | 1 file |
 
 ## Accumulated Context
 
@@ -66,6 +67,7 @@ Recent decisions affecting current work:
 - 10-01: Consolidated .env.example from 240 lines to 33 lines (user-facing variables only)
 - 11-01: Created wait-ready.sh (150 lines) health gate and doctor.sh (215 lines, 24 checks, 6 categories) diagnostics
 - 11-01: Added deploy.resources.limits to all 8 docker-compose services (64M-512M memory, 0.5-2.0 CPUs)
+- 12-02: Created docs/ADMIN-GUIDE.md (516 lines) with container architecture, Mermaid network diagram, firewall rules, DHCP config, design rationale, operations guide
 
 ### Pending Todos
 
@@ -77,6 +79,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-08T18:55:43Z
-Stopped at: Completed 11-01-PLAN.md (Phase 11 complete)
+Last session: 2026-03-10T08:33:35.879Z
+Stopped at: Completed 12-02-PLAN.md
 Resume file: None

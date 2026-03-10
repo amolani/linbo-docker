@@ -50,8 +50,8 @@ Requirements for Fresh Install & Production Readiness. Each maps to roadmap phas
 ### Documentation
 
 - [ ] **DOC-01**: Install Guide (`docs/INSTALL.md`) führt Admin von Prerequisites bis zum ersten PXE-Boot
-- [ ] **DOC-02**: Architektur-Übersicht erklärt Container-Rollen, Ports, Volumes und Startup-Reihenfolge für Admins
-- [ ] **DOC-03**: Netzwerk-Diagramm zeigt alle Verbindungen (Client <-> TFTP/HTTP/rsync/SSH) mit Ports und Firewall-Regeln
+- [x] **DOC-02**: Architektur-Übersicht erklärt Container-Rollen, Ports, Volumes und Startup-Reihenfolge für Admins
+- [x] **DOC-03**: Netzwerk-Diagramm zeigt alle Verbindungen (Client <-> TFTP/HTTP/rsync/SSH) mit Ports und Firewall-Regeln
 
 ### Production Hardening
 
@@ -140,8 +140,8 @@ Requirements for Fresh Install & Production Readiness. Each maps to roadmap phas
 | HARD-01 | Phase 11: Production Hardening & Observability | Complete |
 | HARD-02 | Phase 11: Production Hardening & Observability | Complete |
 | DOC-01 | Phase 12: Admin Documentation | Pending |
-| DOC-02 | Phase 12: Admin Documentation | Pending |
-| DOC-03 | Phase 12: Admin Documentation | Pending |
+| DOC-02 | Phase 12: Admin Documentation | Complete |
+| DOC-03 | Phase 12: Admin Documentation | Complete |
 
 **Coverage:**
 - v1.0 requirements: 16 total -- 16 complete
