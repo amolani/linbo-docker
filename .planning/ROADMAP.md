@@ -109,6 +109,6 @@ Phases execute in numeric order: 13 -> 14 -> 15
 | 10. Configuration & Install Script | v1.1 | 1/1 | Complete | 2026-03-08 |
 | 11. Production Hardening & Observability | v1.1 | 1/1 | Complete | 2026-03-08 |
 | 12. Admin Documentation | v1.1 | 2/2 | Complete | 2026-03-10 |
-| 13. Pipeline Diff Documentation | v1.2 | 0/2 | Not started | - |
+| 13. Pipeline Diff Documentation | 1/2 | In Progress|  | - |
 | 14. Hook Observability | v1.2 | 0/? | Not started | - |
 | 15. Update Regression Hardening | v1.2 | 0/? | Not started | - |
