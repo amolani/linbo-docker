@@ -2,7 +2,7 @@
 # LINBO Docker - Development Makefile
 # =============================================================================
 
-.PHONY: help up down rebuild logs health deploy test status clean wait-ready doctor
+.PHONY: help up down rebuild logs health deploy test status clean wait-ready doctor linbofs-audit linbofs-diff
 
 # Default target
 help:
@@ -21,6 +21,8 @@ help:
 	@echo "  make status      - Show git + Docker status"
 	@echo "  make wait-ready  - Wait until all containers are healthy"
 	@echo "  make doctor      - Run system diagnostics"
+	@echo "  make linbofs-audit - Inspect built linbofs64 contents"
+	@echo "  make linbofs-diff  - Compare template vs built linbofs64"
 	@echo "  make db-push     - Apply Prisma schema changes"
 	@echo "  make clean       - Prune Docker build cache + images"
 
@@ -78,6 +80,16 @@ status:
 	@echo "=== Git Sync ==="
 	@echo -n "  Main: " && git log --oneline -1
 	@echo -n "  Test: " && ssh -o ConnectTimeout=3 root@10.0.0.13 "cd /root/linbo-docker; git log --oneline -1" 2>/dev/null || echo "  (unreachable)"
+
+# ---------------------------------------------------------------------------
+# linbofs64 Inspection
+# ---------------------------------------------------------------------------
+
+linbofs-audit:
+	@docker exec linbo-api bash /usr/share/linuxmuster/linbo/linbofs-audit.sh
+
+linbofs-diff:
+	@docker exec linbo-api bash /usr/share/linuxmuster/linbo/linbofs-diff.sh
 
 # ---------------------------------------------------------------------------
 # Deploy

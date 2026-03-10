@@ -63,9 +63,12 @@ echo ""
 
 echo "=== File Sizes ==="
 TMPL_SIZE=$(stat -c%s "$TEMPLATE")
-TMPL_SIZE_HR=$(numfmt --to=iec-i --suffix=B "$TMPL_SIZE" 2>/dev/null || echo "${TMPL_SIZE} bytes")
+# Human-readable size (awk fallback for Alpine BusyBox which lacks numfmt)
+TMPL_SIZE_HR=$(numfmt --to=iec-i --suffix=B "$TMPL_SIZE" 2>/dev/null || \
+    awk "BEGIN { s=$TMPL_SIZE; u=\"B\"; if(s>1024){s/=1024;u=\"KiB\"} if(s>1024){s/=1024;u=\"MiB\"} if(s>1024){s/=1024;u=\"GiB\"} printf \"%.1f%s\n\",s,u }")
 BUILT_SIZE=$(stat -c%s "$BUILT")
-BUILT_SIZE_HR=$(numfmt --to=iec-i --suffix=B "$BUILT_SIZE" 2>/dev/null || echo "${BUILT_SIZE} bytes")
+BUILT_SIZE_HR=$(numfmt --to=iec-i --suffix=B "$BUILT_SIZE" 2>/dev/null || \
+    awk "BEGIN { s=$BUILT_SIZE; u=\"B\"; if(s>1024){s/=1024;u=\"KiB\"} if(s>1024){s/=1024;u=\"MiB\"} if(s>1024){s/=1024;u=\"GiB\"} printf \"%.1f%s\n\",s,u }")
 echo "  Template: $TMPL_SIZE_HR ($TEMPLATE)"
 echo "  Built:    $BUILT_SIZE_HR ($BUILT)"
 echo ""
@@ -97,11 +100,12 @@ echo "=== ADDED ($ADDED_COUNT files only in built) ==="
 echo ""
 
 if [ "$ADDED_COUNT" -gt 0 ]; then
-    # Categorize added files
-    ADDED_MODULES=$(grep -cE '\.(ko|ko\.xz)$' "$TMPDIR/added.list" 2>/dev/null || echo 0)
-    ADDED_FIRMWARE=$(grep -c '^lib/firmware/' "$TMPDIR/added.list" 2>/dev/null || echo 0)
-    ADDED_SSH=$(grep -cE '^(etc/ssh/|etc/dropbear/|\.ssh/)' "$TMPDIR/added.list" 2>/dev/null || echo 0)
-    ADDED_THEMES=$(grep -c '^themes/' "$TMPDIR/added.list" 2>/dev/null || echo 0)
+    # Categorize added files (wrap grep in { || true; } to handle pipefail
+    # when grep finds 0 matches and exits 1)
+    ADDED_MODULES=$({ grep -E '\.(ko|ko\.xz)$' "$TMPDIR/added.list" || true; } | wc -l)
+    ADDED_FIRMWARE=$({ grep '^lib/firmware/' "$TMPDIR/added.list" || true; } | wc -l)
+    ADDED_SSH=$({ grep -E '^(etc/ssh/|etc/dropbear/|\.ssh/)' "$TMPDIR/added.list" || true; } | wc -l)
+    ADDED_THEMES=$({ grep '^themes/' "$TMPDIR/added.list" || true; } | wc -l)
     ADDED_OTHER=$((ADDED_COUNT - ADDED_MODULES - ADDED_FIRMWARE - ADDED_SSH - ADDED_THEMES))
 
     # Modules

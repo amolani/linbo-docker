@@ -61,7 +61,9 @@ echo ""
 
 echo "=== Archive Info ==="
 FILE_SIZE=$(stat -c%s "$LINBOFS")
-FILE_SIZE_HR=$(numfmt --to=iec-i --suffix=B "$FILE_SIZE" 2>/dev/null || echo "${FILE_SIZE} bytes")
+# Human-readable size (awk fallback for Alpine BusyBox which lacks numfmt)
+FILE_SIZE_HR=$(numfmt --to=iec-i --suffix=B "$FILE_SIZE" 2>/dev/null || \
+    awk "BEGIN { s=$FILE_SIZE; u=\"B\"; if(s>1024){s/=1024;u=\"KiB\"} if(s>1024){s/=1024;u=\"MiB\"} if(s>1024){s/=1024;u=\"GiB\"} printf \"%.1f%s\n\",s,u }")
 FILE_MD5=$(md5sum "$LINBOFS" | awk '{print $1}')
 FILE_MTIME=$(stat -c%y "$LINBOFS" 2>/dev/null | cut -d. -f1)
 echo "  Size:     $FILE_SIZE_HR ($FILE_SIZE bytes)"
@@ -74,15 +76,17 @@ echo ""
 # ===================================================================
 
 echo "=== Kernel ==="
-KVER=$(grep -oP '^lib/modules/\K[0-9][^/]+' "$TMPDIR/filelist.txt" | head -1 || true)
+# Extract kernel version from module paths (BusyBox-compatible, no -P flag)
+KVER=$(grep '^lib/modules/[0-9]' "$TMPDIR/filelist.txt" | head -1 | sed 's|^lib/modules/||; s|/.*||' || true)
 if [ -n "$KVER" ]; then
     echo "  Version: $KVER"
 else
     echo "  Version: not found (no modules injected)"
 fi
 
-MOD_COUNT=$(grep -c '\.ko$' "$TMPDIR/filelist.txt" || echo 0)
-MOD_COUNT_XZ=$(grep -c '\.ko\.xz$' "$TMPDIR/filelist.txt" || echo 0)
+# Count modules (BusyBox-compatible: avoid grep -c which exits 1 on 0 matches)
+MOD_COUNT=$({ grep '\.ko$' "$TMPDIR/filelist.txt" || true; } | wc -l)
+MOD_COUNT_XZ=$({ grep '\.ko\.xz$' "$TMPDIR/filelist.txt" || true; } | wc -l)
 MOD_TOTAL=$((MOD_COUNT + MOD_COUNT_XZ))
 echo "  Modules: $MOD_COUNT .ko + $MOD_COUNT_XZ .ko.xz = $MOD_TOTAL total"
 echo ""
@@ -137,8 +141,7 @@ echo ""
 
 echo "=== Firmware ==="
 FW_FILES=$(grep '^lib/firmware/' "$TMPDIR/filelist.txt" | grep -v '/$' || true)
-FW_COUNT=$(echo "$FW_FILES" | grep -c . 2>/dev/null || echo 0)
-if [ -z "$FW_FILES" ]; then FW_COUNT=0; fi
+if [ -z "$FW_FILES" ]; then FW_COUNT=0; else FW_COUNT=$(echo "$FW_FILES" | wc -l); fi
 echo "  Files: $FW_COUNT"
 if [ "$FW_COUNT" -gt 0 ]; then
     echo "$FW_FILES" | sed 's/^/  /'
@@ -157,8 +160,7 @@ if [ -f "$TEMPLATE" ]; then
 
     # Files only in built (ADDED by Docker pipeline + hooks)
     ADDED=$(comm -13 "$TMPDIR/template.list" "$TMPDIR/built.list" || true)
-    ADDED_COUNT=$(echo "$ADDED" | grep -c . 2>/dev/null || echo 0)
-    if [ -z "$ADDED" ]; then ADDED_COUNT=0; fi
+    if [ -z "$ADDED" ]; then ADDED_COUNT=0; else ADDED_COUNT=$(echo "$ADDED" | wc -l); fi
 
     echo "  ADDED by Docker pipeline + hooks: $ADDED_COUNT files"
     if [ "$ADDED_COUNT" -gt 0 ] && [ "$ADDED_COUNT" -le 50 ]; then
@@ -179,8 +181,7 @@ echo ""
 
 echo "=== Device Nodes ==="
 DEV_ENTRIES=$(grep '^dev/' "$TMPDIR/filelist.txt" || true)
-DEV_COUNT=$(echo "$DEV_ENTRIES" | grep -c . 2>/dev/null || echo 0)
-if [ -z "$DEV_ENTRIES" ]; then DEV_COUNT=0; fi
+if [ -z "$DEV_ENTRIES" ]; then DEV_COUNT=0; else DEV_COUNT=$(echo "$DEV_ENTRIES" | wc -l); fi
 echo "  Count: $DEV_COUNT"
 if [ "$DEV_COUNT" -gt 0 ]; then
     echo "$DEV_ENTRIES" | sed 's/^/  /'
