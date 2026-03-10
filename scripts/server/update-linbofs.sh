@@ -271,11 +271,33 @@ else
 fi
 
 # Verify extraction produced files
-if [ ! -d "$WORKDIR/bin" ] && [ ! -d "$WORKDIR/etc" ]; then
-    echo "ERROR: Failed to extract linbofs — no bin/ or etc/ directory found!"
+if [ ! -d "$WORKDIR/bin" ] || [ ! -d "$WORKDIR/etc" ]; then
+    echo "ERROR: Failed to extract linbofs — bin/ or etc/ directory missing!"
     exit 1
 fi
 echo "Extract OK ($(find "$WORKDIR" -type f | wc -l) files)"
+
+# =============================================================================
+# Step 6.5: Pre-injection path validation
+# =============================================================================
+# Validate that the extracted linbofs64 template has the expected directory
+# structure. Subsequent steps use mkdir -p which would mask a changed upstream
+# structure — catch it early before any injection occurs.
+
+echo "Validating linbofs64 internal structure..."
+VALIDATION_FAIL=0
+for required_dir in bin etc; do
+    if [ ! -d "$required_dir" ]; then
+        echo "ERROR: Required directory '$required_dir' not found in extracted linbofs64."
+        echo "  Expected at: $WORKDIR/$required_dir"
+        echo "  The linbo7 package may have changed its internal directory structure."
+        VALIDATION_FAIL=1
+    fi
+done
+if [ "$VALIDATION_FAIL" -ne 0 ]; then
+    exit 1
+fi
+echo "  - Structure validation: OK"
 
 # Device nodes (dev/console, dev/null) cannot be created by non-root (cpio -i
 # silently skips them). We store a pre-built cpio fragment containing these nodes
@@ -593,6 +615,58 @@ if [ "$NEW_SIZE" -lt "$MIN_SIZE" ]; then
     echo "Keeping backup, aborting!"
     rm -f "$LINBOFS.new"
     exit 1
+fi
+
+# Hard upper bound (200MB)
+MAX_SIZE=209715200
+if [ "$NEW_SIZE" -gt "$MAX_SIZE" ]; then
+    echo "ERROR: linbofs64 exceeds maximum size: $(($NEW_SIZE / 1048576))MB > 200MB"
+    echo "This indicates a build problem (e.g., double compression, leaked temp files)."
+    rm -f "$LINBOFS.new"
+    exit 1
+fi
+
+# Warning threshold (80MB)
+WARN_SIZE=83886080
+if [ "$NEW_SIZE" -gt "$WARN_SIZE" ]; then
+    echo "WARNING: linbofs64 is unusually large: $(($NEW_SIZE / 1048576))MB (threshold: 80MB)"
+    echo "Current production size is typically ~55MB. Investigate before deploying."
+fi
+
+# =============================================================================
+# Step 12.5: Post-rebuild CPIO verification
+# =============================================================================
+
+echo "Verifying CPIO archive integrity..."
+
+# Test 1: All XZ segments must decompress correctly
+if ! xz -t "$LINBOFS.new" 2>/dev/null; then
+    echo "ERROR: linbofs64 XZ verification failed - archive is corrupt"
+    rm -f "$LINBOFS.new"
+    exit 1
+fi
+echo "  - XZ integrity: OK"
+
+# Test 2: CPIO listing must work and contain dev/console
+CPIO_LIST=$(xz -dc "$LINBOFS.new" 2>/dev/null | cpio -t 2>/dev/null) || true
+if ! echo "$CPIO_LIST" | grep -q '^dev/console$'; then
+    echo "ERROR: dev/console not found in linbofs64 CPIO archive"
+    echo "The device nodes segment may be missing or corrupt."
+    rm -f "$LINBOFS.new"
+    exit 1
+fi
+echo "  - CPIO content: dev/console present"
+
+# Test 3: Module count (only when kernel variant was injected)
+if [ "$HAS_KERNEL_VARIANT" = "true" ]; then
+    KO_COUNT=$({ echo "$CPIO_LIST" | grep '\.ko$' || true; } | wc -l)
+    if [ "$KO_COUNT" -eq 0 ]; then
+        echo "ERROR: No kernel modules (.ko files) found in linbofs64"
+        echo "Kernel variant '$KTYPE' was injected but no modules survived repack."
+        rm -f "$LINBOFS.new"
+        exit 1
+    fi
+    echo "  - Module count: $KO_COUNT .ko files"
 fi
 
 # =============================================================================
