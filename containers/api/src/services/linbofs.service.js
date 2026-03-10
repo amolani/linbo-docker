@@ -14,12 +14,48 @@ const LINBO_DIR = process.env.LINBO_DIR || '/srv/linbo';
 const CONFIG_DIR = process.env.CONFIG_DIR || '/etc/linuxmuster/linbo';
 
 /**
+ * Rotate build logs, keeping only the 3 most recent
+ * @returns {Promise<void>}
+ */
+async function rotateBuildLogs() {
+  try {
+    const files = await fs.readdir(LINBO_DIR);
+    const logFiles = [];
+
+    for (const file of files) {
+      if (file.startsWith('.linbofs-build') && file.endsWith('.log')) {
+        const fullPath = path.join(LINBO_DIR, file);
+        try {
+          const stat = await fs.stat(fullPath);
+          logFiles.push({ path: fullPath, mtime: stat.mtimeMs });
+        } catch {
+          // Skip files we can't stat
+        }
+      }
+    }
+
+    // Sort by mtime descending (newest first)
+    logFiles.sort((a, b) => b.mtime - a.mtime);
+
+    // Delete all beyond the 3 most recent
+    for (let i = 3; i < logFiles.length; i++) {
+      await fs.unlink(logFiles[i].path).catch(() => {});
+    }
+  } catch {
+    // Silently ignore errors (directory might not exist yet)
+  }
+}
+
+/**
  * Execute update-linbofs script to inject keys into linbofs64
  * @param {object} options - Optional configuration
  * @returns {Promise<{success: boolean, output: string, errors: string|null, duration: number}>}
  */
 async function updateLinbofs(options = {}) {
   const startTime = Date.now();
+
+  // Rotate old build logs before starting
+  await rotateBuildLogs();
 
   const env = {
     ...process.env,
@@ -45,6 +81,10 @@ async function updateLinbofs(options = {}) {
 
     const duration = Date.now() - startTime;
 
+    // Save build log (non-critical)
+    const logFilename = `.linbofs-build.${new Date().toISOString().replace(/[:.]/g, '-')}.log`;
+    await fs.writeFile(path.join(LINBO_DIR, logFilename), stdout).catch(() => {});
+
     return {
       success: true,
       output: stdout,
@@ -54,9 +94,14 @@ async function updateLinbofs(options = {}) {
   } catch (error) {
     const duration = Date.now() - startTime;
 
+    // Save build log even on failure (non-critical)
+    const output = error.stdout || '';
+    const logFilename = `.linbofs-build.${new Date().toISOString().replace(/[:.]/g, '-')}.log`;
+    await fs.writeFile(path.join(LINBO_DIR, logFilename), output).catch(() => {});
+
     return {
       success: false,
-      output: error.stdout || '',
+      output,
       errors: error.stderr || error.message,
       duration,
     };
@@ -331,16 +376,49 @@ async function initializeKeys() {
 
 /**
  * Read build status marker written by update-linbofs.sh
- * @returns {Promise<{available: boolean, buildDate: string|null, healthy: boolean}>}
+ * @returns {Promise<{available: boolean, buildDate: string|null, healthy: boolean, hookWarnings: number, hookCount: number, hookWarningDetails: string|null}>}
  */
 async function getPatchStatus() {
   const statusFile = path.join(LINBO_DIR, '.linbofs-patch-status');
   try {
     const content = await fs.readFile(statusFile, 'utf8');
     const dateMatch = content.match(/Build Status — (.+)/);
-    return { available: true, buildDate: dateMatch?.[1]?.trim() || null, healthy: true };
+
+    // Parse hooks| line (e.g., "hooks|1 run, 0 warnings" or "hooks|none")
+    let hookWarnings = 0;
+    let hookCount = 0;
+    let hookWarningDetails = null;
+
+    const hooksMatch = content.match(/^hooks\|(.+)$/m);
+    if (hooksMatch) {
+      const hooksValue = hooksMatch[1].trim();
+      if (hooksValue === 'none') {
+        hookWarnings = 0;
+        hookCount = 0;
+      } else {
+        const countMatch = hooksValue.match(/(\d+)\s+run,\s*(\d+)\s+warnings?/);
+        if (countMatch) {
+          hookCount = parseInt(countMatch[1], 10);
+          hookWarnings = parseInt(countMatch[2], 10);
+        }
+        // Extract details after colon (e.g., "1 run, 1 warnings: 02_custom(exit=1)")
+        const detailMatch = hooksValue.match(/warnings?:\s*(.+)/);
+        if (detailMatch) {
+          hookWarningDetails = detailMatch[1].trim();
+        }
+      }
+    }
+
+    return {
+      available: true,
+      buildDate: dateMatch?.[1]?.trim() || null,
+      healthy: true,
+      hookWarnings,
+      hookCount,
+      hookWarningDetails,
+    };
   } catch {
-    return { available: false, buildDate: null, healthy: false };
+    return { available: false, buildDate: null, healthy: false, hookWarnings: 0, hookCount: 0, hookWarningDetails: null };
   }
 }
 
@@ -354,4 +432,5 @@ module.exports = {
   generateDropbearKey,
   initializeKeys,
   getPatchStatus,
+  rotateBuildLogs,
 };

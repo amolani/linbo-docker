@@ -14,5 +14,6 @@ router.use('/', require('./grub-theme'));
 router.use('/', require('./grub-config'));
 router.use('/', require('./worker'));
 router.use('/', require('./linbo-update'));
+router.use('/', require('./hooks'));
 
 module.exports = router;
