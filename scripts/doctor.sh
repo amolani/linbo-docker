@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # LINBO Docker - System Diagnostics
-# Checks 6 categories: containers, volumes, SSH keys, linbofs64, Redis, PXE ports.
+# Checks 7 categories: containers, volumes, SSH keys, linbofs64, Redis, PXE ports, APT repo.
 #
 # Usage:
 #   ./scripts/doctor.sh   # or: make doctor
@@ -198,6 +198,17 @@ if ss -tlnp sport = :2222 2>/dev/null | grep -q 2222; then
     check "SSH port 2222/tcp listening" 0 ""
 else
     check "SSH port 2222/tcp listening" 1 "docker compose restart ssh"
+fi
+
+# ---------------------------------------------------------------------------
+# Category 7: APT Repository Connectivity
+# ---------------------------------------------------------------------------
+echo -e "\n${BLUE}APT Repository${NC}"
+
+if curl -sf --connect-timeout 5 -o /dev/null "https://deb.linuxmuster.net/dists/lmn73/Release"; then
+    check "deb.linuxmuster.net reachable" 0 ""
+else
+    check "deb.linuxmuster.net reachable" 1 "Check DNS and internet connectivity. URL: https://deb.linuxmuster.net"
 fi
 
 # ---------------------------------------------------------------------------

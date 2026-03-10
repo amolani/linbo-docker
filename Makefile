@@ -2,7 +2,7 @@
 # LINBO Docker - Development Makefile
 # =============================================================================
 
-.PHONY: help up down rebuild logs health deploy test status clean wait-ready doctor linbofs-audit linbofs-diff validate-hooks new-hook
+.PHONY: help up down rebuild logs health deploy test status clean wait-ready doctor linbofs-audit linbofs-diff validate-hooks new-hook module-diff
 
 # Default target
 help:
@@ -25,6 +25,7 @@ help:
 	@echo "  make linbofs-diff    - Compare template vs built linbofs64"
 	@echo "  make validate-hooks  - Validate all installed hooks"
 	@echo "  make new-hook        - Create hook scaffold (NAME=... TYPE=pre|post)"
+	@echo "  make module-diff     - Compare Docker vs LMN linbofs64 modules"
 	@echo "  make db-push         - Apply Prisma schema changes"
 	@echo "  make clean           - Prune Docker build cache + images"
 
@@ -92,6 +93,9 @@ linbofs-audit:
 
 linbofs-diff:
 	@docker exec linbo-api bash /usr/share/linuxmuster/linbo/linbofs-diff.sh
+
+module-diff:
+	@docker exec linbo-api bash /usr/share/linuxmuster/linbo/linbofs-module-diff.sh
 
 # ---------------------------------------------------------------------------
 # Hook Management
