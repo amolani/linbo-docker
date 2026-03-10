@@ -73,7 +73,7 @@ LINBO als eigenständige, Docker-basierte Lösung mit modernem Web-Interface bet
 
 <!-- Current scope. Building toward these. -->
 
-(No active milestone — run `/gsd:new-milestone` to define v2.0)
+(Defined in REQUIREMENTS.md for v1.2)
 
 ### Out of Scope
 
@@ -85,6 +85,16 @@ LINBO als eigenständige, Docker-basierte Lösung mit modernem Web-Interface bet
 - Host-GRUB .img — Eigene Phase
 - Sophomorix/LDAP — Nicht geplant, LMN-seitig
 - LINBO-Kern modifizieren — Prinzip: nur Hooks, nie init.sh/linbo.sh ändern
+
+## Current Milestone: v1.2 linbofs Boot-Pipeline Transparency
+
+**Goal:** Volle Transparenz und Kontrolle über die linbofs64-Build-Pipeline — genau wissen was Docker vs. Vanilla-LMN ändert, sicherstellen dass Updates sauber durchlaufen, und Hooks nachvollziehbar machen.
+
+**Target features:**
+- Systematischer Diff: Docker update-linbofs.sh vs. LMN-Original mit Begründungen
+- Update-Sicherheit: linbo7-Paket-Updates laufen sauber durch ohne Regressionen
+- Hook-Kontrolle: Hooks dokumentiert, nachvollziehbar, update-sicher
+- init.sh DHCP-serverid-Patch als Hook (falls sauber machbar)
 
 ## Context
 
@@ -120,4 +130,4 @@ LINBO als eigenständige, Docker-basierte Lösung mit modernem Web-Interface bet
 | INSTALL.md + ADMIN-GUIDE.md getrennt | Install-Guide = Schritt-für-Schritt, Admin-Guide = Referenz | ✓ Good |
 
 ---
-*Last updated: 2026-03-10 after v1.1 milestone*
+*Last updated: 2026-03-10 after v1.2 milestone start*

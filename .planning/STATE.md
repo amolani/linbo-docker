@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Fresh Install & Production Readiness
-status: completed
-stopped_at: Milestone v1.1 archived
-last_updated: "2026-03-10T10:21:00.000Z"
-last_activity: 2026-03-10 -- Milestone v1.1 completed and archived
+milestone: v1.2
+milestone_name: linbofs Boot-Pipeline Transparency
+status: in_progress
+stopped_at: null
+last_updated: "2026-03-10T11:00:00.000Z"
+last_activity: 2026-03-10 -- Milestone v1.2 started
 progress:
-  total_phases: 12
-  completed_phases: 12
-  total_plans: 19
-  completed_plans: 19
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-10)
 
 **Core value:** LINBO als eigenstaendige Docker-Loesung mit modernem Web-Interface, ohne den LINBO-Kern zu veraendern
-**Current focus:** Milestone v1.1 complete — run /gsd:new-milestone for next
+**Current focus:** Defining requirements for v1.2 (linbofs Boot-Pipeline Transparency)
 
 ## Current Position
 
-Milestone: v1.1 Fresh Install & Production Readiness — SHIPPED 2026-03-10
-All 12 phases, 19 plans complete across v1.0 + v1.1.
-
-Progress: [██████████] 100%
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-10 — Milestone v1.2 started
 
 ## Accumulated Context
 
@@ -47,5 +47,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-10
-Stopped at: Milestone v1.1 archived
+Stopped at: Defining requirements for v1.2
 Resume file: None
