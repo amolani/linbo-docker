@@ -51,6 +51,9 @@ if [ ! -f /etc/linuxmuster/linbo/server_id_rsa.pub ]; then
        /etc/linuxmuster/linbo/server_id_rsa.pub
 fi
 
+# Fix key ownership so API container (uid 1001) can read them
+chown 1001:1001 /etc/linuxmuster/linbo/*_key /etc/linuxmuster/linbo/*_key.pub /etc/linuxmuster/linbo/dropbear_* 2>/dev/null || true
+
 # Link SSH host keys to sshd config location
 ln -sf /etc/linuxmuster/linbo/ssh_host_rsa_key /etc/ssh/ssh_host_rsa_key
 ln -sf /etc/linuxmuster/linbo/ssh_host_rsa_key.pub /etc/ssh/ssh_host_rsa_key.pub

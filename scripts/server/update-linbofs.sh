@@ -73,11 +73,19 @@ fi
 # Validate prerequisites
 # =============================================================================
 
-# Check for linbofs64
+# Check for linbofs64 (or template for first build)
 if [ ! -f "$LINBOFS" ]; then
-    echo "ERROR: $LINBOFS not found!"
-    echo "Please ensure linbofs64 is present in $LINBO_DIR"
-    exit 1
+    if [ -f "$LINBOFS_TEMPLATE" ]; then
+        echo "First build: $LINBOFS not found, will build from template"
+        echo "  Template: $LINBOFS_TEMPLATE"
+        # Create a placeholder so backup step and extraction work
+        xzcat "$LINBOFS_TEMPLATE" > "$LINBOFS"
+        FIRST_BUILD=true
+    else
+        echo "ERROR: $LINBOFS not found and no template available!"
+        echo "Please run the init container first to provision boot files."
+        exit 1
+    fi
 fi
 
 # Check for rsync secrets
