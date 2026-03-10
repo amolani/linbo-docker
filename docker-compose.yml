@@ -254,7 +254,7 @@ services:
       resources:
         limits:
           cpus: '2.0'
-          memory: 512M
+          memory: 1024M
 
   # =============================================================================
   # Web Frontend (React + Nginx)
