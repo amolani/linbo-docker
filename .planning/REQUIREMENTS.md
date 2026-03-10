@@ -18,8 +18,8 @@ Requirements for linbofs Boot-Pipeline Transparency. Each maps to roadmap phases
 ### Hook-Observability
 
 - [x] **HOOK-01**: Build-Manifest JSON (`.linbofs-build-manifest.json`) mit Hook-Namen, Exit-Codes, Datei-Counts, Timestamp
-- [ ] **HOOK-02**: Build-Log Retention (`.linbofs-build.log`, letzte 3 Builds, via linbofs.service.js)
-- [ ] **HOOK-03**: `GET /system/hooks` API-Endpoint (installierte Hooks, letzter Exit-Code, Executable-Status)
+- [x] **HOOK-02**: Build-Log Retention (`.linbofs-build.log`, letzte 3 Builds, via linbofs.service.js)
+- [x] **HOOK-03**: `GET /system/hooks` API-Endpoint (installierte Hooks, letzter Exit-Code, Executable-Status)
 - [x] **HOOK-04**: `validate-hook.sh` Script (Shebang, Executable-Bit, Pfad-Validierung)
 - [x] **HOOK-05**: Hook-Scaffold-Generator (`make new-hook NAME=... TYPE=...`)
 - [x] **HOOK-06**: `.linbofs-patch-status` erweitert um Hook-Warning-Summary
@@ -73,8 +73,8 @@ Requirements for linbofs Boot-Pipeline Transparency. Each maps to roadmap phases
 | DIFF-04 | Phase 13 | Complete |
 | DIFF-05 | Phase 13 | Complete |
 | HOOK-01 | Phase 14 | Complete |
-| HOOK-02 | Phase 14 | Pending |
-| HOOK-03 | Phase 14 | Pending |
+| HOOK-02 | Phase 14 | Complete |
+| HOOK-03 | Phase 14 | Complete |
 | HOOK-04 | Phase 14 | Complete |
 | HOOK-05 | Phase 14 | Complete |
 | HOOK-06 | Phase 14 | Complete |
