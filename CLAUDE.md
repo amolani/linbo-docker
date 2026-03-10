@@ -28,3 +28,15 @@ Hauptserver (10.0.0.11) → implementieren & verifizieren
 Testserver  (10.0.0.13) → erst danach ausrollen
 ```
 **Niemals direkt auf dem Testserver implementieren.**
+
+### 5. linbofs64-Änderungen – nur über Hooks
+**Niemals `update-linbofs.sh` direkt modifizieren** für inhaltliche Anpassungen am linbofs64.
+Stattdessen Hook-Scripts verwenden:
+```
+/etc/linuxmuster/linbo/hooks/update-linbofs.pre.d/   # VOR Repack (Dateien im linbofs ändern)
+/etc/linuxmuster/linbo/hooks/update-linbofs.post.d/   # NACH Repack (Notifications etc.)
+```
+- Pre-Hooks laufen im extrahierten linbofs-Root (relative Pfade wie `usr/share/...` funktionieren)
+- Nummerierte Präfixe für Reihenfolge: `01_theme`, `02_patch`, ...
+- Doku: `docs/hooks.md`
+- `update-linbofs.sh` selbst nur ändern bei Bugs im Build-Prozess, nicht für Inhalte.

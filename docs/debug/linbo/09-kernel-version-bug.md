@@ -1,4 +1,8 @@
-# 09 — Kernel-Version-Bug (Session 19, 2026-03-01)
+# 09 — Kernel-Version-Bug (Session 19, 2026-03-01) [HISTORISCH]
+
+> **Hinweis:** Dieses Dokument ist historisch. Seit Session 31 verwendet Docker
+> den LINBO-Paket-Kernel statt des Host-Kernels. Der hier beschriebene Bug
+> (Host-Kernel-Version-Mismatch) kann nicht mehr auftreten.
 
 ## TL;DR
 

@@ -104,3 +104,4 @@ linbo64
 config/linbo_client_key
 config/dropbear_dss_host_key
 config/dropbear_rsa_host_key
+docs/linuxmuster-cachingserver-linbo7-main.zip
