@@ -6,9 +6,13 @@
 
 LINBO Docker ist eine containerisierte Version von [LINBO](https://github.com/linuxmuster/linuxmuster-linbo7) (Linux Network Boot). Es kann als **Sync-Client** an einen bestehenden linuxmuster.net-Server angebunden werden oder als **Standalone-System** ohne linuxmuster.net betrieben werden.
 
-> **Architektur-Diagramme:** Siehe [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) für Mermaid-Diagramme (IST/SOLL).
+> **Installationsanleitung:** [docs/INSTALL.md](docs/INSTALL.md) -- Schritt-fuer-Schritt von einem frischen Server bis zum ersten PXE-Boot.
 >
-> **Unterschiede zu Vanilla-LINBO:** Siehe [docs/UNTERSCHIEDE-ZU-LINBO.md](docs/UNTERSCHIEDE-ZU-LINBO.md) — was LINBO ist, was Docker anders macht, und warum.
+> **Admin-Handbuch:** Siehe [docs/ADMIN-GUIDE.md](docs/ADMIN-GUIDE.md) fuer Container-Architektur, Netzwerk-Diagramm und Firewall-Regeln.
+>
+> **Architektur-Diagramme:** Siehe [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) fuer Mermaid-Diagramme (IST/SOLL).
+>
+> **Unterschiede zu Vanilla-LINBO:** Siehe [docs/UNTERSCHIEDE-ZU-LINBO.md](docs/UNTERSCHIEDE-ZU-LINBO.md) -- was LINBO ist, was Docker anders macht, und warum.
 
 ## Features
 
@@ -32,45 +36,24 @@ LINBO Docker ist eine containerisierte Version von [LINBO](https://github.com/li
 - **WebSocket** — Echtzeit-Updates für Host-Status, Operations, Sync-Fortschritt
 - **DHCP** — Export für ISC DHCP / dnsmasq, optionaler Proxy-DHCP-Container
 
-## Quick Start
+## Installation
 
-### Voraussetzungen
+> **Vollstaendige Installationsanleitung:** [docs/INSTALL.md](docs/INSTALL.md) -- Schritt-fuer-Schritt von einem frischen Server bis zum ersten PXE-Boot.
 
-- Docker Engine 24.0+
-- Docker Compose v2.20+
-- 4 GB RAM (Minimum)
-- 50 GB Festplatte (mehr für Images)
-
-### Installation
+Kurzfassung:
 
 ```bash
 git clone https://github.com/amolani/linbo-docker.git
 cd linbo-docker
-
-cp .env.example .env
-nano .env  # LINBO_SERVER_IP, Passwörter etc. setzen
-
+./setup.sh          # Interaktiver Setup-Assistent
 docker compose up -d
+make wait-ready      # Wartet bis alle Container bereit sind
+make doctor          # 24 Diagnose-Checks
 ```
 
-Beim ersten Start lädt der Init-Container automatisch die LINBO Boot-Dateien (~70 MB) von GitHub Releases herunter. SSH-Keys werden automatisch generiert.
+Web-UI: **http://\<LINBO_SERVER_IP\>:8080** -- Login: `admin` / `Muster!`
 
-### Sync-Modus (mit linuxmuster.net)
-
-```bash
-# In .env:
-SYNC_ENABLED=true
-LMN_API_URL=http://10.0.0.11:8400
-LMN_API_KEY=your_api_key
-```
-
-Im Sync-Modus ist Docker **permanent read-only** für LMN-Daten. Hosts, Configs und Rooms werden ausschließlich auf dem LMN-Server verwaltet. Docker konsumiert diese Daten via Cursor-basiertem Delta-Feed.
-
-### Web-Interface
-
-Öffne **http://localhost:8080** im Browser.
-
-Login: `admin` / `Muster!` (Standard-Passwort, änderbar in Settings)
+Sync-Modus einrichten: Siehe [INSTALL.md -- Sync-Modus](docs/INSTALL.md#7-sync-modus-einrichten).
 
 ## Architektur
 
@@ -174,20 +157,21 @@ Im Sync-Modus geben diese Endpoints `409 SYNC_MODE_ACTIVE` zurück:
 
 ## DHCP-Konfiguration
 
-Bestehenden DHCP-Server für PXE konfigurieren:
+Bestehenden DHCP-Server fuer PXE konfigurieren:
 
 ```
 # ISC DHCP
-next-server 10.0.0.13;            # LINBO Docker Server IP
-filename "boot/grub/grub.cfg";
-
-# UEFI:
 option architecture-type code 93 = unsigned integer 16;
+
 if option architecture-type = 00:07 {
-    filename "boot/grub/x86_64-efi/grub.efi";
+    filename "boot/grub/x86_64-efi/core.efi";
+} elsif option architecture-type = 00:09 {
+    filename "boot/grub/x86_64-efi/core.efi";
 } else {
-    filename "boot/grub/i386-pc/grub.0";
+    filename "boot/grub/i386-pc/core.0";
 }
+
+next-server <LINBO_SERVER_IP>;
 ```
 
 Oder den eingebauten DHCP-Proxy-Container nutzen:
@@ -195,6 +179,8 @@ Oder den eingebauten DHCP-Proxy-Container nutzen:
 ```bash
 docker compose --profile dhcp up -d
 ```
+
+Detaillierte DHCP-Konfiguration (ISC DHCP, dnsmasq, Proxy-DHCP): [docs/INSTALL.md](docs/INSTALL.md#5-dhcp-konfiguration)
 
 ## Development
 
@@ -219,18 +205,20 @@ docker exec linbo-api npx prisma db push
 
 ```bash
 make up              # Alle Container starten
-make health          # Health-Check
+make wait-ready      # Warten bis alle Container healthy
+make doctor          # 24 Diagnose-Checks (6 Kategorien)
+make health          # Quick Health-Check (API + Web)
 make status          # Git + Docker Status
 make deploy          # Deploy zum Testserver (rsync)
 make deploy-full     # + linbofs + GRUB neu bauen
-make test            # Tests ausführen
+make test            # Tests ausfuehren
 ```
 
 ## Troubleshooting
 
 | Problem | Lösung |
 |---------|--------|
-| PXE kein Netzwerk | Falscher Kernel (linbo7 vs Host) → Host-Kernel verwenden |
+| PXE kein Netzwerk | Kernel-Module pruefen: `make doctor` -- PXE Port Reachability |
 | Control Mode | `linbo_gui64_7.tar.lz` fehlt auf dem Server |
 | Buttons nicht klickbar | udevd tot → linbofs64 neu bauen |
 | SSH refused | Port 22 vs 2222 prüfen |
