@@ -38,24 +38,24 @@ created: 2026-03-10
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 14-01-01 | 01 | 1 | HOOK-01 | smoke | `grep -q '"hooks"' /srv/linbo/.linbofs-build-manifest.json` | ❌ W0 | ⬜ pending |
-| 14-01-02 | 01 | 1 | HOOK-06 | smoke | `grep -q 'hooks|' /srv/linbo/.linbofs-patch-status` | ❌ W0 | ⬜ pending |
-| 14-01-03 | 01 | 1 | HOOK-04 | smoke | `docker exec linbo-api bash /usr/share/linuxmuster/linbo/validate-hook.sh --all` | ❌ W0 | ⬜ pending |
-| 14-02-01 | 02 | 1 | HOOK-02 | unit | `docker exec linbo-api npx jest tests/services/linbofs.service.test.js` | Yes (extend) | ⬜ pending |
-| 14-02-02 | 02 | 1 | HOOK-03 | unit | `docker exec linbo-api npx jest tests/routes/system.hooks.test.js` | ❌ W0 | ⬜ pending |
-| 14-02-03 | 02 | 1 | HOOK-05 | smoke | `make new-hook NAME=test TYPE=pre` | ❌ W0 | ⬜ pending |
+| 14-01-01 | 01 | 1 | HOOK-01 | smoke | `grep -q '"hooks"' /srv/linbo/.linbofs-build-manifest.json` | No (W0) | pending |
+| 14-01-02 | 01 | 1 | HOOK-06 | smoke | `grep -q 'hooks|' /srv/linbo/.linbofs-patch-status` | No (W0) | pending |
+| 14-01-03 | 01 | 1 | HOOK-04 | smoke | `docker exec linbo-api bash /usr/share/linuxmuster/linbo/validate-hook.sh --all` | No (W0) | pending |
+| 14-02-01 | 02 | 2 | HOOK-02 | unit | `docker exec linbo-api npx jest tests/services/linbofs.service.test.js` | Yes (extend) | pending |
+| 14-02-02 | 02 | 2 | HOOK-03 | unit | `docker exec linbo-api npx jest tests/routes/system.hooks.test.js` | Created by 14-02 Task 2 | pending |
+| 14-02-03 | 02 | 2 | HOOK-05 | smoke | `make new-hook NAME=test TYPE=pre` | No (W0) | pending |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: pending / green / red / flaky*
 
 ---
 
 ## Wave 0 Requirements
 
-- [ ] `containers/api/tests/services/hook.service.test.js` — covers HOOK-01, HOOK-03, HOOK-06
-- [ ] `containers/api/tests/routes/system.hooks.test.js` — covers HOOK-03 route-level
+- [ ] `containers/api/tests/services/hook.service.test.js` — covers HOOK-01, HOOK-03, HOOK-06 (created by Plan 14-02 Task 1)
+- [ ] `containers/api/tests/routes/system.hooks.test.js` — covers HOOK-03 route-level (created by Plan 14-02 Task 2)
 - [ ] No framework install needed — Jest already configured
 
-*Existing `linbofs.service.test.js` will be extended for HOOK-02 (build log rotation).*
+*Both test files are created by Plan 14-02 tasks, not Wave 0 prerequisites. Existing `linbofs.service.test.js` will be extended for HOOK-02 (build log rotation).*
 
 ---
 
