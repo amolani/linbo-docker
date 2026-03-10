@@ -6,6 +6,33 @@
 # Based on the original linuxmuster.net update-linbofs script
 # Adapted for LINBO Docker standalone solution with kernel variant support
 #
+# LINBOFS64 ARCHIVE FORMAT
+# ========================
+# The output linbofs64 file consists of TWO concatenated XZ-compressed CPIO
+# segments. This is a standard Linux initramfs technique -- the kernel's
+# initramfs loader (init/initramfs.c) processes concatenated compressed
+# cpio archives sequentially.
+#
+# Segment 1: Main filesystem (all files from WORKDIR)
+#   Created by: find . | cpio -H newc --owner 0:0 | xz --check=crc32 -T0
+#   Contains: SSH keys, password hash, kernel modules, firmware, themes, hooks
+#
+# Segment 2: Device nodes (dev/console c5,1 + dev/null c1,3)
+#   Created by: xz --check=crc32 < DEVNODES_CPIO (pre-built binary cpio fragment)
+#   Reason: The build runs as non-root (uid 1001). cpio(1) cannot create
+#   character device nodes without CAP_MKNOD. A pre-built cpio fragment
+#   containing these nodes is appended as a separate compressed segment.
+#
+# To inspect the full archive:
+#   xzcat linbofs64 | cpio -t          # lists ALL files (both segments)
+#   xzcat linbofs64 | cpio -i -d       # extracts ALL files (both segments)
+#
+# Note: xzcat/xz -dc decompresses ALL concatenated XZ streams, not just the
+# first. The cpio TRAILER!!! marker separates the two archives, and cpio
+# processes them sequentially, merging the results.
+#
+# See also: docs/UNTERSCHIEDE-ZU-LINBO.md (divergence #5: CPIO format)
+#
 
 set -e
 
@@ -17,26 +44,7 @@ LINBO_DIR="${LINBO_DIR:-/srv/linbo}"
 CONFIG_DIR="${CONFIG_DIR:-/etc/linuxmuster/linbo}"
 CACHE_DIR="/var/cache/linbo"
 KERNEL_VAR_DIR="${KERNEL_VAR_DIR:-/var/lib/linuxmuster/linbo/current}"
-
-# Host kernel support (set by linbo-update.service.js)
-USE_HOST_KERNEL="${USE_HOST_KERNEL:-false}"
-HOST_MODULES_PATH_OVERRIDE="${HOST_MODULES_PATH:-}"
-SKIP_KERNEL_COPY="${SKIP_KERNEL_COPY:-false}"
-
-# =============================================================================
-# Auto-detect Docker host kernel
-# =============================================================================
-# When /boot/vmlinuz-<kver> and /lib/modules/<kver> are bind-mounted from the
-# Docker host, automatically use them. This makes the script safe to call
-# directly (docker exec) without requiring USE_HOST_KERNEL to be passed.
-if [ "$USE_HOST_KERNEL" = "false" ]; then
-    _auto_kver=$(uname -r)
-    if [ -f "/boot/vmlinuz-${_auto_kver}" ] && [ -d "/lib/modules/${_auto_kver}" ]; then
-        echo "AUTO-DETECT: Host kernel ${_auto_kver} found, enabling host kernel mode"
-        USE_HOST_KERNEL=true
-        SKIP_KERNEL_COPY=true
-    fi
-fi
+HOOKSDIR="${HOOKSDIR:-/etc/linuxmuster/linbo/hooks}"
 
 # Files
 LINBOFS="$LINBO_DIR/linbofs64"
@@ -85,6 +93,32 @@ for tool in xz cpio argon2; do
         exit 1
     fi
 done
+
+# =============================================================================
+# Hook support (compatible with linuxmuster.net update-linbofs hooks)
+# =============================================================================
+# Hooks are executable scripts in:
+#   $HOOKSDIR/update-linbofs.pre.d/   — run BEFORE repack (CWD = extracted linbofs)
+#   $HOOKSDIR/update-linbofs.post.d/  — run AFTER repack (CWD = extracted linbofs)
+# Scripts are executed in sorted order. Key variables (LINBO_DIR, CONFIG_DIR,
+# KTYPE, KVERS, WORKDIR) are exported so hooks can use them.
+
+exec_hooks() {
+    case "$1" in
+        pre|post) ;;
+        *) return ;;
+    esac
+    local hookdir="$HOOKSDIR/update-linbofs.$1.d"
+    [ -d "$hookdir" ] || return 0
+    local hook_files
+    hook_files=$(find "$hookdir" -type f -executable 2>/dev/null | sort)
+    [ -z "$hook_files" ] && return 0
+    local file
+    for file in $hook_files; do
+        echo "Executing $1 hook: $(basename "$file")"
+        "$file" || echo "  WARNING: hook $(basename "$file") exited with $?"
+    done
+}
 
 # =============================================================================
 # Step 1: Read kernel variant from custom_kernel
@@ -159,7 +193,8 @@ echo "OK"
 # =============================================================================
 
 WORKDIR=$(mktemp -d "${CACHE_DIR}/linbofs-build.XXXXXX")
-trap "rm -rf $WORKDIR" EXIT
+DEVNODES_CPIO=$(mktemp "${CACHE_DIR}/devnodes.XXXXXX")
+trap "rm -rf $WORKDIR; rm -f $DEVNODES_CPIO" EXIT
 
 echo "Work directory: $WORKDIR"
 
@@ -191,11 +226,20 @@ if [ ! -d "$WORKDIR/bin" ] && [ ! -d "$WORKDIR/etc" ]; then
 fi
 echo "Extract OK ($(find "$WORKDIR" -type f | wc -l) files)"
 
+# Device nodes (dev/console, dev/null) cannot be created by non-root (cpio -i
+# silently skips them). We store a pre-built cpio fragment containing these nodes
+# and concatenate it during repack (Step 11). Linux initramfs supports concatenated
+# cpio archives, so the device nodes appear in the final image without needing
+# mknod privileges during the build.
+echo "MDcwNzAxMDAyNEE0QzcwMDAwNDFFRDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjY5QTlBRDQ0MDAwMDAwMDAwMDAwMDA4MDAwMDAwMDIwMDAwMDAwMDAwMDAwMDAwMDAwMDA0MDAwMDAwMDBkZXYAAAAwNzA3MDEwMDI0QTRDODAwMDAyMTgwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAxNjlBOUFENDQwMDAwMDAwMDAwMDAwMDA4MDAwMDAwMjAwMDAwMDA1MDAwMDAwMDEwMDAwMDAwQzAwMDAwMDAwZGV2L2NvbnNvbGUAAAAwNzA3MDEwMDI0QTRDOTAwMDAyMUI2MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDE2OUE5QUQ0NDAwMDAwMDAwMDAwMDAwODAwMDAwMDIwMDAwMDAwMTAwMDAwMDAzMDAwMDAwMDkwMDAwMDAwMGRldi9udWxsAAAwNzA3MDEwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAxMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMEIwMDAwMDAwMFRSQUlMRVIhISEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" \
+    | base64 -d > "$DEVNODES_CPIO"
+echo "  - Device nodes fragment prepared (dev/console c5,1 + dev/null c1,3)"
+
 # =============================================================================
 # Step 7: Inject kernel modules (if variant available)
 # =============================================================================
 
-if [ "$HAS_KERNEL_VARIANT" = "true" ] && [ "$USE_HOST_KERNEL" != "true" ]; then
+if [ "$HAS_KERNEL_VARIANT" = "true" ]; then
     echo "Injecting kernel modules from variant '$KTYPE'..."
 
     # Ensure lib/modules exists
@@ -239,61 +283,6 @@ if [ "$HAS_KERNEL_VARIANT" = "true" ] && [ "$USE_HOST_KERNEL" != "true" ]; then
     if command -v depmod &>/dev/null; then
         depmod -a -b . "$MOD_KVER"
         echo "  - depmod completed"
-    fi
-elif [ "$HAS_KERNEL_VARIANT" = "true" ] && [ "$USE_HOST_KERNEL" = "true" ]; then
-    echo "Skipping variant module extraction (host kernel takes priority)"
-fi
-
-# =============================================================================
-# Step 7b: Inject host kernel modules (if USE_HOST_KERNEL=true)
-# =============================================================================
-# When running in Docker with the host kernel, the linbo7 package modules
-# won't match. We inject the host's /lib/modules/<kver> instead, so the
-# initrd boots with full hardware support on the host kernel.
-
-if [ "$USE_HOST_KERNEL" = "true" ]; then
-    if [ -n "$HOST_MODULES_PATH_OVERRIDE" ]; then
-        # Extract kernel version from the explicit module path
-        HOST_KVER=$(basename "$HOST_MODULES_PATH_OVERRIDE")
-        HOST_MOD_SRC="$HOST_MODULES_PATH_OVERRIDE"
-    else
-        HOST_KVER=$(uname -r)
-        HOST_MOD_SRC="/lib/modules/$HOST_KVER"
-    fi
-
-    if [ -d "$HOST_MOD_SRC" ]; then
-        echo "Injecting HOST kernel modules ($HOST_KVER)..."
-
-        # Clean previous modules
-        mkdir -p lib/modules
-        rm -rf lib/modules/*
-
-        # Copy host modules: use rsync to follow symlinks but skip broken ones
-        # build/ and source/ are symlinks to /usr/src/* which don't exist in container
-        if command -v rsync &>/dev/null; then
-            rsync -a --copy-links --safe-links \
-                --exclude='build' --exclude='source' \
-                "$HOST_MOD_SRC/" "lib/modules/$HOST_KVER/"
-        else
-            # Fallback: copy without following symlinks, then clean up
-            cp -r "$HOST_MOD_SRC" "lib/modules/$HOST_KVER"
-            rm -rf "lib/modules/$HOST_KVER/build" "lib/modules/$HOST_KVER/source"
-        fi
-
-        # Run depmod for host kernel version
-        if command -v depmod &>/dev/null; then
-            depmod -a -b . "$HOST_KVER"
-            echo "  - depmod completed for $HOST_KVER"
-        fi
-
-        MOD_COUNT=$(find "lib/modules/$HOST_KVER" -name '*.ko' -o -name '*.ko.xz' -o -name '*.ko.zst' | wc -l)
-        echo "  - Host modules injected: $MOD_COUNT files"
-
-        # Disable package variant module injection (host modules take priority)
-        HAS_KERNEL_VARIANT=false
-    else
-        echo "WARNING: Host modules not found at $HOST_MOD_SRC"
-        echo "Falling back to package kernel modules (if available)"
     fi
 fi
 
@@ -510,6 +499,13 @@ if [ -f "$CUSTOM_GUI" ]; then
 fi
 
 # =============================================================================
+# Step 10.9: Execute pre-repack hooks
+# =============================================================================
+
+export LINBO_DIR CONFIG_DIR CACHE_DIR KTYPE KVERS WORKDIR
+exec_hooks pre
+
+# =============================================================================
 # Step 11: Repack linbofs64
 # =============================================================================
 
@@ -518,6 +514,10 @@ echo "Repacking linbofs64 (this may take a while)..."
 # The build runs as non-root (linbo, uid 1001) in Docker, but the LINBO
 # client boots as root. dropbear refuses authorized_keys owned by non-root.
 find . -print | cpio --quiet -o -H newc --owner 0:0 | xz -e --check=none -z -f -T 0 -c > "$LINBOFS.new"
+# Append device nodes as a separately compressed cpio segment.
+# Linux initramfs supports concatenated compressed archives.
+xz -e --check=none -z -f -T 0 -c < "$DEVNODES_CPIO" >> "$LINBOFS.new"
+echo "  - Device nodes appended (separate XZ segment)"
 
 if [ $? -ne 0 ]; then
     echo "ERROR: Failed to repack linbofs64!"
@@ -589,15 +589,19 @@ fi
 # Step 15: Copy kernel from variant (if available)
 # =============================================================================
 
-if [ "$SKIP_KERNEL_COPY" = "true" ]; then
-    echo "Skipping kernel copy (SKIP_KERNEL_COPY=true, host kernel preserved)"
-elif [ "$HAS_KERNEL_VARIANT" = "true" ]; then
+if [ "$HAS_KERNEL_VARIANT" = "true" ]; then
     echo "Copying kernel from variant '$KTYPE'..."
     cp "$VARIANT_DIR/linbo64" "$LINBO_DIR/linbo64"
     chmod 644 "$LINBO_DIR/linbo64"
     md5sum "$LINBO_DIR/linbo64" | awk '{print $1}' > "$LINBO_DIR/linbo64.md5"
     echo "  - linbo64: $(cat $LINBO_DIR/linbo64.md5)"
 fi
+
+# =============================================================================
+# Step 15.5: Execute post-repack hooks
+# =============================================================================
+
+exec_hooks post
 
 # =============================================================================
 # Summary
