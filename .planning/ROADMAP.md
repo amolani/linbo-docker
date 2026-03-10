@@ -168,11 +168,11 @@ Plans:
   1. The install guide (`docs/INSTALL.md`) walks an admin from bare Ubuntu/Debian VM through prerequisites, setup.sh, container startup, and verification of the first PXE boot -- with no gaps requiring guesswork
   2. The architecture document explains each container's role, which ports it uses, which volumes it mounts, and the startup dependency order -- readable by an admin who has never seen the codebase
   3. The network diagram shows all connections between PXE client and LINBO Docker (TFTP, HTTP, rsync, SSH) with port numbers and required firewall rules -- usable as a reference when configuring network infrastructure
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 12-01: TBD
-- [ ] 12-02: TBD
+- [ ] 12-01-PLAN.md -- Install guide (docs/INSTALL.md) and README.md Quick Start replacement
+- [ ] 12-02-PLAN.md -- Admin guide with architecture overview, network diagram, and firewall rules (docs/ADMIN-GUIDE.md)
 
 ## Progress
 
@@ -194,4 +194,4 @@ Note: Phase 12 (Documentation) depends on all three prior phases being stable, s
 | 9. Init Container Hardening | v1.1 | 2/2 | Complete | 2026-03-08 |
 | 10. Configuration & Install Script | v1.1 | Complete    | 2026-03-08 | 2026-03-08 |
 | 11. Production Hardening & Observability | v1.1 | Complete    | 2026-03-08 | 2026-03-08 |
-| 12. Admin Documentation | v1.1 | 0/? | Not started | - |
+| 12. Admin Documentation | v1.1 | 0/2 | Planned | - |
