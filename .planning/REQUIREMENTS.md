@@ -67,30 +67,30 @@ Requirements for linbofs Boot-Pipeline Transparency. Each maps to roadmap phases
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DIFF-01 | - | Pending |
-| DIFF-02 | - | Pending |
-| DIFF-03 | - | Pending |
-| DIFF-04 | - | Pending |
-| DIFF-05 | - | Pending |
-| HOOK-01 | - | Pending |
-| HOOK-02 | - | Pending |
-| HOOK-03 | - | Pending |
-| HOOK-04 | - | Pending |
-| HOOK-05 | - | Pending |
-| HOOK-06 | - | Pending |
-| UPD-01 | - | Pending |
-| UPD-02 | - | Pending |
-| UPD-03 | - | Pending |
-| UPD-04 | - | Pending |
-| UPD-05 | - | Pending |
-| UPD-06 | - | Pending |
-| UPD-07 | - | Pending |
+| DIFF-01 | Phase 13 | Pending |
+| DIFF-02 | Phase 13 | Pending |
+| DIFF-03 | Phase 13 | Pending |
+| DIFF-04 | Phase 13 | Pending |
+| DIFF-05 | Phase 13 | Pending |
+| HOOK-01 | Phase 14 | Pending |
+| HOOK-02 | Phase 14 | Pending |
+| HOOK-03 | Phase 14 | Pending |
+| HOOK-04 | Phase 14 | Pending |
+| HOOK-05 | Phase 14 | Pending |
+| HOOK-06 | Phase 14 | Pending |
+| UPD-01 | Phase 15 | Pending |
+| UPD-02 | Phase 15 | Pending |
+| UPD-03 | Phase 15 | Pending |
+| UPD-04 | Phase 15 | Pending |
+| UPD-05 | Phase 15 | Pending |
+| UPD-06 | Phase 15 | Pending |
+| UPD-07 | Phase 15 | Pending |
 
 **Coverage:**
 - v1.2 requirements: 18 total
-- Mapped to phases: 0
-- Unmapped: 18
+- Mapped to phases: 18
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-10*
-*Last updated: 2026-03-10 after initial definition*
+*Last updated: 2026-03-10 after roadmap creation*
