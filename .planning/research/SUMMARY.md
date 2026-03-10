@@ -1,184 +1,210 @@
 # Project Research Summary
 
-**Project:** LINBO Docker v1.1 -- Fresh Install & Production Readiness
-**Domain:** Docker-based network boot server (PXE/LINBO) -- first-run experience and operational hardening
-**Researched:** 2026-03-08
+**Project:** LINBO Docker v1.2 — linbofs Boot-Pipeline Transparency
+**Domain:** Boot artifact pipeline hardening, diff analysis, hook system governance
+**Researched:** 2026-03-10
 **Confidence:** HIGH
 
 ## Executive Summary
 
-LINBO Docker v1.1 is a production readiness milestone for an existing, functional network boot system. The codebase is mature (33+ sessions, 7 containers, 23 API services, 14 React pages, verified on real hardware), but the fresh install experience is broken: there is no setup script, the init container fails silently, .env configuration is a 240-line guessing game with three conflicting sources of truth, LINBO_SERVER_IP defaults to the wrong value for every non-LMN network, and volume permissions break cross-container file access. The gap is not missing functionality -- it is missing operability. A competent sysadmin with no prior exposure to the codebase cannot go from `git clone` to working PXE boot without trial-and-error or developer assistance.
+LINBO Docker v1.2 is a maintenance and transparency milestone — not a new feature milestone. The task is to systematically document every intentional divergence between Docker's `update-linbofs.sh` and the upstream LMN original, make the hook system observable and auditable, and harden the system against silent regressions during future `linuxmuster-linbo7` package updates. No new stack components are required. All work is analysis, documentation, targeted hardening, and test coverage within the existing Node.js/Bash/Docker architecture.
 
-The recommended approach requires zero new npm dependencies and zero new containers. All improvements are surgical enhancements to existing components: a setup script (bash), structured error reporting in the init container (bash), Zod-based .env validation at API startup (already-installed library), and plain Markdown admin documentation. The architecture research confirms that the init container, install script, and API startup sequence are the three integration points. A new setup.service.js aggregates system readiness into a checklist, and an optional SetupWizardPage provides guided first-run configuration through the existing web frontend. The critical ordering insight is: init container error reporting must come first (because it makes all subsequent debugging possible), followed by configuration management (.env consolidation, install script), then API setup detection, then frontend wizard, then documentation.
+The recommended approach follows the sequence: document first, then test, then harden, then extend. The research identified 15 concrete divergences between the Docker and LMN scripts, each with explicit rationale for preservation. The most dangerous divergences (device node cpio concatenation, `--owner 0:0` cpio flag, atomic write pattern, `flock`-based locking) are irreversible and must be explicitly protected against future maintainers treating them as "unnecessary" differences. The hook system (added in Session 33) needs a build manifest, API surface, and criticality model before new hooks are added.
 
-The top risks are: (1) .env drift between .env.example, docker-compose.yml defaults, and the actual .env file -- which causes silent misconfiguration on every fresh install; (2) init container failures leaving volumes in an unrecoverable partial state with no clear error messages; (3) LINBO_SERVER_IP defaulting to 10.0.0.1 which silently breaks PXE boot on every non-LMN network; and (4) Docker volume permissions breaking cross-container file access (EACCES errors). All four are preventable with validation, structured error reporting, and startup checks -- patterns already proven in the existing validateSecrets() implementation.
+The primary risk is silent regression: a `linuxmuster-linbo7` package update produces a linbofs64 that passes all current checks (size > 10MB, MD5 written) but fails to boot clients because injection paths changed or the module selection diverged. This was the root cause of the Session 32 "Remote Control Mode" incident. Mitigation requires both automated verification (module count, injection path existence checks) and a documented manual boot test runbook that must be executed after every package update.
+
+---
 
 ## Key Findings
 
 ### Recommended Stack
 
-No new dependencies. The existing stack already contains everything needed. Zod (^3.22.4, already installed and used in validate.js middleware) handles .env validation. Shell scripts (bash + standard Unix tools) handle the setup flow. Plain Markdown handles documentation. This is a deliberate constraint: adding dependencies for a "make it easier to install" milestone would be counterproductive.
+No new stack components are needed for v1.2. The existing Bash + Node.js + Docker infrastructure covers all requirements. The only new tooling candidates are pure-shell scripts (`validate-hook.sh`, `make linbofs-audit`, `make linbofs-diff`) that have no dependencies beyond the tools already present in the API container.
 
-**Core technologies (existing, unchanged):**
-- **Express.js ^4.18.2**: API framework -- no changes needed
-- **Zod ^3.22.4**: Extend from request validation to .env validation at startup -- zero new code patterns
-- **ioredis ^5.3.2**: Redis client for setup state storage (setup:complete key) -- uses existing settings service pattern
-- **Node.js 20.20.0-alpine**: API runtime, LTS until April 2026 -- no version bump needed
-- **Docker Compose v2**: Container orchestration -- improve health check timing and unify compose files
+**Core technologies (all existing):**
+- **Bash 5.x** — `update-linbofs.sh`, hook scripts, audit/diff tooling — no alternatives needed
+- **xz-utils + cpio** — initramfs pack/unpack; the concatenated two-segment XZ format must be preserved exactly
+- **argon2** — password hash injection; parameters must match LMN's in future package updates
+- **flock (util-linux)** — crash-safe build locking; superior to LMN's `touch`-based lockfile
+- **Node.js 20 / Express.js** — API container; hook status endpoint to be added as new route in existing system router
+- **ioredis** — Redis for update orchestration state (linbo-update.service); build state remains file-based (do not mix these two state mechanisms)
 
-**Explicitly rejected:** envalid, dotenv-safe, t3-env (unnecessary wrappers around Zod), MkDocs/Docusaurus/VitePress (overkill for ~10 docs pages), Ansible (over-engineered for 1-3 server deployments), HashiCorp Vault (enterprise tool for school sysadmins), web-based setup wizard (shell script is correct for this audience).
+See `STACK.md` for the complete diff of Docker vs LMN script with rationale for every divergence.
 
 ### Expected Features
 
-**Must have (table stakes -- fresh install fails without these):**
-- Setup script (setup.sh) -- prerequisite checks, .env generation, secret auto-generation, IP detection
-- Init container error reporting -- structured status JSON, actionable error codes, retry with backoff
-- .env consolidation -- single authoritative .env.example matching docker-compose.yml, grouped into required/optional
-- Startup health gate -- `make wait-ready` that blocks until system is operational or reports what is stuck
-- LINBO_SERVER_IP auto-detection and validation -- the single most common misconfiguration
-- Port conflict detection -- TFTP (69/udp) and rsync (873) conflict with existing services on LMN servers
-- Install guide -- step-by-step admin documentation with prerequisites, verification, troubleshooting cross-references
+**Must have (table stakes for v1.2):**
+- **Hook content manifest** — structured JSON written to `.linbofs-build-manifest.json` at Step 14.5; records hook names, exit codes, file counts per injection step, build timestamp
+- **Build log retention** — full `update-linbofs.sh` stdout written to `.linbofs-build.log` (rotate, keep last 3); accessible via API endpoint
+- **Hook listing/status API** — `GET /system/hooks` returns installed hooks, last exit code from manifest, executable status; no API surface exists today
+- **Hook validation script** — `validate-hook.sh`: checks shebang, executable bit, absolute path references; runs before hook is installed
+- **linbofs content audit command** — `make linbofs-audit`: extracts linbofs64, reports kernel version, module count, SSH key fingerprints, firmware files, hook-modified files
+- **linbofs diff (Docker vs vanilla)** — shell script comparing template `linbofs64.xz` vs built `linbofs64` cpio manifests; answers "what does Docker actually change?"
+- **Update safety test coverage** — extend existing `linbo-update.service.test.js` to cover partial failure states (provision OK, rebuild fails), concurrent update attempt (409), version comparison edge cases
 
-**Should have (differentiators):**
-- `make doctor` diagnostic command -- checks container health, volume permissions, SSH keys, linbofs64 status
-- Configuration drift detection -- warn when running .env differs from container environment
-- Backup/restore script -- `make backup` for Docker volumes before upgrades
-- Network requirements diagram -- visual port/flow diagram preventing 80% of "PXE does not work" issues
-- Container resource limits -- memory/CPU caps in docker-compose.yml
+**Should have (strong differentiators for v1.2):**
+- **Module diff (Docker vs LMN)** — compare `lib/modules/` between Docker linbofs64 and an LMN-generated linbofs64; directly addresses Session 32 root cause
+- **Hook scaffold generator** — `make new-hook NAME=02_foo TYPE=pre` creates a hook skeleton with exported variable docs and error handling pattern
+- **Hook idempotency testing** — test harness that runs pre-hooks twice on same extracted linbofs and verifies identical output; critical for any future init.sh patch hook
+- **Size range check** — extend existing 10MB minimum to also warn if > 80MB, fail if > 200MB; add module count verification (`lib/modules/*.ko` count > 0 after module injection)
 
-**Defer (v1.2+):**
-- GITHUB_TOKEN / @edulution-io/ui-kit resolution -- important for open-source adoption but requires significant refactoring
-- Guided first-login experience -- nice-to-have banner/checklist in dashboard
-- Sync mode setup guide -- advanced usage, not blocking fresh standalone installs
-- Auto-update mechanism -- dangerous for network boot infrastructure
-- Multi-site management -- v3+ concern
-- Web-based setup wizard -- shell script is appropriate for sysadmin audience
+**Defer (post-v1.2):**
+- **init.sh SERVERID patch as pre-hook** — MEDIUM confidence feasibility; requires verification against current init.sh version and a decision between hook-based patch vs GRUB cmdline approach (see Pitfall 3 in PITFALLS.md). Do not implement until the transparency phase is complete and exact init.sh structure is confirmed.
+- **Firmware audit** — cross-reference `$CONFIG_DIR/firmware` against `linux-firmware` package; useful but not blocking
+- **Hook criticality model** — `HOOK_REQUIRED=true` header convention; design this after observing real hook failure patterns in the wild
+- **APT repo connectivity in `make doctor`** — minor resilience improvement; not blocking v1.2
+
+See `FEATURES.md` for full feature landscape with dependency graph.
 
 ### Architecture Approach
 
-No new containers. All changes integrate into existing components through four modification points and two new files. The init container gains structured status reporting (.init-status.json) as a write-once file read by the API. A new setup.service.js aggregates readiness checks (init complete, keys present, linbofs built, config valid) into a queryable checklist backed by Redis. The install script gains preflight validation and .env generation. An optional SetupWizardPage in the frontend provides guided verification. The critical anti-pattern to avoid: never make the API block on setup completion, because the API must be running for the setup wizard to work.
+The build pipeline is architecturally sound and requires no structural changes for v1.2. The pipeline has three distinct phases (Bootstrap via init container, Build via `update-linbofs.sh`, Update via `linbo-update.service.js`) and five established patterns that must be preserved: atomic template extraction, atomic kernel set symlink swap, build marker state machine, non-root build safety (uid 1001 + pre-built cpio device node fragment), and idempotent update orchestration via Redis lock + heartbeat.
 
-**Major components (modified or new):**
-1. **scripts/install.sh** (modified) -- preflight checks, .env generation from template, secret generation, IP detection
-2. **containers/init/entrypoint.sh** (modified) -- structured .init-status.json output, error categorization, proxy support
-3. **containers/api/src/lib/env-schema.js** (new) -- Zod schema replacing ad-hoc validateSecrets()
-4. **containers/api/src/services/setup.service.js** (new) -- setup state machine and checklist aggregator
-5. **containers/api/src/routes/system/** (modified) -- setup-status, setup-validate, setup-complete endpoints
-6. **containers/web/frontend/src/pages/SetupWizardPage.tsx** (new) -- guided first-run verification UI
-7. **docs/admin/** (new directory) -- INSTALL.md, CONFIGURATION.md, ARCHITECTURE.md, TROUBLESHOOTING.md, NETWORK.md
+**Major components:**
+1. **`containers/init/entrypoint.sh`** — one-shot APT provisioning; writes `.needs-rebuild` to signal API; uses checkpoint files for idempotency
+2. **`scripts/server/update-linbofs.sh`** — core build pipeline; 15 steps from template extraction to kernel binary copy; the ONLY file that writes `linbofs64`; all Docker vs LMN divergences live here
+3. **`containers/api/src/services/linbo-update.service.js`** — full package update orchestration; the integration seam where the most dangerous partial-failure states exist (provision succeeds, rebuild fails)
+4. **`containers/api/src/services/linbofs.service.js`** — shell-out wrapper for `update-linbofs.sh`; handles key provisioning; candidate for adding build log capture
+5. **Hook scripts (`update-linbofs.pre.d/`, `update-linbofs.post.d/`)** — extensibility point; currently one active hook (Plymouth theme); needs governance model before expansion
+
+The critical invariant to protect: `linbo64` (kernel binary) is copied to `$LINBO_DIR` at Step 15, AFTER `linbofs64` is fully built and verified. This ensures kernel binary and module set are always synchronized. Any refactoring that separates these steps creates a race window during updates.
+
+See `ARCHITECTURE.md` for the full pipeline diagram, volume map, and integration point risk analysis.
 
 ### Critical Pitfalls
 
-1. **.env drift between three sources** -- .env.example (240 lines), docker-compose.yml defaults (~60 vars), and actual .env (116 lines) tell different stories. Variable naming is inconsistent (DB_PASSWORD vs POSTGRES_PASSWORD). GITHUB_TOKEN is required but not in .env.example. **Prevention:** Create ONE canonical .env.example matching docker-compose.yml exactly, grouped into required/optional with inline comments.
+1. **Misclassifying intentional differences as bugs** — Every diff against the LMN original must use a three-column format: LMN behavior / Docker behavior / Justification. Never remove a Docker-specific behavior without tracing which feature it enables. The 15 catalogued divergences in `STACK.md` are the authoritative reference.
 
-2. **Init container partial failure leaves unrecoverable state** -- restart: "no" + set -e means any failure exits with no retry. No checkpoint/resume mechanism. Partial volumes block all dependent containers. **Prevention:** Add idempotent checkpoints, HTTP_PROXY support, structured error status file, document `docker compose up -d --force-recreate init` recovery.
+2. **Module selection divergence is non-deterministic at identical kernel versions** — Session 32 proved same version + same nominal count != same module set. Same kernel binary, different supporting module selection → boot failure on specific hardware. The fix is ensuring `modules.tar.xz` originates from the LMN .deb's pre-built linbofs64, not a separately compiled set. After any package update, compare module NAME lists (not just counts) against an LMN reference.
 
-3. **LINBO_SERVER_IP defaults to 10.0.0.1** -- wrong for every non-LMN network. Written into GRUB configs, causes PXE clients to download from nonexistent server. Debugging takes hours because TFTP works fine (host network) but HTTP boot fails. **Prevention:** Startup validation comparing against local interfaces, prominent warning, auto-detection in install script.
+3. **LMN package update silently invalidates injection paths** — LMN can change internal linbofs64 paths (`etc/linbo_pwhash`, `etc/dropbear/`, `.ssh/authorized_keys`) in any release without announcing it. Docker's `update-linbofs.sh` writes to hardcoded paths with no pre-injection existence check. After any linbo7 update, run: `xzcat linbofs64.xz | cpio -t 2>/dev/null | grep -E 'linbo_pwhash|dropbear|authorized_keys'` before rebuilding.
 
-4. **Docker volume permissions (EACCES)** -- init runs as root, API runs as UID 1001. If init fails before chown step, all API file operations fail with 500 errors. Recurs after any root-context operation (SSH container, LINBO update). **Prevention:** Startup write-permission check in API, shared GID approach, permission repair in init.
+4. **CPIO concatenation format is fragile and undocumented** — linbofs64 is a two-segment concatenated XZ file (main archive + device nodes). Any tool that recompresses or decompresses the "full file" as a single XZ drops the device node segment silently. Client kernel panics immediately. This format MUST be explicitly documented in `update-linbofs.sh` and verified after every rebuild: `xzcat linbofs64 | cpio -t 2>/dev/null | grep dev/console`.
 
-5. **Marker file state machine hangs after interrupted rebuild** -- .needs-rebuild -> .running -> .linbofs-patch-status chain breaks if rebuild crashes. TFTP busy-waits forever. **Prevention:** Add timeout to TFTP wait, write FAILED status on error, add manual recovery command.
+5. **Hook errors are swallowed by design — build status reports OK even on hook failure** — The current `.linbofs-patch-status` file contains only `build|OK` regardless of hook exit codes. An admin who monitors only this file has no visibility into hook failures. The build manifest (table stakes feature) must extend this file to include hook warning summaries.
+
+---
 
 ## Implications for Roadmap
 
-Based on research, suggested phase structure (4 phases):
+Based on research, the v1.2 milestone maps cleanly to 3 phases with a strict dependency order: documentation before testing, testing before hardening/extension.
 
-### Phase 1: Init Container Hardening & Error Reporting
+### Phase 1: Pipeline Diff Documentation and Transparency
 
-**Rationale:** The init container is the entry point for every fresh install and the source of the most common failure. Fixing error reporting first makes all subsequent phases debuggable. This phase has no dependencies on other v1.1 work.
+**Rationale:** All subsequent work (testing, hardening, hook extension) depends on a precise catalogue of what Docker's pipeline does and why. Without this foundation, any "improvement" risks removing intentional divergences. This phase is pure documentation and lightweight tooling with no architectural risk. It directly addresses Pitfall 1 (misclassifying differences as bugs) by creating the authoritative reference that all future maintainers can consult.
 
-**Delivers:** Structured .init-status.json with progress tracking and error categorization; retry with backoff for network failures; HTTP_PROXY/HTTPS_PROXY support; idempotent checkpoints so reruns skip completed steps; actionable error codes (APT_FETCH_FAILED, DOWNLOAD_FAILED, PERMISSION_DENIED, etc.)
+**Delivers:**
+- Pinned copy of LMN `update-linbofs` original at `scripts/server/update-linbofs-lmn-original.sh` for ongoing drift tracking
+- `make linbofs-audit` shell command: extract and report linbofs64 composition (kernel version, module count, SSH key fingerprints, firmware files)
+- `make linbofs-diff` shell script: compare template `linbofs64.xz` vs built `linbofs64` cpio manifests
+- Updated `docs/UNTERSCHIEDE-ZU-LINBO.md` with full 15-divergence catalogue (three-column format: LMN behavior / Docker behavior / Justification)
+- Documentation of the concatenated XZ format in `update-linbofs.sh` header comments
 
-**Addresses features:** Init container error reporting (table stakes), partial state recovery
+**Addresses features:** linbofs content audit command, linbofs diff (Docker vs vanilla)
+**Avoids:** Pitfall 1 (intentional-difference misclassification), Pitfall 5 (undocumented CPIO format)
 
-**Avoids pitfalls:** #2 (partial failure), #9 (marker state machine -- add TFTP timeout), #15 (firmware mount check)
+### Phase 2: Hook System Observability and Governance
 
-### Phase 2: Configuration Management & Install Script
+**Rationale:** The hook system (introduced Session 33) has no API surface, no build manifest, and no criticality model. Before any new hooks are written — especially the high-risk init.sh SERVERID patch — the governance model must exist. This phase makes hooks visible and auditable, which is a prerequisite for safely expanding the hook ecosystem. It also surfaces the hook warning information that is currently swallowed.
 
-**Rationale:** The install script is the user's entry point. It depends on understanding the init error format from Phase 1. This phase resolves the .env chaos that causes most fresh install failures and creates the canonical configuration surface.
+**Delivers:**
+- Build manifest JSON at `.linbofs-build-manifest.json` (extend Step 14.5 in `update-linbofs.sh`)
+- Build log retention: full stdout to `.linbofs-build.log` (rotate, keep 3); written by `linbofs.service.js`
+- `GET /system/hooks` API endpoint in existing system router
+- `validate-hook.sh` script: shebang, executable bit, path validation
+- Hook scaffold generator: `make new-hook NAME=... TYPE=...`
+- Extension of `.linbofs-patch-status` to include hook warning summary
+- Example hook in `docs/hooks.md` updated to use `$CONFIG_DIR` instead of hardcoded `/root/linbo-docker/`
 
-**Delivers:** Consolidated .env.example (single source of truth, grouped required/optional); setup.sh with preflight validation (Docker, ports, disk, DNS); auto-generated secrets (JWT_SECRET, INTERNAL_API_KEY, RSYNC_PASSWORD); LINBO_SERVER_IP auto-detection; port conflict detection; env-schema.js (Zod-based .env validation replacing validateSecrets()); resolution of deploy/docker-compose.yml divergence
+**Addresses features:** Hook content manifest, hook listing/status API, hook validation, hook scaffold generator, build log retention
+**Avoids:** Pitfall 6 (silent hook failures), Pitfall 12 (hardcoded paths in examples)
 
-**Addresses features:** Setup script, prerequisites validation, .env generation, LINBO_SERVER_IP auto-detection, port conflict detection (all table stakes)
+### Phase 3: Update Regression Hardening and Test Coverage
 
-**Avoids pitfalls:** #1 (.env drift), #3 (LINBO_SERVER_IP), #4 (volume permissions -- startup check), #6 (port conflicts), #7 (over-strict validation -- use warn/fatal tiers), #10 (two compose files), #11 (GITHUB_TOKEN documentation), #12 (rsyncd default credentials)
+**Rationale:** The highest-risk scenario is a silent regression after a `linuxmuster-linbo7` package update: build succeeds, all checks pass, clients fail to boot. This phase adds the verification layer that makes package updates safe. It depends on Phase 1 (audit tools become verification primitives) and Phase 2 (hook manifest provides build evidence for test assertions). The automated checks address what can be scripted; the boot test runbook addresses what cannot.
 
-### Phase 3: Setup Service, API Endpoints & Frontend Wizard
+**Delivers:**
+- Extended `linbo-update.service.test.js`: partial failure states (provision OK, rebuild fails), concurrent update attempt (409), version comparison edge cases
+- Pre-injection path existence check in `update-linbofs.sh` (Steps 8/9): verify target directories exist in extracted linbofs before writing, fail loudly if not
+- Size range check: warn if linbofs64 > 80MB, fail if > 200MB; module count verification (`.ko` files > 0)
+- Post-rebuild verification: assert both XZ segments decode to valid cpio, confirm `dev/console` present
+- Module diff script: compare `lib/modules/` contents between Docker and LMN linbofs64
+- Written runbook in `docs/linbo-upgrade-flow.md`: boot test procedure required after every linbo7 update
+- `make doctor` addition: APT repo connectivity check (`deb.linuxmuster.net` reachable)
 
-**Rationale:** The backend setup service and API endpoints must exist before the frontend wizard can be built. This phase depends on the init status format (Phase 1) and .env structure (Phase 2). It adds the "smart" layer that ties all checks together into a queryable system.
-
-**Delivers:** setup.service.js (checklist aggregator reading init status, keys, linbofs, config validity); GET /system/setup-status, POST /system/setup/validate, POST /system/setup/complete API endpoints; SetupWizardPage.tsx with step-by-step verification flow; startup health gate (make wait-ready); make doctor diagnostic command; container resource limits in docker-compose.yml
-
-**Addresses features:** Startup health gate (table stakes), make doctor (differentiator), guided first-login (differentiator), container resource limits (differentiator)
-
-**Avoids pitfalls:** Anti-pattern #1 (setup-blocking API startup -- keep setup advisory, not enforced), anti-pattern #3 (storing setup config in files -- use Redis)
-
-### Phase 4: Admin Documentation
-
-**Rationale:** Documentation must reference final behavior. Writing it before Phases 1-3 stabilize would require rewriting. Writing it last also means the author can test the actual install flow end-to-end on a fresh VM.
-
-**Delivers:** docs/admin/INSTALL.md (step-by-step from fresh VM to working deployment); docs/admin/CONFIGURATION.md (all .env variables explained); docs/admin/ARCHITECTURE.md (container roles, network diagram, volume purposes); docs/admin/NETWORK.md (PXE network requirements, firewall rules, port diagram); docs/admin/TROUBLESHOOTING.md (common problems with solutions, cross-referenced from install guide); docs/admin/UPGRADE.md (version upgrade procedures, backup/restore)
-
-**Addresses features:** Install guide, architecture overview, network requirements diagram (table stakes + differentiators)
-
-**Avoids pitfalls:** #5 (documentation that lies about prerequisites -- test on fresh VM), #8 (restart vs up -d confusion -- prominent callout), #13 (PostgreSQL password mismatch), #14 (container naming)
+**Addresses features:** Update safety test coverage, module diff, size range check, linbofs64 format verification
+**Avoids:** Pitfall 2 (module divergence), Pitfall 4 (injection path staleness), Pitfall 5 (CPIO format verification), Pitfall 7 (inadequate size check), Pitfall 8 (kernel/module race window documentation), Pitfall 13 (build-only testing is not sufficient)
 
 ### Phase Ordering Rationale
 
-- **Init first** because every subsequent phase needs a working init container to test, and structured errors make debugging everything else possible.
-- **Configuration second** because the install script is the user's entry point and .env consolidation affects all container startup behavior. Must be settled before the API setup service can validate configuration.
-- **Setup service and wizard third** because they aggregate status from init (Phase 1) and configuration (Phase 2). The frontend wizard depends on stable API endpoints.
-- **Documentation last** because it must describe final, tested behavior. Writing docs against moving targets wastes effort and produces docs that lie.
+- **Documentation before everything:** The diff catalogue (Phase 1) is the source of truth for what the pipeline does. Without it, both test coverage (Phase 3) and hook extension (Phase 2 examples) risk operating on incorrect assumptions.
+- **Hook governance before hook expansion:** The init.sh SERVERID patch (deferred) is a high-risk hook. The governance model (Phase 2) must exist before it can be safely designed and implemented.
+- **Hardening after observability:** Phase 3 builds on the audit tools from Phase 1 and the build manifest from Phase 2. The regression tests assert on the same evidence operators will use to verify production builds.
+- **No phase requires the others to be 100% complete before starting,** but each phase's deliverables improve the quality of subsequent phases' work.
 
 ### Research Flags
 
-Phases likely needing deeper research during planning:
-- **Phase 2 (Configuration):** The .env consolidation requires auditing every variable across three files (root .env, .env.example, docker-compose.yml). The install script needs to handle both fresh install and re-run without overwriting existing .env. The GITHUB_TOKEN situation needs a definitive decision (document vs vendor vs replace).
-- **Phase 3 (Setup Service):** The setup wizard frontend scope should be tightly bounded. Risk of scope creep into a "full onboarding experience." Keep it to a verification checklist, not a configuration tool.
-
 Phases with standard patterns (skip research-phase):
-- **Phase 1 (Init Hardening):** Well-understood patterns -- structured JSON status, retry with backoff, error categorization. Existing entrypoint.sh is the full scope.
-- **Phase 4 (Documentation):** Straight Markdown writing. Template and structure are defined in FEATURES.md. No technical research needed.
+- **Phase 1 (Pipeline Diff Documentation):** Pure shell scripting against a fully-read known codebase. All 15 divergences are already catalogued in `STACK.md`. No ambiguity about scope.
+- **Phase 2 (Hook Observability):** Adding a new Express route and extending a shell script. The patterns are established by the existing system routes and the existing `linbofs.service.js` implementation.
+- **Phase 3 (Regression Hardening):** Extending an existing test suite and adding shell verification steps. The test infrastructure already exists in `containers/api/tests/`.
+
+Items needing investigation before implementation (not a full research-phase, but an explicit pre-implementation check):
+- **init.sh SERVERID patch (deferred):** Before scheduling, verify the exact `do_env()` function structure in the current linuxmuster-linbo7 4.3.31-0 `init.sh`. Also evaluate the GRUB cmdline alternative (passes `serverid=` in cmdline to override DHCP value before `do_env()` runs — avoids vanilla file modification entirely). This decision requires reading the current init.sh directly. See Pitfall 3 for the full risk analysis.
+- **Module diff implementation:** Requires access to an LMN-generated linbofs64 as comparison target. Available on the main LMN server (10.0.0.11) but the comparison procedure needs to be documented before the script is written.
+
+---
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Zero new dependencies. All recommendations build on existing validated stack. Sources are the codebase itself. |
-| Features | HIGH | Table stakes derived from codebase gap analysis + 33 sessions of operational history. Anti-features well-reasoned. |
-| Architecture | HIGH | All changes are modifications to existing components. Patterns follow established codebase conventions. Sources are internal code analysis. |
-| Pitfalls | HIGH | 15 pitfalls identified, 6 critical. Based on actual documented incidents in TROUBLESHOOTING.md (25 issues) and CONCERNS.md. |
+| Stack | HIGH | LMN original read verbatim from GitHub raw URL (2026-03-10); Docker version read directly from working tree; all 15 divergences verified against actual code |
+| Features | HIGH | Based on direct codebase analysis of all relevant services and scripts; session memory confirms operational history behind each feature gap |
+| Architecture | HIGH | All findings derived from current codebase files read directly; integration points traced end-to-end with explicit risk analysis per seam |
+| Pitfalls | HIGH | Based on 33+ sessions of operational history; Pitfalls 2 and 5 are confirmed incidents (Session 32 Remote Control Mode, Session 33 DEVNODES_CPIO bug), not hypothetical scenarios |
 
 **Overall confidence:** HIGH
 
-Research confidence is high because this is a subsequent milestone on a mature codebase, not a greenfield project. All four research files draw primarily from internal codebase analysis and documented operational incidents rather than external speculation. The pitfalls are real -- most have occurred and been documented in TROUBLESHOOTING.md.
-
 ### Gaps to Address
 
-- **GITHUB_TOKEN strategy:** Research identified the problem (blocks open-source adoption) but deferred the solution to v1.2+. Phase 2 should at minimum document the token requirement clearly in .env.example and install guide. A definitive resolution (vendor, replace, or make public) needs a separate decision.
-- **Deploy compose file disposition:** Research flagged deploy/docker-compose.yml as divergent and confusing. Phase 2 must decide: delete it, merge it, or clearly mark it as deprecated. This decision was not made in research.
-- **Proxy support scope:** Init container needs HTTP_PROXY/HTTPS_PROXY for school networks behind proxies. The scope of proxy support (just init? also web container build? also API for sync mode?) needs definition during Phase 1 planning.
-- **Permission model long-term fix:** Research identifies EACCES as a recurring problem with a band-aid fix (chown). The shared GID approach was recommended but not fully designed. Phase 1 or 2 should define the target permission model.
+- **init.sh SERVERID fix approach undecided:** Two viable approaches exist — hook-based patch vs GRUB cmdline override. Neither has been prototyped. The GRUB cmdline approach should be evaluated first as it avoids vanilla file modification entirely. Resolve during Phase 2/3 planning, not as part of the current phases.
+
+- **Module diff requires LMN reference linbofs64:** The module diff script (Phase 3 deliverable) needs an LMN-generated linbofs64 as input. The LMN server at 10.0.0.11 has one, but the comparison procedure needs to be documented before the script is written. This is a process gap, not a technical gap.
+
+- **Hook criticality model design is open:** Whether to use a `HOOK_REQUIRED=true` convention, a separate config file, or a different mechanism is undecided. Phase 2 should design this based on the first real failure case: Plymouth hook (advisory) vs a future init.sh patch hook (potentially critical) are at opposite ends of the spectrum.
+
+- **Size regression thresholds need calibration:** The proposed 80MB warn / 200MB fail thresholds are estimates based on the current 55MB clean build. The actual historical range (pre-Session 33 was 172MB due to double-XZ bug) should be surveyed before setting final thresholds. Add this as a first step of Phase 3.
+
+---
 
 ## Sources
 
-### Primary (HIGH confidence)
-- Existing codebase: docker-compose.yml, containers/init/entrypoint.sh, containers/api/src/index.js, scripts/install.sh, .env.example, .env
-- .planning/codebase/ analysis: ARCHITECTURE.md, CONCERNS.md, INTEGRATIONS.md, STACK.md, STRUCTURE.md
-- docs/TROUBLESHOOTING.md -- 25 documented operational incidents
-- 33+ development sessions -- accumulated domain knowledge in MEMORY.md
+### Primary (HIGH confidence — direct code read)
 
-### Secondary (MEDIUM confidence)
-- [Docker Compose production best practices](https://docs.docker.com/compose/how-tos/production/) -- resource limits, restart policies
-- [Docker env var best practices](https://docs.docker.com/compose/how-tos/environment-variables/best-practices/) -- .env management
-- [Docker healthcheck startup order](https://docs.docker.com/compose/how-tos/startup-order/) -- service dependencies
-- [Sentry Self-Hosted Install](https://develop.sentry.dev/self-hosted/) -- reference install script patterns
-- [Zod env validation pattern](https://dev.to/roshan_ican/validating-environment-variables-in-nodejs-with-zod-2epn) -- confirms standard practice
+- `scripts/server/update-linbofs.sh` — complete Docker build pipeline, all 15 steps
+- `containers/init/entrypoint.sh` — bootstrap flow, checkpoint system, kernel set provisioning
+- `containers/api/src/services/linbo-update.service.js` — update orchestration, dual provisioning logic
+- `containers/api/src/services/linbofs.service.js` — shell-out wrapper, key management
+- `containers/api/src/routes/system/linbofs.js` — existing linbofs API surface
+- `docs/hooks.md` — hook system specification and LMN compatibility table
+- `docs/linbo-upgrade-flow.md` — complete upgrade flow with risk table
+- `.planning/PROJECT.md` — v1.2 milestone definition and constraints
+- LMN Original: [github.com/linuxmuster/linuxmuster-linbo7 serverfs/usr/sbin/update-linbofs](https://raw.githubusercontent.com/linuxmuster/linuxmuster-linbo7/main/serverfs/usr/sbin/update-linbofs) — retrieved 2026-03-10
 
-### Tertiary (LOW confidence)
-- [netboot.xyz Docker](https://hub.docker.com/r/linuxserver/netbootxyz) -- reference Docker PXE server (simpler scope, limited applicability)
-- [PXE boot with Docker](https://jpetazzo.github.io/2013/12/07/pxe-netboot-docker/) -- foundational but dated (2013)
+### Session History (HIGH confidence — verified incidents)
+
+- MEMORY.md Session 32 — module selection divergence root cause (Remote Control Mode on client)
+- MEMORY.md Session 33 — DEVNODES_CPIO bug and double-XZ template bug, hook system creation
+- MEMORY.md Session 30 — vanilla LINBO works without patches proof
+- MEMORY.md Session 31 — HOST_KERNEL architecture removal
+
+### Debug Documentation (HIGH confidence — incident records)
+
+- `docs/debug/linbo/08-kernel-schutz.md` — kernel architecture history
+- `docs/debug/linbo/09-kernel-version-bug.md` — atomic deployment lesson (Session 19)
+- `.planning/codebase/CONCERNS.md` — fragile areas analysis
 
 ---
-*Research completed: 2026-03-08*
+*Research completed: 2026-03-10*
 *Ready for roadmap: yes*

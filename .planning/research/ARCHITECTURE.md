@@ -1,551 +1,552 @@
 # Architecture Patterns
 
-**Domain:** Fresh install flow, configuration validation, and setup documentation for existing LINBO Docker multi-container system
-**Researched:** 2026-03-08
-
-## Recommended Architecture
-
-The v1.1 milestone adds **no new containers**. All fresh install, configuration validation, and error handling improvements integrate into existing components: the init container, the API server, and the install script. The frontend gains a setup wizard page. No architectural paradigm shifts -- this is surgical enhancement of the bootstrap pipeline.
-
-### High-Level Integration Map
-
-```
-EXISTING                          NEW / MODIFIED
-========                          ==============
-
-install.sh ----[modify]--------> install.sh (validation, preflight checks, rsync secrets)
-                                      |
-.env.example --[modify]--------> .env.example (minimal + documented, env groups)
-                                      |
-                                      v
-docker compose up
-      |
-      v
-init container --[modify]------> entrypoint.sh (structured errors, progress markers, retry)
-      |                               |
-      | writes .needs-rebuild         | writes .init-status.json (progress/errors)
-      v                               v
-API startup ----[modify]--------> index.js (setup wizard detection, config validation)
-      |                               |
-      |                               | new: GET /api/v1/system/setup-status
-      |                               | new: POST /api/v1/system/setup/validate
-      v                               v
-web frontend ---[new page]------> SetupWizardPage.tsx (first-run guided setup)
-      |
-      v
-(Normal operation -- unchanged)
-```
-
-### Component Boundaries
-
-| Component | Responsibility | Changes for v1.1 | Communicates With |
-|-----------|---------------|-------------------|-------------------|
-| `scripts/install.sh` | Automated first-run setup (clone, .env, docker compose up) | Add preflight validation, env validation, better error messages, rsync secrets generation | Host OS, Docker, git |
-| `containers/init/entrypoint.sh` | Download LINBO packages from APT repo, provision boot files | Add structured status reporting (.init-status.json), better error categorization, retry with backoff for network failures | APT repo (deb.linuxmuster.net), shared volumes |
-| `containers/api/src/index.js` | API startup, secret validation, auto-rebuild | Add setup-status detection (is this a fresh install?), config completeness check | Redis, filesystem, init status file |
-| `containers/api/src/routes/system/` | System management endpoints | New: setup-status, setup-validate, setup-complete endpoints | Settings service, linbofs service |
-| `containers/api/src/services/setup.service.js` | **NEW** -- Setup state machine, validation, first-run detection | Validate .env completeness, check init status, check key status, check linbofs status | Settings service, linbofs service, Redis, filesystem |
-| `containers/web/frontend/src/pages/SetupWizardPage.tsx` | **NEW** -- Guided first-run configuration | Step-by-step: network config, auth check, init status, linbofs rebuild, PXE test | API client (setup endpoints) |
-| `.env.example` | Reference configuration | Reorganize into required/optional groups with validation hints | install.sh reads this |
-| `docs/` | Admin documentation | **NEW** -- INSTALL.md, ARCHITECTURE-OVERVIEW.md, TROUBLESHOOTING.md updates | Human readers |
-
-### New vs Modified Files (Explicit)
-
-**New Files:**
-- `containers/api/src/services/setup.service.js` -- setup state machine and validation
-- `containers/web/frontend/src/pages/SetupWizardPage.tsx` -- first-run wizard UI
-- `docs/INSTALL.md` -- admin installation guide
-- `docs/ARCHITECTURE-OVERVIEW.md` -- admin-facing architecture documentation
-
-**Modified Files:**
-- `scripts/install.sh` -- preflight checks, validation, structured output
-- `containers/init/entrypoint.sh` -- status reporting, error categorization
-- `containers/api/src/index.js` -- setup detection on startup
-- `containers/api/src/routes/system/index.js` -- new setup endpoints
-- `containers/api/src/services/settings.service.js` -- network config validation additions
-- `containers/web/frontend/src/App.tsx` -- setup wizard route
-- `.env.example` -- reorganized with validation hints
-- `docker-compose.yml` -- possible minor env var additions for setup mode
-
-**Unchanged:**
-- All other containers (tftp, rsync, ssh, cache, web, dhcp)
-- All existing API routes and services
-- Frontend pages (except new wizard route)
-- update-linbofs.sh (hooks system unchanged)
-- Kernel variant system
-- Sync/standalone mode logic
-
-## Data Flow
-
-### Fresh Install Flow (Happy Path)
-
-```
-1. Admin runs install.sh (or manually: git clone + cp .env.example .env + edit)
-       |
-       | install.sh:
-       |   - Checks dependencies (docker, git, curl, openssl)
-       |   - Detects server IP (or uses LINBO_IP env)
-       |   - Generates secrets (JWT_SECRET, INTERNAL_API_KEY, RSYNC_PASSWORD)
-       |   - Creates .env from template
-       |   - Creates config/rsyncd.secrets from RSYNC_PASSWORD
-       |   - docker compose build + up
-       v
-2. Init container starts (one-shot)
-       |
-       | entrypoint.sh:
-       |   - Writes .init-status.json: {"phase": "starting", "progress": 0}
-       |   - Fetches APT Packages index (retry with backoff)
-       |   - Downloads linuxmuster-linbo7 + linuxmuster-linbo-gui7 .deb
-       |   - Provisions boot files (GRUB, kernels, GUI, themes)
-       |   - Writes .init-status.json: {"phase": "complete", "version": "4.3.31"}
-       |   - Sets .needs-rebuild marker
-       v
-3. API container starts (waits for init + cache healthy)
-       |
-       | index.js startup:
-       |   - validateSecrets() -- blocks in production if defaults
-       |   - Redis connect
-       |   - Setup detection: reads .init-status.json, checks key-status, checks linbofs
-       |   - If fresh install: sets Redis key "setup:pending"
-       |   - Mounts routes (including new setup endpoints)
-       |   - Auto-rebuild: detects .needs-rebuild, triggers updateLinbofs()
-       |     - Generates SSH keys if missing
-       |     - Builds linbofs64 (inject keys, modules, firmware, hooks)
-       |   - Starts workers
-       v
-4. Web container starts (waits for API healthy)
-       |
-       | Browser navigates to http://SERVER:8080
-       |   - App.tsx checks GET /api/v1/system/setup-status
-       |   - If setup incomplete: redirect to /setup wizard
-       |   - SetupWizardPage shows:
-       |     Step 1: Verify network config (LINBO_SERVER_IP)
-       |     Step 2: Verify init completed (boot files present)
-       |     Step 3: Verify SSH keys + linbofs64 built
-       |     Step 4: PXE boot configuration instructions
-       |     Step 5: Mark setup complete
-       v
-5. Normal operation
-```
-
-### Init Container Status Reporting (New Pattern)
-
-The init container currently writes markers (`.needs-rebuild`, `.boot-files-installed`, `linbo-version`) as separate files. For v1.1, add a single structured status file that the API can read.
-
-**File:** `/srv/linbo/.init-status.json`
-
-```json
-{
-  "phase": "complete",
-  "progress": 100,
-  "timestamp": "2026-03-08T14:30:00Z",
-  "version": "4.3.31-0",
-  "packages": {
-    "linbo7": {"version": "4.3.31-0", "sha256": "abc..."},
-    "gui7": {"version": "4.3.31-0", "sha256": "def..."}
-  },
-  "errors": [],
-  "warnings": ["Kernel variant 'legacy' not available in this release"]
-}
-```
-
-**Error case:**
-```json
-{
-  "phase": "download",
-  "progress": 30,
-  "timestamp": "2026-03-08T14:30:00Z",
-  "error": {
-    "code": "APT_FETCH_FAILED",
-    "message": "Failed to fetch APT Packages index from https://deb.linuxmuster.net/...",
-    "retries": 3,
-    "hint": "Check DNS resolution and internet connectivity from the Docker host"
-  }
-}
-```
-
-This is a write-once file (init container exits after writing), read by the API on startup. No shared-state complexity.
-
-### Setup State Machine
-
-```
-                    +-----------+
-                    |  PENDING  |  (default after fresh install)
-                    +-----+-----+
-                          |
-          setup-status API returns checklist:
-          - init_complete: true/false
-          - keys_present: true/false
-          - linbofs_built: true/false
-          - config_valid: true/false
-                          |
-                          v
-                    +-----------+
-                    | VALIDATING|  (wizard is running checks)
-                    +-----+-----+
-                          |
-          All checks pass, admin clicks "Complete Setup"
-          POST /api/v1/system/setup/complete
-                          |
-                          v
-                    +-----------+
-                    | COMPLETE  |  (Redis: setup:complete = true)
-                    +-----------+
-```
-
-The setup state is stored in Redis (`setup:status` key) so it survives API restarts but not volume wipes (which is correct -- a volume wipe IS a fresh install).
-
-## Patterns to Follow
-
-### Pattern 1: Preflight Validation in install.sh
-
-**What:** Validate host environment BEFORE starting Docker containers.
-**When:** Always, at the top of install.sh.
-**Why:** Failing fast with a clear message is better than containers crashing with cryptic errors.
-
-```bash
-preflight_check() {
-    local errors=()
-
-    # 1. Docker daemon running
-    if ! docker info &>/dev/null; then
-        errors+=("Docker daemon is not running")
-    fi
-
-    # 2. Required ports available
-    for port in 69 873 2222 3000 6379 8080; do
-        if ss -tlnp | grep -q ":${port} "; then
-            errors+=("Port $port is already in use (required by LINBO Docker)")
-        fi
-    done
-
-    # 3. Network interface exists (for LINBO_SERVER_IP)
-    if [ -n "$LINBO_IP" ] && ! ip addr show | grep -q "$LINBO_IP"; then
-        errors+=("LINBO_IP=$LINBO_IP is not assigned to any network interface")
-    fi
-
-    # 4. DNS resolution works (for APT repo)
-    if ! host deb.linuxmuster.net &>/dev/null 2>&1; then
-        errors+=("Cannot resolve deb.linuxmuster.net (DNS issue)")
-    fi
-
-    if [ ${#errors[@]} -gt 0 ]; then
-        log_error "Preflight checks failed:"
-        for err in "${errors[@]}"; do
-            echo "  - $err"
-        done
-        exit 1
-    fi
-    log_success "Preflight checks passed"
-}
-```
-
-### Pattern 2: Setup Service as Checklist Aggregator
-
-**What:** A service that aggregates status from multiple sources into a single setup checklist.
-**When:** First-run detection on API startup and on-demand via setup API endpoints.
-**Why:** The API already checks multiple subsystems on startup; centralizing this into a service makes it queryable from the frontend.
-
-```javascript
-// containers/api/src/services/setup.service.js
-const fs = require('fs').promises;
-const redis = require('../lib/redis');
-
-const LINBO_DIR = process.env.LINBO_DIR || '/srv/linbo';
-const CONFIG_DIR = process.env.CONFIG_DIR || '/etc/linuxmuster/linbo';
-
-async function getSetupStatus() {
-  const client = redis.getClient();
-
-  // Check if setup was already completed
-  const isComplete = await client.get('setup:complete');
-  if (isComplete === 'true') {
-    return { status: 'complete', checklist: null };
-  }
-
-  // Build checklist from filesystem + Redis state
-  const checklist = {
-    init_complete: await checkInitComplete(),
-    keys_present: await checkKeysPresent(),
-    linbofs_built: await checkLinbofsBuilt(),
-    config_valid: await checkConfigValid(),
-  };
-
-  const allPassed = Object.values(checklist).every(c => c.ok);
-
-  return {
-    status: allPassed ? 'ready' : 'pending',
-    checklist,
-  };
-}
-
-async function checkInitComplete() {
-  try {
-    const status = JSON.parse(
-      await fs.readFile(`${LINBO_DIR}/.init-status.json`, 'utf8')
-    );
-    return {
-      ok: status.phase === 'complete',
-      detail: status.phase === 'complete'
-        ? `LINBO ${status.version} installed`
-        : `Init in phase: ${status.phase}`,
-      error: status.error || null,
-    };
-  } catch {
-    // Fallback: check legacy markers
-    try {
-      await fs.access(`${LINBO_DIR}/.boot-files-installed`);
-      return { ok: true, detail: 'Boot files installed (legacy marker)' };
-    } catch {
-      return { ok: false, detail: 'Init container has not completed', error: null };
-    }
-  }
-}
-
-async function checkKeysPresent() {
-  const keys = [
-    `${CONFIG_DIR}/ssh_host_rsa_key`,
-    `${CONFIG_DIR}/ssh_host_rsa_key.pub`,
-    `${CONFIG_DIR}/linbo_client_key`,
-  ];
-  const missing = [];
-  for (const key of keys) {
-    try { await fs.access(key); } catch { missing.push(key); }
-  }
-  return {
-    ok: missing.length === 0,
-    detail: missing.length === 0
-      ? 'All SSH keys present'
-      : `Missing: ${missing.map(k => k.split('/').pop()).join(', ')}`,
-  };
-}
-// ... etc
-```
-
-### Pattern 3: Structured Error Categories in Init Container
-
-**What:** Categorize init container failures into actionable error codes.
-**When:** Every failure point in entrypoint.sh.
-**Why:** A generic "ERROR: curl failed" helps nobody. Knowing it is `APT_FETCH_FAILED` with a DNS hint is actionable.
-
-**Error taxonomy for init container:**
-
-| Code | Cause | User Action |
-|------|-------|-------------|
-| `APT_FETCH_FAILED` | Cannot reach APT repo | Check DNS, internet, firewall |
-| `APT_PARSE_FAILED` | Packages index corrupted | Retry, or check DEB_BASE_URL |
-| `DOWNLOAD_FAILED` | .deb download failed after retries | Check bandwidth, disk space |
-| `CHECKSUM_MISMATCH` | SHA256 verification failed | Retry (possible mirror issue) |
-| `EXTRACT_FAILED` | dpkg-deb extraction failed | Check disk space, .deb integrity |
-| `PERMISSION_DENIED` | Cannot write to volume | Check Docker volume permissions |
-| `DISK_FULL` | No space left on device | Free space on Docker host |
-
-```bash
-# Write structured status
-write_status() {
-    local phase="$1" progress="$2" error_code="${3:-}" error_msg="${4:-}" hint="${5:-}"
-    local status_file="${LINBO_DIR}/.init-status.json"
-
-    if [ -n "$error_code" ]; then
-        printf '{"phase":"%s","progress":%d,"timestamp":"%s","error":{"code":"%s","message":"%s","hint":"%s"}}\n' \
-            "$phase" "$progress" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$error_code" "$error_msg" "$hint" \
-            > "$status_file"
-    else
-        printf '{"phase":"%s","progress":%d,"timestamp":"%s"}\n' \
-            "$phase" "$progress" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            > "$status_file"
-    fi
-}
-```
-
-### Pattern 4: .env Validation on API Startup
-
-**What:** Validate not just secrets (already done in validateSecrets()) but also functional configuration.
-**When:** Early in startServer(), after validateSecrets().
-**Why:** A missing LINBO_SERVER_IP or invalid subnet breaks PXE boot silently. Better to warn loudly at startup.
-
-```javascript
-function validateConfig() {
-  const warnings = [];
-
-  // LINBO_SERVER_IP must be a valid IP
-  const serverIp = process.env.LINBO_SERVER_IP;
-  if (!serverIp || serverIp === '10.0.0.1') {
-    warnings.push(
-      `LINBO_SERVER_IP is ${serverIp || 'not set'} -- PXE clients need the real IP of this server`
-    );
-  }
-
-  // Network settings sanity
-  const subnet = process.env.LINBO_SUBNET;
-  const gateway = process.env.LINBO_GATEWAY;
-  if (subnet && gateway && !isInSubnet(gateway, subnet, process.env.LINBO_NETMASK)) {
-    warnings.push(`LINBO_GATEWAY ${gateway} is not in LINBO_SUBNET ${subnet}`);
-  }
-
-  // GITHUB_TOKEN is build-time only, not needed at runtime
-  // But warn if build artifacts are missing
-  // (handled by web container, not API)
-
-  for (const w of warnings) {
-    console.warn(`[config] WARNING: ${w}`);
-  }
-
-  return warnings;
-}
-```
-
-## Anti-Patterns to Avoid
-
-### Anti-Pattern 1: Setup-Blocking API Startup
-
-**What:** Making the API refuse to start until setup is complete.
-**Why bad:** The API must be running for the setup wizard to work. If the API blocks on "setup not complete," the frontend cannot reach the setup endpoints. Creates a chicken-and-egg problem.
-**Instead:** API starts normally. Setup status is informational. The frontend detects incomplete setup and shows the wizard, but all API endpoints remain functional. The "setup" state is advisory, not enforced.
-
-### Anti-Pattern 2: Separate Setup Container
-
-**What:** Adding a new container just for initial setup/configuration.
-**Why bad:** Adds operational complexity for a one-time flow. The init container already handles the "run once" pattern. Adding another one-shot container creates ordering issues (does setup run before or after init?). The API already has startup hooks -- use them.
-**Instead:** Extend the existing init container for boot file provisioning. Use the existing API startup sequence for configuration validation. Use a frontend page for the guided wizard.
-
-### Anti-Pattern 3: Storing Setup Config in Files Instead of Redis
-
-**What:** Writing setup state to JSON files on the shared volume.
-**Why bad:** The API already has a settings service backed by Redis with env-var fallback. Adding another persistence mechanism (JSON files for setup state) creates two sources of truth. File writes on shared Docker volumes have permission issues.
-**Instead:** Use Redis for setup state (`setup:complete`, `setup:checklist`). The only file-based status is the init container's `.init-status.json` (because the init container has no Redis client).
-
-### Anti-Pattern 4: Environment Variable Explosion
-
-**What:** Adding dozens of new env vars for every configurable aspect of setup.
-**Why bad:** The docker-compose.yml already has 50+ environment variables passed to the API container. Each new env var increases cognitive load and misconfiguration risk.
-**Instead:** Use the existing settings service (Redis-backed with env fallback) for runtime-configurable settings. Keep .env to the true minimum: secrets (JWT_SECRET, INTERNAL_API_KEY), host identity (LINBO_SERVER_IP), and mode flags (SYNC_ENABLED). Everything else should have working defaults.
-
-### Anti-Pattern 5: Interactive Docker Setup
-
-**What:** Making docker compose up prompt for configuration.
-**Why bad:** Docker containers are non-interactive by design. TTY allocation is unreliable. Breaks CI/CD and automated deployments.
-**Instead:** All configuration happens BEFORE docker compose up (via install.sh or manual .env editing). The setup wizard runs AFTER containers are up, through the web UI.
-
-## Scalability Considerations
-
-Not a primary concern for v1.1 (single-school deployment), but noted for future reference.
-
-| Concern | At 1 school (current) | At 10 schools | At 100 schools |
-|---------|----------------------|---------------|----------------|
-| Fresh install | Manual per server | Script per server | Ansible/Terraform playbook |
-| Config validation | install.sh + wizard | Same per server | Config management tool |
-| Setup documentation | Human-readable docs | Same | Video + docs |
-| .env management | Manual edit | Template per site | Secrets manager (Vault) |
-
-The v1.1 architecture explicitly supports the "1 school" case with room to grow. The install.sh with `--interactive` mode is the right interface for single-server setup. Multi-site automation is out of scope but not blocked.
-
-## Build Order (Dependency-Aware)
-
-Based on the data flow analysis, the recommended build order for v1.1 phases:
-
-```
-Phase 1: Init Container Hardening
-    - Structured error reporting (.init-status.json)
-    - Retry with backoff for network failures
-    - Error categorization (APT_FETCH_FAILED, etc.)
-    - No dependencies on other v1.1 changes
-    |
-    v
-Phase 2: .env & Install Script Improvements
-    - Preflight validation
-    - .env.example reorganization
-    - rsync secrets generation from template
-    - Depends on: understanding init error format (Phase 1)
-    |
-    v
-Phase 3: Setup Service & API Endpoints
-    - setup.service.js (checklist aggregator)
-    - GET /system/setup-status
-    - POST /system/setup/validate
-    - POST /system/setup/complete
-    - Config validation on startup (validateConfig)
-    - Depends on: init status format (Phase 1), .env structure (Phase 2)
-    |
-    v
-Phase 4: Setup Wizard Frontend
-    - SetupWizardPage.tsx
-    - Route in App.tsx
-    - API client additions for setup endpoints
-    - Depends on: API endpoints exist (Phase 3)
-    |
-    v
-Phase 5: Admin Documentation
-    - INSTALL.md (references all above)
-    - ARCHITECTURE-OVERVIEW.md
-    - TROUBLESHOOTING.md updates
-    - Depends on: final behavior settled (Phases 1-4)
-```
-
-**Phase ordering rationale:**
-1. Init container errors are the most common fresh install failure. Fixing error reporting first makes all subsequent debugging easier.
-2. Install script improvements are the entry point for fresh install -- get this right early so the remaining phases can be tested via the actual install flow.
-3. Setup service and API endpoints are the backend for the wizard -- must exist before the frontend.
-4. Frontend wizard depends on stable API endpoints.
-5. Documentation references everything above and should reflect final behavior.
-
-## Integration Points Detail
-
-### Init Container -> API (via shared volume)
-
-**Current:** Init writes `.needs-rebuild`, `.boot-files-installed`, `linbo-version` to `/srv/linbo/`. API reads `.needs-rebuild` on startup to trigger auto-rebuild.
-
-**v1.1 Addition:** Init also writes `.init-status.json` to `/srv/linbo/`. API reads this in setup.service.js to populate the setup checklist. This is a passive integration (file-based IPC) -- no new inter-container communication channel needed.
-
-**Risk:** File format must be backwards-compatible. If an older init container does not write `.init-status.json`, the setup service must fall back to legacy markers. The `checkInitComplete()` function above handles this.
-
-### API -> Frontend (via REST + WebSocket)
-
-**Current:** Frontend fetches from `/api/v1/*` endpoints. WebSocket delivers real-time updates.
-
-**v1.1 Addition:** New REST endpoints under `/api/v1/system/setup-*`. Frontend adds a setup wizard page that calls these endpoints. No WebSocket changes needed (setup is not a real-time flow).
-
-**Risk:** The setup wizard must work without WebSocket (since WebSocket requires auth, and during initial setup the auth state may be new). All setup endpoints should be accessible with basic JWT auth using the default admin credentials.
-
-### install.sh -> .env -> docker-compose.yml
-
-**Current:** install.sh generates .env, docker-compose.yml reads .env via `${VAR:-default}` syntax.
-
-**v1.1 Addition:** install.sh validates .env values before starting containers. Also generates `config/rsyncd.secrets` from RSYNC_PASSWORD (currently tracked in git with default value -- this is a v1.0 concern that was identified but may not yet be fixed).
-
-**Risk:** The install.sh must handle both fresh install (no .env) and re-run (existing .env). It must NEVER overwrite an existing .env without confirmation. Current script already handles this (`if [ -d "$INSTALL_DIR" ]` check).
-
-## Configuration Validation Schema
-
-The setup service validates the following configuration dimensions:
-
-| Check | Source | Required For | Blocking? |
-|-------|--------|-------------|-----------|
-| `LINBO_SERVER_IP` is a real interface IP | .env + `ip addr` | PXE boot | Warning (non-blocking) |
-| `JWT_SECRET` is not default | .env / env var | Security | Blocking in production |
-| `INTERNAL_API_KEY` is not default | .env / env var | Security | Blocking in production |
-| Init container completed | `.init-status.json` | Boot files | Blocking |
-| SSH keys exist | Filesystem scan | linbofs64 build | Blocking |
-| linbofs64 built and not stale | `.linbofs-patch-status` | PXE boot | Blocking |
-| GRUB configs generated | `/srv/linbo/boot/grub/*.cfg` | PXE boot | Warning |
-| At least one start.conf exists | `/srv/linbo/start.conf.*` | Client boot | Warning |
-| Redis is accessible | Redis ping | Runtime | Blocking |
-| PostgreSQL is accessible (standalone) | Prisma query | Standalone mode | Blocking for standalone |
-
-## Sources
-
-- Existing codebase analysis (HIGH confidence):
-  - `docker-compose.yml` -- container definitions, volumes, environment variables
-  - `containers/init/entrypoint.sh` -- current init flow, error handling gaps
-  - `containers/api/src/index.js` -- startup sequence, secret validation, auto-rebuild
-  - `scripts/install.sh` -- current install automation
-  - `.env.example` -- configuration reference
-  - `.planning/codebase/ARCHITECTURE.md` -- existing architecture documentation
-  - `.planning/codebase/CONCERNS.md` -- known issues and tech debt
-  - `.planning/codebase/INTEGRATIONS.md` -- external service integrations
-- Docker Compose documentation (HIGH confidence): Multi-container orchestration patterns, healthcheck dependencies, one-shot containers
-- Express.js patterns (HIGH confidence): Route organization, middleware ordering, startup sequences
+**Domain:** linbofs64 build pipeline — end-to-end from init container to boot artifact
+**Researched:** 2026-03-10
 
 ---
 
-*Architecture research: 2026-03-08*
+## Scope
+
+This document covers the **v1.2 milestone**: full transparency and hardening of the linbofs64 build pipeline. It supersedes the v1.1 ARCHITECTURE.md for this topic but does not replace anything already shipped.
+
+The pipeline has three distinct phases:
+
+1. **Bootstrap** — Init container provisions raw boot files from the APT repo into shared volumes
+2. **Build** — `update-linbofs.sh` constructs the final `linbofs64` initramfs artifact (keys + modules + firmware + hooks)
+3. **Update** — `linbo-update.service.js` orchestrates a live package upgrade that traverses both phases in sequence
+
+---
+
+## Recommended Architecture
+
+The pipeline is already architecturally sound. No new containers or paradigm shifts are needed for v1.2. The work is: documentation, diff analysis, test coverage, and targeted hardening at the integration seams.
+
+### High-Level Pipeline
+
+```
+APT REPO (deb.linuxmuster.net)
+       |
+       | HTTPS: linuxmuster-linbo7.deb + linuxmuster-linbo-gui7.deb
+       v
++------------------+
+|   init container |  (one-shot at startup)
+|  entrypoint.sh   |
++------------------+
+       |
+       | Provisions to /srv/linbo/ (linbo_srv_data volume):
+       |   /srv/linbo/kernels/{stable,longterm,legacy}/
+       |     - linbo64          (kernel binary)
+       |     - modules.tar.xz  (720 selected kernel modules)
+       |     - version          (kernel version string)
+       |   /srv/linbo/kernels/linbofs64.xz  (vanilla template)
+       |   /srv/linbo/kernels/manifest.json (SHA256 + sizes)
+       |   /srv/linbo/boot/grub/            (GRUB files)
+       |   /srv/linbo/linbo_gui64_7.tar.lz  (GUI archive)
+       |   /srv/linbo/.needs-rebuild        (signal to API)
+       |
+       | Provisions to /var/lib/linuxmuster/linbo/ (linbo_kernel_data volume):
+       |   sets/{hash}/{stable,longterm,legacy}/
+       |   sets/{hash}/linbofs64.xz
+       |   current -> sets/{hash}  (atomic symlink)
+       v
++------------------+        +-------------------+
+|   API container  |  <-->  |  ssh/rsync/tftp   |
+|  index.js        |        |  containers       |
+|  (startup hook)  |        +-------------------+
++------------------+
+       |
+       | Detects .needs-rebuild, calls linbofsService.updateLinbofs()
+       |   OR: POST /system/update-linbofs  (manual trigger)
+       |   OR: POST /system/linbo-update   (full package update flow)
+       |   OR: POST /system/kernel-switch  (variant change trigger)
+       v
++------------------+
+|  update-linbofs  |  scripts/server/update-linbofs.sh
+|  .sh             |  (runs inside API container as uid 1001)
++------------------+
+       |
+       | Reads:
+       |   $KERNEL_VAR_DIR/current/linbofs64.xz  (template)
+       |   $KERNEL_VAR_DIR/current/{variant}/modules.tar.xz
+       |   /etc/linuxmuster/linbo/rsyncd.secrets (rsync password)
+       |   /etc/linuxmuster/linbo/dropbear_*_host_key
+       |   /etc/linuxmuster/linbo/ssh_host_*_key*
+       |   /etc/linuxmuster/linbo/*.pub
+       |   /etc/linuxmuster/linbo/firmware  (optional)
+       |   /etc/linuxmuster/linbo/wpa_supplicant.conf  (optional)
+       |   /srv/linbo/gui-themes/           (optional)
+       |
+       | Steps:
+       |   1. Read kernel variant from custom_kernel file
+       |   2. Validate kernel variant directory
+       |   3. Hash rsync password (argon2)
+       |   4. Create WORKDIR = mktemp /var/cache/linbo/linbofs-build.XXXXXX
+       |   5. Backup linbofs64 -> linbofs64.bak
+       |   6. Extract template (xzcat | cpio -i) into WORKDIR
+       |   7. Inject kernel modules (tar xf modules.tar.xz + depmod)
+       |   8. Inject password hash (etc/linbo_pwhash + etc/linbo_salt)
+       |   9. Inject SSH keys (etc/dropbear/, etc/ssh/, .ssh/authorized_keys)
+       |   10. Copy start.conf
+       |   10.5. Inject firmware (from /etc/linuxmuster/linbo/firmware list)
+       |   10.6. Inject wpa_supplicant.conf
+       |   10.7. Inject GUI themes + custom linbo_gui binary
+       |   10.9. Execute pre-hooks (HOOKSDIR/update-linbofs.pre.d/)
+       |   11. Repack: find . | cpio | xz -> linbofs64.new
+       |         + append device nodes cpio segment (dev/console, dev/null)
+       |   12. Verify size (>= 10MB)
+       |   13. mv linbofs64.new -> linbofs64 (atomic)
+       |   14. Generate linbofs64.md5
+       |   14.5. Write .linbofs-patch-status marker
+       |   14.6. Sync to Docker volume if LINBO_DIR != Docker volume path
+       |   15. Copy kernel binary from variant: linbo64 -> /srv/linbo/linbo64
+       |   15.5. Execute post-hooks (HOOKSDIR/update-linbofs.post.d/)
+       v
++------------------+
+|  TFTP container  |
+|  (reads volume)  |
++------------------+
+       |
+       | Serves to PXE clients:
+       |   /srv/linbo/linbo64       (kernel)
+       |   /srv/linbo/linbofs64     (initramfs -- built artifact)
+       |   /srv/linbo/boot/grub/    (GRUB configs + modules)
+```
+
+---
+
+### Component Boundaries
+
+| Component | Responsibility | Reads From | Writes To |
+|-----------|---------------|-----------|----------|
+| `containers/init/entrypoint.sh` | One-shot APT provisioning, kernel set management | APT repo (HTTPS), `.deb` files | `linbo_srv_data` vol, `linbo_kernel_data` vol |
+| `scripts/server/update-linbofs.sh` | linbofs64 initramfs construction | `linbo_kernel_data` vol (template+modules), `linbo_config_data` vol (keys, secrets), `linbo_srv_data` vol (firmware list, themes) | `linbo_srv_data/linbofs64`, `.linbofs-patch-status`, `linbo64` |
+| `containers/api/src/services/linbofs.service.js` | Shell out to update-linbofs.sh; key management | Filesystem (CONFIG_DIR, LINBO_DIR) | CONFIG_DIR (keys), triggers update-linbofs.sh |
+| `containers/api/src/services/linbo-update.service.js` | Full package update orchestration (APT download + extract + provision + rebuild) | APT Packages index, `linbo_srv_data`, `linbo_kernel_data` | `linbo_srv_data`, `linbo_kernel_data`, Redis status key |
+| `containers/api/src/services/kernel.service.js` | Kernel variant switch (writes custom_kernel, triggers rebuild) | `linbo_kernel_data/current/`, `custom_kernel` file | `custom_kernel` file, triggers update-linbofs.sh |
+| `containers/api/src/index.js` | API startup: auto-rebuild detection | `.needs-rebuild` marker | `.needs-rebuild.running` (rename), triggers linbofs.service |
+| `containers/api/src/routes/system/linbo-update.js` | HTTP API for version check + update | linbo-update.service | HTTP responses, WebSocket broadcasts |
+| `containers/api/src/routes/system/linbofs.js` | HTTP API for linbofs status + manual rebuild | linbofs.service | HTTP responses, WebSocket broadcasts |
+| `containers/api/src/routes/system/kernel.js` | HTTP API for kernel variant management | kernel.service | HTTP responses, WebSocket broadcasts |
+| Hook scripts (pre.d/) | Custom linbofs content modifications | WORKDIR (extracted linbofs root) | WORKDIR files (in-place modifications) |
+| Hook scripts (post.d/) | Post-build notifications, extra checksums | Final `linbofs64` | External systems, notification endpoints |
+
+---
+
+### Volume Map
+
+| Docker Volume | Mount Path | Used By | Contains |
+|--------------|------------|---------|---------|
+| `linbo_srv_data` | `/srv/linbo` | init, api, tftp, rsync | Boot files, linbofs64, kernels staging, GUI |
+| `linbo_kernel_data` | `/var/lib/linuxmuster/linbo` | init, api | Kernel sets (atomic symlink), current symlink |
+| `linbo_config_data` | `/etc/linuxmuster/linbo` | init (writes keys), api, update-linbofs.sh | SSH/Dropbear keys, rsyncd.secrets, hooks dir, firmware list |
+
+---
+
+## Data Flow — Detailed
+
+### Phase 1: Init Container Bootstrap
+
+```
+entrypoint.sh main flow:
+  Pre-flight: check_write_permission, check_disk_space, check_dns
+  Step 3: fetch_packages_index() → PACKAGES_CACHE (APT stanza)
+  Step 4: parse_package_info(linuxmuster-linbo7) → LINBO_VERSION, LINBO_FILENAME, LINBO_SHA256
+  Step 6: download_and_cache_deb() → CACHE_DIR/debs/linuxmuster-linbo7_X.X.XX.deb
+           checkpoint_set("linbo-deb", version) [idempotent skip on rerun]
+  Step 7: download_and_cache_deb() → CACHE_DIR/debs/linuxmuster-linbo-gui7_X.X.XX.deb
+  Step 8: provision_boot_files():
+            dpkg-deb -x linbo7.deb → TEMP_DIR/linbo7/
+              → merge_grub_files(src/boot/grub, /srv/linbo/boot/grub)
+              → cp icons/, start.conf (if not exist)
+              → cp kernels/{stable,longterm,legacy}/ → /srv/linbo/kernels/
+              → cp linbofs64.xz → /srv/linbo/kernels/linbofs64.xz
+              → build_manifest_json() → /srv/linbo/kernels/manifest.json
+            dpkg-deb -x gui7.deb → TEMP_DIR/gui7/
+              → cp linbo_gui64_7.tar.lz → /srv/linbo/
+              → create /srv/linbo/gui/ symlinks
+          Sets .needs-rebuild marker → /srv/linbo/.needs-rebuild
+  Step 9: provision_kernels():
+            reads /srv/linbo/kernels/manifest.json
+            MANIFEST_HASH = sha256(manifest)[0:8]
+            cp kernels/{stable,longterm,legacy}/ → SETS_DIR/.tmp-{hash}/
+            cp linbofs64.xz → SETS_DIR/.tmp-{hash}/linbofs64.xz
+            verify against manifest SHA256
+            atomic rename: .tmp-{hash} → sets/{hash}
+            atomic symlink swap: current.new → current
+  Step 10: provision_themes():
+             cp /opt/linbo-themes/*/ → /srv/linbo/gui-themes/
+```
+
+**Key invariant:** Init uses checkpoint files (`/srv/linbo/.checkpoints/`) to make all steps idempotent. A partial run can be resumed. `FORCE_UPDATE=true` clears all checkpoints.
+
+**Key invariant:** Boot files provisioning ends by writing `.needs-rebuild`. This is the handoff signal to the API.
+
+### Phase 2: update-linbofs.sh Build
+
+```
+Triggered by:
+  a) API startup detecting .needs-rebuild → linbofsService.updateLinbofs()
+  b) POST /system/update-linbofs → linbofsService.updateLinbofs()
+  c) POST /system/linbo-update (package update) → linbo-update.service → linbofsService.updateLinbofs()
+  d) POST /system/kernel-switch → kernelService.switchKernel() → linbofsService.updateLinbofs()
+
+KERNEL_VAR_DIR default: /var/lib/linuxmuster/linbo/current
+  (symlink → sets/{hash}, populated by init container)
+
+Template source: $KERNEL_VAR_DIR/linbofs64.xz
+  (vanilla linbofs from package, no Docker modifications)
+
+Modules source: $KERNEL_VAR_DIR/{ktype}/modules.tar.xz
+  (720 kernel modules selected by linuxmuster for LINBO)
+
+Build output:
+  /srv/linbo/linbofs64        → final initramfs (served by TFTP)
+  /srv/linbo/linbofs64.md5    → MD5 checksum (verified by linbo client)
+  /srv/linbo/linbofs64.bak    → backup of previous build
+  /srv/linbo/linbo64          → kernel binary (copied from variant)
+  /srv/linbo/.linbofs-patch-status → build marker (API reads for health)
+```
+
+**Key invariant:** Template is always read from `linbofs64.xz` (vanilla). Docker NEVER modifies vanilla files in-place — all modifications are injections into the extracted WORKDIR before repack. This ensures upstream `update-linbofs.sh` compatibility.
+
+**Key invariant:** The flock at `$CONFIG_DIR/.rebuild.lock` prevents concurrent builds. Only one update-linbofs.sh process runs at a time.
+
+### Phase 3: LINBO Package Update Flow
+
+```
+POST /system/linbo-update
+  → linbo-update.service.startUpdate()
+
+  Redis lock: linbo:update:lock (TTL 120s + heartbeat)
+  Redis status: linbo:update:status (hash, expires 1h)
+  WebSocket: linbo.update.status events (throttled 2s)
+
+  Flow:
+    checkVersion() → APT Packages index → compare with linbo-version.txt
+    preflightCheck(packageSize) → df check (3x package size)
+    workDir = mktemp /tmp/linbo-update-{timestamp}/
+    downloadAndVerify(debUrl, sha256, size)
+      → streaming download → hash transform → verify SHA256+size
+    extractDeb(debPath)
+      → dpkg-deb -x → workDir/extracted/
+    provisionBootFiles(extractDir, version)
+      → GUI files to .update-staging/ (atomic rename to /srv/linbo/)
+      → mergeGrubFiles() (protect x86_64-efi/, i386-pc/)
+      → GUI symlinks (gui/linbo_gui64_7.tar.lz)
+      → provisionKernels(extractDir, version)
+          → copy variants to /srv/linbo/kernels/{stable,longterm,legacy}/
+          → copy linbofs64.xz template
+          → buildManifest() → /srv/linbo/kernels/manifest.json
+          → provisionKernelSets() → atomic symlink swap on /var/lib/linuxmuster/linbo/current
+    rebuildLinbofs(version)
+      → linbofsService.updateLinbofs()  ← Phase 2 runs here
+    regenerateGrubConfigs(version)
+      → grubService.regenerateAllGrubConfigs()  (non-fatal)
+    finalize(extractDir, version)
+      → cp linbo-version.txt (LAST — UI shows old version until done)
+      → .boot-files-installed marker
+      → cleanup workDir
+      → ws.broadcast('linbo.update.status', {status:'done'})
+      → ws.broadcast('system.kernel_variants_changed', {})
+```
+
+**Key invariant:** Version file is written LAST in finalize(). The UI always shows the current running version until the entire update (including linbofs rebuild) is complete.
+
+**Key invariant:** provisionKernelSets() uses the same atomic rename + symlink-swap pattern as init container, so both code paths result in an identical kernel set structure.
+
+---
+
+## Docker vs LMN Divergences
+
+This table documents every intentional divergence between Docker's update-linbofs.sh and the vanilla LMN version, with rationale:
+
+| Aspect | LMN Original | Docker | Rationale |
+|--------|-------------|--------|-----------|
+| **Script source** | `/usr/share/linuxmuster/linbo/update-linbofs.sh` (from linbo7 package) | `scripts/server/update-linbofs.sh` (repo) | Docker needs customization; LMN can overwrite its own file on package update |
+| **Kernel source** | `dpkg -l linuxmuster-linbo7` installed kernel in `/var/lib/linuxmuster/linbo/` | `KERNEL_VAR_DIR/current/` (atomic symlink, managed by init container) | Decoupled: kernel variants managed independently, not by dpkg |
+| **Template source** | `linbofs64.xz` from package installation in `/var/lib/linuxmuster/linbo/` | `$KERNEL_VAR_DIR/linbofs64.xz` (staged by init container) | Same file, different path — init container stages it to the set directory |
+| **Password hashing** | argon2 (same) | argon2 (same) | No divergence |
+| **SSH key injection** | Reads from `/etc/linuxmuster/linbo/` | Reads from `$CONFIG_DIR` (same default path) | No divergence |
+| **init.sh** | Unmodified | Unmodified | CRITICAL: never patch init.sh directly |
+| **linbo.sh** | Unmodified | Unmodified | No divergence |
+| **Device nodes** | mknod (requires root) | pre-built cpio fragment (base64-encoded, concatenated) | API runs as uid 1001; cpio -i silently skips device nodes without root |
+| **Hook directory** | `/var/lib/linuxmuster/hooks/` | `/etc/linuxmuster/linbo/hooks/` | Docker puts hooks with other LINBO config; more portable |
+| **Hook variable export** | None (hooks must source helperfunctions.sh) | LINBO_DIR, CONFIG_DIR, CACHE_DIR, KTYPE, KVERS, WORKDIR exported | Better DX: hooks can use vars without sourcing anything |
+| **Hook sort order** | find without sort (non-deterministic) | sort (alphabetic, numeric prefix effective) | Deterministic execution order |
+| **Hook error handling** | Hook exit may stop build | WARNING + continue | Build resilience; hook failure is non-fatal |
+| **Flock mechanism** | Uses package-provided locking | `$CONFIG_DIR/.rebuild.lock` (flock fd 8) | Same mechanism, different path (config vol always writable) |
+| **Post-sync to Docker volume** | N/A | Step 14.6: cp to `/var/lib/docker/volumes/linbo_srv_data/_data/` if LINBO_DIR differs | Multi-path support: script can run from both inside and outside the container |
+| **DEVNODES_CPIO** | Created inline with mknod | Pre-built base64 blob, decoded to temp file, concatenated as separate XZ segment | Non-root build safety; initramfs supports concatenated cpio archives |
+
+---
+
+## Hook System Architecture
+
+```
+/etc/linuxmuster/linbo/hooks/
+├── update-linbofs.pre.d/
+│   └── 01_edulution-plymouth   (active: replaces Plymouth theme)
+└── update-linbofs.post.d/
+    (empty by default)
+
+Execution sequence for update-linbofs.sh:
+  1. Extract template → WORKDIR
+  2. Inject keys, modules, firmware, themes (Steps 7-10.7)
+  3. exec_hooks pre  ← hooks run here, CWD = WORKDIR
+  4. cpio | xz → linbofs64.new
+  5. Verify + replace linbofs64
+  6. Copy linbo64 kernel
+  7. exec_hooks post ← hooks run here, CWD = WORKDIR (still accessible)
+
+Exported variables available to all hooks:
+  $LINBO_DIR    = /srv/linbo
+  $CONFIG_DIR   = /etc/linuxmuster/linbo
+  $CACHE_DIR    = /var/cache/linbo
+  $KTYPE        = stable | longterm | legacy
+  $KVERS        = e.g. 6.12.57 (empty if no kernel variant available)
+  $WORKDIR      = /var/cache/linbo/linbofs-build.XXXXXX
+```
+
+**Design constraint:** Hooks MUST NOT call `update-linbofs.sh` recursively. The flock prevents this from causing double-build but the error is confusing. Hooks should only modify files within WORKDIR (pre) or trigger external notifications (post).
+
+**Design constraint:** Pre-hooks run AFTER standard injections (SSH keys, modules, firmware). A hook that injects an SSH key the standard injector already handles will silently overwrite. Hooks are for content not covered by standard steps.
+
+---
+
+## Patterns to Follow
+
+### Pattern 1: Atomic Template Extraction — Never Modify Vanilla Files
+
+**What:** Always use `linbofs64.xz` as the base template for each build. Never repack from the previous `linbofs64`.
+**Why:** The vanilla template is clean (no prior injections). Repacking from the current `linbofs64` would accumulate injections across builds, double-injecting keys/modules on every rebuild.
+**Implemented:** Step 6 of update-linbofs.sh: `if [ -f "$LINBOFS_TEMPLATE" ]; then xzcat "$LINBOFS_TEMPLATE" | cpio -i ... else WARNING + use current linbofs64`.
+
+```bash
+# Correct pattern (Step 6):
+if [ -f "$LINBOFS_TEMPLATE" ]; then
+    xzcat "$LINBOFS_TEMPLATE" | cpio -i -d -H newc --no-absolute-filenames
+else
+    echo "WARNING: template not found, using current linbofs64"
+    xzcat "$LINBOFS" | cpio -i -d -H newc --no-absolute-filenames
+fi
+```
+
+### Pattern 2: Atomic Kernel Set Provisioning (Symlink Swap)
+
+**What:** Kernel sets are written to a temp directory, then atomically renamed to the final set directory. The `current` symlink is swapped atomically.
+**Why:** Prevents a reader (API, update-linbofs.sh) from seeing a partially-written kernel set during provisioning.
+**Implemented:** Both `provision_kernels()` in entrypoint.sh and `provisionKernelSets()` in linbo-update.service.js use the same pattern.
+
+```
+sets/.tmp-{hash}/          ← write here first
+  → sets/{hash}/           ← atomic rename
+     current.new -> sets/{hash}  ← atomic symlink
+     current.new mv→ current     ← atomic swap
+```
+
+### Pattern 3: Build Marker State Machine
+
+**What:** The build lifecycle uses a chain of marker files to communicate state between the init container, the API startup hook, and the TFTP container.
+**Why:** File-based IPC is robust across container restarts and requires no shared message queue.
+
+```
+State machine:
+  .needs-rebuild        (init container writes after provisioning)
+        |
+        | API startup detects, renames atomically
+        v
+  .needs-rebuild.running (API wrote this; if present on restart = interrupted)
+        |
+        | update-linbofs.sh completes successfully
+        v
+  .linbofs-patch-status  (update-linbofs.sh writes on success)
+  .needs-rebuild.running is deleted
+
+Recovery: API startup detects .needs-rebuild.running → renames back to .needs-rebuild
+          (will be picked up on next restart — requires one deliberate restart)
+```
+
+**Note:** TFTP container busy-waits for `.linbofs-patch-status` before serving `linbofs64`. This is the synchronization point between the build pipeline and PXE clients.
+
+### Pattern 4: Non-Root Build Safety (uid 1001)
+
+**What:** update-linbofs.sh runs as uid 1001 (linbo user) inside the API container. It cannot use `mknod` or `chown` on arbitrary files.
+**Why:** Docker best practice — API container does not run as root.
+**Implemented:**
+- Device nodes: pre-built base64 CPIO blob; appended as separate XZ segment (Linux initramfs supports concatenated archives)
+- File ownership: `cpio --owner 0:0` ensures initramfs files are owned by root at boot time despite build uid
+- Volume permissions: `chown -R 1001:1001` set on volumes by init container
+
+### Pattern 5: Idempotent Update Orchestration (Redis Lock + Heartbeat)
+
+**What:** The linbo-update.service uses a Redis lock with TTL + heartbeat to prevent concurrent updates. Lock is released on completion or error.
+**Why:** `update-linbofs.sh` itself uses flock, but the download/provision steps before it are also non-reentrant (shared workDir, staging directory).
+
+```javascript
+// Lock: NX SET with 120s TTL + 30s heartbeat renewal
+// On completion: DEL if runId matches (prevents stale lock cleanup race)
+```
+
+---
+
+## Anti-Patterns to Avoid
+
+### Anti-Pattern 1: Patching init.sh Directly
+
+**What:** Modifying `init.sh` (the LINBO client init script) in `update-linbofs.sh` or via a patch embedded in the script.
+**Why bad:** init.sh changes are invisible to upstream (no diff audit trail), break on package updates, and violate the "Vanilla LINBO Works" principle proven in Session 30.
+**Instead:** Use a pre-hook if init.sh modification is truly necessary (e.g., the DHCP serverid bug). Document the patch in the hook file. The hook is visible, versioned, and opt-in.
+
+```bash
+# Anti-pattern (was removed in Session 30):
+# sed -i 's/LINBOSERVER=.*/LINBOSERVER=$server/' etc/init.sh
+
+# Correct pattern if modification becomes necessary:
+# /etc/linuxmuster/linbo/hooks/update-linbofs.pre.d/02_init-serverid-fix
+```
+
+### Anti-Pattern 2: Repack from Current linbofs64 as Baseline
+
+**What:** Using the existing `linbofs64` (already injected) as the template for the next build instead of the vanilla `linbofs64.xz`.
+**Why bad:** Each rebuild accumulates injections. SSH keys get doubled. Module directories contain stale modules from previous kernel versions. The artifact diverges from vanilla over time, making diffs against upstream impossible.
+**Prevents:** The fallback in Step 6 (use current linbofs64 if template missing) is a last-resort emergency, not the intended flow. The template should always be present in `$KERNEL_VAR_DIR`.
+
+### Anti-Pattern 3: Skipping SHA256 Verification on Package Download
+
+**What:** Downloading `.deb` without verifying SHA256 against the APT Packages index.
+**Why bad:** A corrupted or MITM-modified package silently produces a broken or backdoored `linbofs64`. The artifact is served to all PXE clients.
+**Implemented correctly:** Both `entrypoint.sh` (via `verify_sha256_structured`) and `linbo-update.service.js` (via streaming SHA256 transform) verify before use.
+
+### Anti-Pattern 4: Blocking API Startup on linbofs Rebuild
+
+**What:** Synchronously awaiting the linbofs rebuild during API startup before accepting HTTP traffic.
+**Why bad:** The rebuild takes 30-120s. A blocked startup means health checks fail, Docker Compose considers the container unhealthy, and dependent containers time out.
+**Implemented correctly:** API startup fires the rebuild asynchronously (`.then()` handler in index.js). HTTP server starts listening immediately after marker rename.
+
+### Anti-Pattern 5: Storing linbofs Build State in Redis
+
+**What:** Using Redis keys to track whether the linbofs build is "in progress" (analogous to the linbo-update.service Redis lock).
+**Why bad:** The linbofs build is coordinated via file markers (`.needs-rebuild`, `.needs-rebuild.running`, `.linbofs-patch-status`). Adding Redis state creates two sources of truth. The flock in `update-linbofs.sh` is the actual mutex; Redis would only be advisory and could get out of sync on crash.
+**Instead:** Keep build state in file markers. Redis tracks high-level update orchestration (linbo-update.service) because that operation spans multiple phases and needs WebSocket progress reporting.
+
+---
+
+## Integration Points (Explicit)
+
+### 1. Init Container → API (via `.needs-rebuild` on shared volume)
+
+- **Trigger:** Init successfully provisions boot files (Step 8 of entrypoint.sh)
+- **Signal:** `touch /srv/linbo/.needs-rebuild`
+- **Consumer:** API startup in `containers/api/src/index.js` (lines 671-695)
+- **Action:** Renames to `.needs-rebuild.running`, fires `linbofsService.updateLinbofs()` asynchronously
+- **Success:** Deletes `.needs-rebuild.running`, writes `.linbofs-patch-status`
+- **Failure:** Restores `.needs-rebuild.running` → `.needs-rebuild` for retry on next restart
+- **Risk:** If API restarts mid-build (e.g., OOM), the running marker is left. Recovery requires one deliberate restart.
+
+### 2. Init Container → update-linbofs.sh (via kernel set symlink)
+
+- **Trigger:** Init provisions kernels (Step 9 of entrypoint.sh via `provision_kernels()`)
+- **Signal:** `/var/lib/linuxmuster/linbo/current` symlink points to `sets/{hash}/`
+- **Consumer:** `update-linbofs.sh` reads `$KERNEL_VAR_DIR/current/` for template and modules
+- **Default KERNEL_VAR_DIR:** `/var/lib/linuxmuster/linbo/current`
+- **Risk:** If `current` symlink is missing (init failed at Step 9), update-linbofs.sh logs "Kernel variant directory not found" and skips module injection. linbofs64 builds without new kernel modules — it uses whatever modules were in the vanilla template. This is a degraded but bootable state.
+
+### 3. linbo-update.service.js → update-linbofs.sh (via linbofsService)
+
+- **Trigger:** `rebuildLinbofs()` called at progress ~85% after package provisioning
+- **Signal:** Direct call — `linbofsService.updateLinbofs()` execs `update-linbofs.sh`
+- **Contract:** linbofsService returns `{success, output, errors, duration}`
+- **Error behavior:** If rebuild fails, `startUpdate()` throws, Redis status set to `error`, lock released. The new package files ARE provisioned (step 3 completed) but linbofs64 is NOT rebuilt. The old linbofs64 remains active from `.bak`. The version file is NOT updated (finalize() was not reached).
+- **Risk (partial state):** After a failed update, boot files are from the new package version but linbofs64 is from the old. A subsequent `POST /system/update-linbofs` (manual trigger) can repair this.
+
+### 4. linbo-update.service.js → grubService (via regenerateAllGrubConfigs)
+
+- **Trigger:** After successful linbofs rebuild, at progress ~90%
+- **Contract:** `grubService.regenerateAllGrubConfigs()` returns `{configs, hosts}`
+- **Error behavior:** Non-fatal. Errors are logged but do not fail the update. Existing GRUB configs remain in place.
+- **Risk:** If a new LINBO package changes GRUB template syntax, regeneration produces incorrect configs. This would only be visible at next PXE boot attempt. The update appears successful.
+
+### 5. update-linbofs.sh → TFTP container (via `.linbofs-patch-status` marker)
+
+- **Trigger:** update-linbofs.sh writes `.linbofs-patch-status` at Step 14.5
+- **Consumer:** TFTP container entrypoint busy-waits on this file before serving `linbofs64`
+- **Contract:** File contains: `# Build Status — {ISO date}\nbuild|OK`
+- **Risk (blocker):** If update-linbofs.sh fails after writing `linbofs64` but before writing `.linbofs-patch-status`, TFTP never unblocks. Manual recovery: `echo "build|OK" >> /srv/linbo/.linbofs-patch-status` or `make deploy-full`.
+
+### 6. linbo-update.service.js → Kernel Set System (dual write)
+
+- **Issue:** Both `provision_boot_files()` in entrypoint.sh and `provisionBootFiles()` in linbo-update.service.js implement the same kernel set provisioning logic independently.
+- **Current state:** Both implementations use the same manifest hash + atomic symlink pattern. They produce structurally identical output.
+- **Risk (divergence):** If the manifest schema changes, both implementations must be updated in sync. There is no shared library — this is duplicated business logic in shell + JS.
+
+---
+
+## Scalability Considerations
+
+| Concern | Current (1 school, ~100 clients) | 10 schools | Notes |
+|---------|----------------------------------|------------|-------|
+| linbofs build time | 30-120s (CPU-bound XZ compression) | Same per instance | Each school has its own Docker instance |
+| Concurrent PXE boots | TFTP serves linbofs64 to all clients simultaneously | Same | TFTP is stateless read-only |
+| Package update frequency | Rare (LMN releases ~quarterly) | Same | Update is manual/admin-triggered |
+| Hook execution overhead | Negligible (<1s for Plymouth theme hook) | Same | Hooks are isolated per build |
+| linbofs64 size | ~55MB (after double-XZ bug fix in Session 33) | Same | XZ compression level: `-e` (extreme) |
+
+---
+
+## Build Order for v1.2 Phases
+
+Based on integration point analysis, recommended phase order:
+
+```
+Phase 1: Pipeline Diff Documentation
+  - Systematic diff of Docker update-linbofs.sh vs LMN original
+  - Document every divergence with rationale (feeds this file)
+  - No code changes — pure documentation
+  - Dependencies: none (can start immediately)
+
+Phase 2: Build Pipeline Tests
+  - Unit tests for update-linbofs.sh (bats or shellspec)
+  - Integration test: full build cycle with mock template
+  - Verify: template extraction idempotency, hook execution order, marker state machine
+  - Dependencies: diff analysis from Phase 1 (identifies what to test)
+
+Phase 3: Update Safety Hardening
+  - Test: linbo-update.service.js (extend existing test suite)
+  - Cover: partial update failure states (provision OK, rebuild fails)
+  - Cover: concurrent update attempt (409 response)
+  - Cover: version comparison edge cases (dpkg --compare-versions)
+  - Dependencies: Phase 2 establishes test infrastructure
+
+Phase 4: Hook System Hardening (if init.sh serverid patch needed)
+  - Implement 02_init-serverid-fix pre-hook (if viable)
+  - Validate hook is update-safe (applies cleanly to new init.sh versions)
+  - Test: hook runs correctly, DHCP serverid preserved
+  - Dependencies: Phase 2 (hook execution tests)
+```
+
+**Phase ordering rationale:**
+- Documentation first: the diff analysis is the foundation for knowing what needs testing.
+- Tests before hardening: can't harden what you can't verify.
+- Hook work last: the serverid fix may not be cleanly expressible as a hook (may need conditional logic based on init.sh version). Needs research.
+
+---
+
+## Sources
+
+All findings are HIGH confidence — derived directly from current codebase:
+
+- `scripts/server/update-linbofs.sh` — build pipeline, all 15 steps, hook execution
+- `containers/init/entrypoint.sh` — bootstrap flow, checkpoint system, kernel set provisioning
+- `containers/api/src/services/linbo-update.service.js` — update orchestration, dual provisioning logic
+- `containers/api/src/services/linbofs.service.js` — shell-out wrapper, key management
+- `containers/api/src/services/kernel.service.js` — kernel variant switch flow (referenced, not read in full)
+- `containers/api/src/index.js` lines 665-698 — auto-rebuild startup hook, marker state machine
+- `containers/api/src/routes/system/linbo-update.js` — HTTP API surface for updates
+- `containers/api/src/routes/system/linbofs.js` — HTTP API surface for linbofs management
+- `containers/api/src/routes/system/kernel.js` — HTTP API surface for kernel switching
+- `docs/hooks.md` — hook system documentation, LMN compatibility notes
+- `.planning/PROJECT.md` — milestone context, constraint definitions, key decisions
+
+---
+
+*Architecture research: 2026-03-10*

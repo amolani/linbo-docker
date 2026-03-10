@@ -1,385 +1,305 @@
 # Domain Pitfalls
 
-**Domain:** Adding fresh install flow, configuration management, error handling, and admin documentation to a Docker-based network boot system (LINBO Docker)
-**Researched:** 2026-03-08
-**Confidence:** HIGH (based on existing codebase analysis, 33+ sessions of operational history, documented troubleshooting incidents, and community patterns)
+**Domain:** Adding boot-pipeline transparency and update-regression hardening to a Docker wrapper around an upstream Linux network boot system (LINBO Docker v1.2)
+**Researched:** 2026-03-10
+**Confidence:** HIGH (based on 33+ sessions of operational history, verified incidents in docs/debug/, known upstream divergence in Session 32, codebase analysis of update-linbofs.sh and linbo-upgrade-flow.md)
 
 ---
 
 ## Critical Pitfalls
 
-Mistakes that cause rewrites, broken deployments, or stranded users.
-
-### Pitfall 1: .env Drift Between .env.example and docker-compose.yml Defaults
-
-**What goes wrong:** The `.env.example` file, the actual `.env` file, and the `docker-compose.yml` inline defaults (`${VAR:-default}`) define different variable sets with conflicting defaults. A fresh user copies `.env.example` but misses variables only defined in `docker-compose.yml` defaults. Or worse, `.env.example` defines `DB_PASSWORD` but `docker-compose.yml` references `POSTGRES_PASSWORD` -- and `DATABASE_URL` uses `${POSTGRES_PASSWORD}` interpolation. The naming is inconsistent.
-
-**Why it happens:** Over 33 development sessions, variables were added to `docker-compose.yml` with inline defaults but never backported to `.env.example`. The project has TWO `.env.example` files (root and `containers/api/`) with different content. The root `.env` currently has 116 lines; the `.env.example` has 240 lines; `docker-compose.yml` sets ~60 env vars with its own defaults. These three sources tell different stories.
-
-**Evidence from codebase:**
-- Root `.env` uses `DB_PASSWORD`, but `docker-compose.yml` and `.env.example` use `POSTGRES_PASSWORD`
-- `.env.example` includes `RSYNC_PASSWORD`, `RATE_LIMIT_MAX`, `PRISMA_LOG_QUERIES` -- none of which appear in `docker-compose.yml`
-- `docker-compose.yml` sets `ADMIN_PASSWORD=${ADMIN_PASSWORD:-Muster!}` -- `.env` has no `ADMIN_PASSWORD`
-- `GITHUB_TOKEN` is REQUIRED for web container build but appears only at the bottom of `.env`, not in `.env.example`
-
-**Consequences:**
-- Fresh install fails silently: web container build returns 401 because GITHUB_TOKEN was not set
-- API starts with default `Muster!` password because user did not know to set `ADMIN_PASSWORD`
-- Database auth fails after volume recreation because password vars have different names
-- User copies `.env.example`, gets 240 lines of config, but only ~8 actually matter for getting started
-
-**Prevention:**
-- Create ONE canonical `.env.example` that matches exactly what `docker-compose.yml` consumes
-- Remove the `containers/api/.env.example` (it is for local dev outside Docker, not the primary workflow)
-- Group variables into REQUIRED (must change), RECOMMENDED (should change), and OPTIONAL (sensible defaults)
-- Add inline comments explaining which variables are build-time vs runtime
-- Add a `make check-env` target that validates `.env` against expected variables
-
-**Detection:** User reports "web container won't build" or "can't login" within first 10 minutes of setup.
-
-**Phase:** Should be addressed in the configuration management phase, before documentation is written.
+Mistakes that cause rewrites, broken boot clients, or silent regressions.
 
 ---
 
-### Pitfall 2: Init Container Failure Leaves System in Unrecoverable Partial State
+### Pitfall 1: "Fixing" Things That Work by Diffing Against the Wrong Reference
 
-**What goes wrong:** The init container (`restart: "no"`) runs once, downloads .deb packages from the LMN APT repo, extracts and provisions boot files, then exits. If it fails partway through (network timeout, disk full, corrupt download), the Docker volumes contain partial data. Every dependent container (tftp, rsync, ssh, api, web) has `condition: service_completed_successfully`, so they never start. The user must manually diagnose why init failed, fix the issue, and either `docker compose down -v` (losing all data) or manually clean up volumes.
+**What goes wrong:** The impulse when creating a "diff against LMN original" is to treat every difference as a defect that should be fixed. In practice Docker's update-linbofs.sh intentionally differs from the LMN original: it uses a template linbofs64.xz (not the live linbofs64), uses a KERNEL_VAR_DIR structure the LMN original does not have, and adds firmware/GUI-theme injection that LMN handles differently. A developer doing a naive diff and "aligning" Docker to LMN will remove these intentional divergences.
 
-**Why it happens:** The init container uses `set -e` but has no checkpoint/resume mechanism. Each run starts from scratch (downloads both .deb packages, re-extracts everything). Network issues to `deb.linuxmuster.net` are common in school networks behind proxies. The download-extract-provision flow has 12 sequential steps with no rollback.
-
-**Evidence from codebase:**
-- `containers/init/entrypoint.sh`: `set -e` means any failure exits, `restart: "no"` means no retry
-- No HTTP proxy configuration support in the init container
-- No retry beyond the download step (3 retries for curl, but `dpkg-deb -x` failure is fatal)
-- `.needs-rebuild` marker is written AFTER provisioning (step 8), so a failure at step 7 means no marker and API does not rebuild, but boot files are partially present
+**Why it happens:** The phrase "Docker diverged from LMN original" implies divergence is wrong. But Docker is not a fork trying to stay in sync — it is a different deployment model with structurally different requirements. Some differences are bugs (Session 33's DEVNODES_CPIO leak); most are features.
 
 **Consequences:**
-- Fresh install on a school network behind a proxy: init fails, all containers stay stopped
-- User sees `linbo-init exited with code 1` but no clear error message in `docker compose ps`
-- Volumes have partial data: GRUB files but no kernel, or kernel but no GUI
-- Rerunning `docker compose up -d` does nothing because init is `restart: "no"` -- user must `docker compose up -d --force-recreate init`
+- Removing KERNEL_VAR_DIR injection breaks kernel-variant switching (BOOT-03)
+- Removing template-based rebuild reverts to in-place extraction (which was the root cause of the double-XZ bug in Session 33)
+- Removing firmware injection silently breaks NIC firmware for deployed clients
+- Clients boot but lack injected SSH keys, making remote management impossible
 
 **Prevention:**
-- Add idempotent checkpoints: if linbo-version matches and all expected files exist, skip download
-- Already partially implemented (version check at line 550), but only covers the happy path
-- Add proxy configuration: `HTTP_PROXY`, `HTTPS_PROXY` env vars passed through to curl
-- Add a health check or verification step before writing success markers
-- Document the `docker compose up -d --force-recreate init` recovery command prominently
-- Consider making init a simple download-and-verify step, moving provisioning to the API startup
+- When documenting differences, classify each one explicitly: INTENTIONAL (reason), BUG (fixed in sessionX), or UNKNOWN (needs investigation)
+- The diff document must have a three-column structure: LMN behavior | Docker behavior | Justification
+- Never remove a Docker-specific behavior without tracing which feature it enables
 
-**Detection:** All containers except init show "waiting" or "not started" status after `docker compose up -d`.
+**Detection:** update-linbofs.sh builds successfully but linbofs64 is missing expected injections. Check with: `xzcat /srv/linbo/linbofs64 | cpio -t 2>/dev/null | grep -E 'lib/modules|etc/dropbear|etc/linbo_pwhash'`
 
-**Phase:** Bootstrap flow optimization phase. This is the single most important fresh-install pitfall.
+**Phase:** Diff documentation phase — must be the first deliverable, before any "alignment" work.
 
 ---
 
-### Pitfall 3: LINBO_SERVER_IP Misconfiguration Breaks PXE Boot Silently
+### Pitfall 2: Module Selection Divergence Is Not Deterministic and Cannot Be Fixed by Matching Version Numbers
 
-**What goes wrong:** `LINBO_SERVER_IP` defaults to `10.0.0.1` in `docker-compose.yml`. This IP is written into GRUB configs and used by LINBO clients to reach the boot server. If the Docker host has a different IP (and it almost always does on a fresh install), PXE clients boot GRUB but then cannot download `linbo64` or `linbofs64` because they try to reach `10.0.0.1`. The LINBO client shows a cryptic GRUB error or hangs at "Loading linbo64...".
+**What goes wrong:** Session 32 found that Docker's linbofs64 contains a DIFFERENT selection of kernel modules than LMN's linbofs64, despite both claiming the same kernel version (6.18.4) with the same nominal module count (720). Two processes that run `update-linbofs` with identical kernel packages do not produce identical module sets.
 
-**Why it happens:** The default `10.0.0.1` is the linuxmuster.net convention, but fresh installs on VMs, cloud instances, or non-LMN networks use completely different IP ranges. The variable name sounds like it might auto-detect, but it does not -- it is a manually-set value that must match the Docker host's actual network interface IP visible to PXE clients.
-
-**Evidence from codebase:**
-- `docker-compose.yml` line 94: `LINBO_SERVER_IP=${LINBO_SERVER_IP:-10.0.0.1}`
-- GRUB configs embed this IP for HTTP boot: `linux (http,$LINBO_SERVER_IP)/linbo64`
-- DHCP container uses it as `next-server`
-- The `.env.example` lists it first with a comment "IP address of the Docker host (visible to PXE clients)" but does not explain consequences of getting it wrong
+**Why it happens:** The `modules.tar.xz` in Docker's kernel variant sets is built by a different process than LMN's `update-linbofs`. LMN's original script likely uses `find /lib/modules/$KVERS -name "*.ko*"` to select modules, while Docker's init container builds modules.tar.xz from the kernel package's pre-selected set. The selection criteria differ even when the kernel binary is the same.
 
 **Consequences:**
-- PXE clients reach GRUB via TFTP (which works because TFTP is on host network), but HTTP boot fails because GRUB tries to reach wrong IP
-- User debugs for hours: TFTP works, GRUB menu shows, but kernel download fails
-- In sync mode with a separate DHCP server, the DHCP server may announce a different `next-server` than LINBO_SERVER_IP, causing a second layer of confusion
+- Client enters "Remote Control Mode" (linbo_gui64_7.tar.lz not found because rsync failed because no network because a supporting module is missing)
+- The symptom looks like a network driver issue but the root cause is a dependency module (e.g., a PCI bus enumeration module that a NIC driver depends on)
+- The bug is intermittent: it affects specific hardware that relies on the missing module, but not hardware with builtin support
+
+**Verified by Session 32:** Swapping LMN's linbofs64 into Docker's volume fixed boot. Swapping Docker's linbofs64 back broke it. Same kernel, same NIC drivers, different boot behavior.
 
 **Prevention:**
-- Add startup validation in the API that checks if `LINBO_SERVER_IP` matches any local network interface
-- If no match, log a prominent warning: "LINBO_SERVER_IP=10.0.0.1 does not match any local interface. PXE boot will fail."
-- In the install guide, make this the FIRST configuration step with a verification command: `ip -4 addr show | grep inet`
-- Add a `make check-network` target that verifies LINBO_SERVER_IP, port availability, and TFTP reachability
+- The fix is NOT to match version numbers. It is to use LMN's linbofs64 as the template (linbofs64.xz) for Docker's rebuild. This is already the architecture: Docker's update-linbofs.sh uses `$LINBOFS_TEMPLATE` (a saved copy of LMN's linbofs64.xz). If this template comes from the LMN .deb, the module selection will match.
+- Verify the modules.tar.xz origin: does it come from the LMN .deb's pre-built linbofs64, or from a separately built kernel package? They must be the same source.
+- Add a diagnostic: after any update, compare the module count AND the module name list (not just the count) against the LMN reference.
 
-**Detection:** PXE clients show GRUB menu but hang at kernel download, or show "error: no suitable address found".
+**Detection:** `Remote Control Mode` on clients that worked before an update. Also: `xzcat linbofs64 | cpio -t 2>/dev/null | grep lib/modules | wc -l` shows different count than LMN reference.
 
-**Phase:** Configuration management phase (validation) and documentation phase (install guide).
+**Phase:** Update regression testing phase. This is the single most dangerous silent regression scenario.
 
 ---
 
-### Pitfall 4: Docker Volume Permissions Break Cross-Container File Access
+### Pitfall 3: init.sh DHCP serverid Overwrite Cannot Be Fixed with a Pre-Hook (or Can It?)
 
-**What goes wrong:** Multiple containers share Docker volumes (`linbo_srv_data`, `linbo_config`, `linbo_log`). The init container runs as root and creates files owned by `root:root`. The API container runs as non-root user `linbo` (UID 1001). The SSH container runs as root. When the API tries to write to files created by init (or vice versa), it fails with EACCES.
+**What goes wrong:** init.sh's `do_env()` function overwrites the `server=` kernel cmdline parameter with the DHCP `serverid` when `HOSTGROUP` is set. In Docker deployments where the DHCP server (10.0.0.11, LMN) and the LINBO server (10.0.0.13, Docker) are different machines, the client rsyncs from the wrong server. No error is shown — the client silently contacts the wrong server and may boot successfully (using LMN's images) or fail (if LMN's LINBO server is not Docker).
 
-**Why it happens:** Docker does not enforce consistent ownership across containers sharing volumes. The init container runs `chown -R 1001:1001` at the end, but:
-1. If init fails before the chown step, files stay root-owned
-2. The SSH container (running as root) creates new files as root
-3. The API container creates files as 1001, but some paths are only writable by root
-4. After a LINBO update (via API), new files from extracted .deb packages are root-owned
+**Why it happens:** The vanilla LINBO assumption is that the DHCP server IS the LINBO server. Docker breaks this assumption. init.sh is a vanilla file that must not be modified directly (LINBO-Kern constraint).
 
-**Evidence from codebase:**
-- Troubleshooting doc issue #1: "EACCES: permission denied, open '/srv/linbo/start.conf.testgruppe'" -- this is a documented recurrence
-- Troubleshooting doc issue #23: SSH key permissions differ between servers
-- `containers/init/entrypoint.sh` line 608-609: `chmod -R 755` + `chown -R 1001:1001` at the end
-- `update-linbofs.sh` runs inside the API container as UID 1001 and creates temp files in `/var/cache/linbo`
-- CONCERNS.md explicitly documents this as a fragile area
+**The hook problem:** A pre-hook runs inside the extracted linbofs BEFORE repack. It CAN modify init.sh inside linbofs. But this means Docker IS modifying a vanilla LINBO file, which violates the "LINBO-Kern: Vanilla" constraint. The question is whether a hook-based patch of init.sh is acceptable.
 
-**Consequences:**
-- Raw Config Editor returns 500 error on first use after fresh install
-- update-linbofs.sh fails because it cannot create temp files or write to `/srv/linbo`
-- GRUB config regeneration fails silently (EACCES when writing to `/srv/linbo/boot/grub/`)
-- The fix (`chown -R 1001:1001 /var/lib/docker/volumes/linbo_srv_data/_data/`) requires root shell access to the Docker host
+**Two possible approaches:**
+1. **Hook patches init.sh** — Technically works, but init.sh is a vanilla file. If LMN ships a new init.sh in the next linbo7 package, the hook's patch offsets will be wrong, potentially breaking boot silently.
+2. **GRUB cmdline workaround** — Add a custom GRUB entry that passes `serverid=$LINBO_SERVER_IP` in the cmdline to override the DHCP value before init.sh's `do_env()` runs. This works without touching init.sh.
+
+**Consequences of doing it wrong:**
+- A sed-based patch on init.sh breaks silently when LMN updates init.sh: the sed pattern no longer matches, patch is skipped, clients start rsyncing from wrong server again
+- No error is visible in logs — the client appears to boot normally but from the wrong server
 
 **Prevention:**
-- Add a startup permission check in the API: verify write access to critical paths BEFORE starting services
-- If permissions are wrong, log a clear error with the exact fix command
-- Use a shared GID approach: create a `linbo` group in all containers, set group-writable permissions
-- Add volume permission repair to the init container's idempotent startup check
-- Document the permission model in the admin guide
+- If hook-patching init.sh: use a line-number-independent patch (grep for the exact function name, use awk to replace the specific logic block, not sed with line numbers)
+- Include an idempotency check: after patching, verify the patch was applied by searching for the patched string — if not found, fail loudly
+- Consider the GRUB cmdline approach as a zero-risk alternative: no vanilla file modification, no fragile text substitution
+- Document the LMN init.sh version this was verified against (linuxmuster-linbo7 4.3.31-0)
 
-**Detection:** API returns 500 errors for file operations; logs show "EACCES: permission denied".
+**Detection:** Client boots but rsync session appears in the wrong server's logs (10.0.0.11 instead of 10.0.0.13). `cat /proc/cmdline` inside the booted linbofs will show `server=<wrong IP>`.
 
-**Phase:** Bootstrap flow phase (permission initialization) and error handling phase (startup checks).
+**Phase:** init.sh fix phase — high risk, needs explicit approval of approach before implementation.
 
 ---
 
-### Pitfall 5: Documentation That Lies About Prerequisites and Steps
+### Pitfall 4: LMN linbo7 Package Update Silently Invalidates Docker's Template-Based Rebuild
 
-**What goes wrong:** The install documentation says "Clone, copy .env, run docker compose up, done" but omits critical prerequisites and intermediate failures. Users hit undocumented requirements: GITHUB_TOKEN for web build, network interface configuration for TFTP host-mode, port conflicts with existing services, Docker version requirements, disk space for boot file downloads.
+**What goes wrong:** Docker's rebuild depends on `linbofs64.xz` as a template. This template comes from the LMN linbo7 .deb package. When LMN ships a new linbo7 version, the init container downloads the new .deb, extracts a new linbofs64.xz template, and update-linbofs.sh rebuilds from it. But if the new linbofs64.xz uses a different internal path for any of Docker's injected items (e.g., `etc/linbo_pwhash`, `etc/dropbear/`, `.ssh/authorized_keys`), Docker's injections silently write to paths that LINBO no longer reads.
 
-**Why it happens:** Documentation was written by the developer who already has everything configured. The "works on my machine" problem: the development server has GITHUB_TOKEN set, has the right ports free, has fast internet, and runs Ubuntu with the right Docker version. Edge cases discovered in Sessions 1-33 are documented in TROUBLESHOOTING.md but not in the install guide.
+**Known injection paths (verified against linuxmuster-linbo7 4.3.31-0):**
+- `etc/linbo_pwhash` — rsync password hash
+- `etc/linbo_salt` — argon2 salt
+- `etc/dropbear/dropbear_*_host_key` — dropbear SSH keys
+- `etc/ssh/ssh_host_*_key` — OpenSSH host keys
+- `.ssh/authorized_keys` — server-to-client public keys
+- `lib/modules/$KVERS/` — kernel modules
 
-**Evidence from codebase:**
-- TROUBLESHOOTING.md has 25 documented issues, many of which are first-install problems
-- Issue #6: Port 69/udp already in use by existing TFTP service
-- Issue #7: Init container download failure with no recovery path documented
-- Issue #20: Web build fails without GITHUB_TOKEN (401 Unauthorized)
-- Issue #12: `docker compose restart` does not load new .env values (common mistake)
-- The current "installation checklist" in TROUBLESHOOTING.md is 6 steps but misses GITHUB_TOKEN, proxy config, LINBO_SERVER_IP verification
+**Why it happens:** LMN can change internal paths in any package release without announcing it as a breaking change. Docker's update-linbofs.sh has no version-specific path validation — it writes to hardcoded paths and assumes they are correct.
 
 **Consequences:**
-- Every fresh install generates 2-3 support requests for issues already documented elsewhere
-- Users lose trust in the project when the "quick start" takes 2 hours
-- Multi-school rollout stalls because each school's admin hits different undocumented issues
+- After an LMN update: Docker rebuilds successfully, linbofs64 passes the 10MB size check, but LINBO clients cannot connect via SSH (wrong key paths), or clients cannot rsync (wrong password hash path)
+- The regression is only discovered when testing a real PXE boot
 
 **Prevention:**
-- Write the install guide by ACTUALLY doing a fresh install on a clean VM and documenting every step
-- Include a "prerequisites check" script that validates: Docker version, available ports, disk space, network config, GITHUB_TOKEN
-- Add troubleshooting cross-references inline: "If you see 401 during build, see [GITHUB_TOKEN setup]"
-- Test the install guide with someone who has NOT seen the codebase before
-- Keep the install guide as a single path (no branching until absolutely necessary)
+- After each linbo7 package update, verify that injection target paths exist in the new template: `xzcat linbofs64.xz | cpio -t 2>/dev/null | grep -E 'linbo_pwhash|linbo_salt|dropbear'`
+- Add a path-existence check in update-linbofs.sh: before injecting, verify the target directory exists in the extracted linbofs; if not, fail loudly with a clear message about what changed
+- Include verification in the update regression test suite: boot a client and verify SSH connectivity after every linbo7 update
 
-**Detection:** Users report install taking longer than 30 minutes, or open issues for problems already documented in TROUBLESHOOTING.md.
+**Detection:** Clients boot to LINBO GUI but SSH connections from the server fail. Also: after update, check `docker exec linbo-api xzcat /srv/linbo/linbofs64 | cpio -t 2>/dev/null | grep linbo_pwhash` should return exactly one hit.
 
-**Phase:** Documentation phase. But the prerequisites check script should be built in the configuration management phase.
+**Phase:** Update regression testing and monitoring.
 
 ---
 
-### Pitfall 6: TFTP/DHCP Host Network Mode Creates Silent Port Conflicts
+### Pitfall 5: CPIO Concatenation Format Requirement Is Undocumented and Fragile
 
-**What goes wrong:** The TFTP container uses `network_mode: host` (required for PXE), which means it binds directly to the host's port 69/UDP. The optional DHCP container also uses `network_mode: host` on port 67/UDP. On a server that already runs a DHCP server (ISC DHCP, dnsmasq) or TFTP server (tftpd-hpa, dnsmasq), these ports are already occupied. Docker starts the container, but it cannot bind the port, and fails with a cryptic error or -- worse -- silently serves stale files from the wrong TFTP root.
+**What goes wrong:** Docker's update-linbofs.sh uses a concatenated cpio/xz format: the main archive is one XZ stream, and device nodes are a second XZ stream appended to the file. This works because Linux initramfs supports concatenated compressed archives. But if any tool along the processing chain (backup, transfer, verification) treats the file as a single XZ and decompresses it, the result is a broken cpio with no device nodes. Tools like `xzcat` on the full file only emit the first XZ stream, silently dropping the device node segment.
 
-**Why it happens:** School servers running linuxmuster.net already have dnsmasq or tftpd-hpa serving PXE. Docker host-mode containers compete for the same ports. Unlike bridge-mode port conflicts (which Docker clearly reports), host-mode conflicts manifest as service failures inside the container, not as Docker errors.
-
-**Evidence from codebase:**
-- Troubleshooting doc issue #6: "Port 69/udp already in use" -- documented occurrence
-- `docker-compose.yml` line 34: `network_mode: host` for tftp
-- `docker-compose.yml` line 263: `network_mode: host` for dhcp
-- DHCP container is profile-gated (`profiles: ["dhcp"]`), but TFTP is always started
+**Evidence:** Session 33 fixed the DEVNODES_CPIO bug where a temp file in WORKDIR was being included in the main cpio archive instead of as a separate segment. The fix was correct but introduced a non-obvious dependency: the format now REQUIRES understanding of the concatenation.
 
 **Consequences:**
-- On a LMN server: existing tftpd-hpa blocks Docker TFTP, PXE clients get files from the old TFTP, which may have outdated or incompatible boot files
-- On a server with dnsmasq: dnsmasq binds both 67 and 69, Docker DHCP AND TFTP fail
-- The error message ("address already in use") is buried in container logs, not visible in `docker compose ps`
+- After transferring linbofs64 via any tool that recompresses or verifies XZ integrity, device nodes are lost
+- Client boots to kernel but `/dev/console` and `/dev/null` are missing — kernel panics immediately
+- The MD5 hash check in update-linbofs.sh still passes because it checks the concatenated file
 
 **Prevention:**
-- Add a pre-flight check script: `ss -tulpn | grep -E ':69|:67'` with human-readable output
-- If port 69 is occupied, print: "Port 69/UDP in use by [process]. Stop it with: systemctl stop tftpd-hpa"
-- In the install guide, make port conflict resolution a prerequisite step
-- Consider a "co-existence mode" where Docker does NOT start TFTP and instead symlinks its boot files into the existing TFTP root
+- Document the concatenation format explicitly in update-linbofs.sh with a comment block at the top
+- Add a verification step after rebuild that confirms both XZ segments decode to valid cpio: `xzcat linbofs64 | cpio -t 2>/dev/null | grep dev/console` should return at least one hit
+- When implementing any copy/transfer of linbofs64, use `cp` or `rsync --inplace` — never recompress
 
-**Detection:** PXE clients boot old/wrong files or do not boot at all. `docker logs linbo-tftp` shows bind failure.
+**Detection:** Client kernel panics immediately after decompression with "unable to open an initial console". Also: `xzcat linbofs64 | cpio -t 2>/dev/null | grep dev/console` returns no output.
 
-**Phase:** Configuration management phase (pre-flight checks) and documentation phase.
+**Phase:** Transparency documentation phase — the format must be documented before any future modifications to the repack step.
 
 ---
 
 ## Moderate Pitfalls
 
-### Pitfall 7: Configuration Validation That Is Too Strict Blocks Legitimate Setups
-
-**What goes wrong:** Adding startup validation for .env variables seems straightforward, but over-validation blocks legitimate edge cases. For example: validating that LINBO_SERVER_IP matches a local interface fails when the Docker host is behind a NAT or uses a virtual IP. Requiring a non-default JWT_SECRET in development mode breaks the developer workflow. Requiring GITHUB_TOKEN blocks builds when users fork the repo and remove the private npm dependency.
-
-**Why it happens:** Developers add validation for every issue they have encountered, creating a "must be this tall to ride" experience where fresh installs are blocked by checks designed for production hardening.
-
-**Evidence from codebase:**
-- `validateSecrets()` already implements the right pattern: fatal in production, warning in development, silent in test
-- But if new checks do not follow this pattern, they will be too strict
-
-**Prevention:**
-- Follow the existing `validateSecrets()` pattern: FATAL in production, WARNING in development
-- Validation should INFORM, not BLOCK, in development mode
-- Group checks into "required for any mode" vs "required for production" vs "recommended"
-- Never validate external network state (like "is this IP reachable?") -- only validate configuration consistency
-
-**Detection:** Users report "API won't start" after a clean install with default settings.
-
-**Phase:** Error handling phase. Define validation tiers before implementing checks.
-
 ---
 
-### Pitfall 8: docker compose restart vs docker compose up -d for .env Changes
+### Pitfall 6: Hook Errors Are Swallowed by Design — Silent Failure in Production
 
-**What goes wrong:** After editing `.env`, users run `docker compose restart api` instead of `docker compose up -d api`. The restart command reuses the existing container with OLD environment variables. The user thinks the change took effect, but the API still runs with the previous configuration.
+**What goes wrong:** The current `exec_hooks()` implementation logs a WARNING if a hook exits non-zero but continues the build. This is intentional for resilience: a Plymouth theme failure should not break the entire linbofs rebuild. But in production, no one reads the update-linbofs.sh log carefully, and a hook that fails silently (e.g., the edulution Plymouth theme hook silently skipping because the source directory doesn't exist) leaves an uncommunicated degraded state.
 
-**Why it happens:** `docker compose restart` is the intuitive command. Docker's distinction between "restart existing container" and "recreate container with new config" is not obvious. This is already documented in TROUBLESHOOTING.md issue #12, proving it happens in practice.
-
-**Evidence from codebase:**
-- TROUBLESHOOTING.md issue #12: exact this problem documented with DC_PROVISIONING_ENABLED
-- `docker-compose.yml` passes all env vars via `environment:` block which is read at container creation time
-- The Makefile uses `docker compose up -d` (correct) but manual users often use `restart`
-
-**Prevention:**
-- Document this prominently in the admin guide with a callout box
-- Add a `make reconfigure` target that runs `docker compose up -d` for all services
-- Consider adding an env-hash check: API on startup compares running env vars against `.env` file and logs a warning if they differ
-
-**Detection:** User changes `.env` but behavior does not change. `docker exec linbo-api env | grep VAR` shows old value.
-
-**Phase:** Documentation phase (admin guide) and possibly error handling phase (env-hash check).
-
----
-
-### Pitfall 9: Marker File State Machine Failures During Interrupted Rebuilds
-
-**What goes wrong:** The linbofs64 rebuild lifecycle depends on three marker files: `.needs-rebuild` (init sets), `.needs-rebuild.running` (API renames during rebuild), `.linbofs-patch-status` (update-linbofs.sh writes on success). If the rebuild is interrupted (OOM kill, timeout, Docker restart), the state machine enters an ambiguous state. The API has recovery logic (line 690-694) but it only handles the `.running` marker, not cases where `update-linbofs.sh` itself fails mid-execution.
-
-**Why it happens:** Marker-file-based state machines are inherently fragile. The state transitions span two processes (Node.js API and bash script) with no shared transaction. A crash during the bash script leaves `.running` but no `.linbofs-patch-status`, so TFTP blocks forever.
-
-**Evidence from codebase:**
-- `containers/api/src/index.js` lines 668-698: rebuild marker logic with `.running` rename
-- `containers/tftp/entrypoint.sh` line 4: blocks on `.linbofs-patch-status` with busy-wait
-- `scripts/server/update-linbofs.sh` line 542: writes `.linbofs-patch-status` only on success
-- If rebuild fails: `.running` exists, `.linbofs-patch-status` does not exist, TFTP waits forever
-
-**Prevention:**
-- Add a timeout to TFTP's marker wait: after 10 minutes, start serving whatever exists (with a log warning)
-- Add a rebuild timeout in the API: if update-linbofs.sh runs longer than 5 minutes, kill and reset marker
-- Write `.linbofs-patch-status` with status "FAILED" on error, not just on success -- TFTP should serve files even if rebuild partially failed (better to boot with old keys than not boot at all)
-- Add a `make repair-rebuild` target for manual recovery
-
-**Detection:** After a Docker restart or OOM event, TFTP never starts. `docker logs linbo-tftp` shows "Waiting for linbofs64 rebuild...".
-
-**Phase:** Error handling phase. This is a reliability improvement, not a feature.
-
----
-
-### Pitfall 10: Two Docker Compose Files With Divergent Service Definitions
-
-**What goes wrong:** The project has two `docker-compose.yml` files: root (`docker-compose.yml`) and deploy (`deploy/docker-compose.yml`). They define different services, different volume names, different healthchecks, and different environment variables. The deploy version does not include the init container, uses unpinned image tags, has different SSH port (22 vs 2222), and uses different volume names (`linbo_data` vs `linbo_srv_data`). Users or scripts that reference the wrong compose file get a completely different system.
-
-**Why it happens:** The deploy compose file was likely an early version that was not maintained as the main compose file evolved. It serves a different purpose (standalone deployment without LMN) but shares the same project name.
-
-**Evidence from codebase:**
-- `docker-compose.yml` (root): 7 services, init container, health checks, kernel volumes, SYNC vars
-- `deploy/docker-compose.yml`: 6 services, no init, no kernel provisioning, uses `version: '3.8'` (deprecated), different volume naming
-- Deploy compose has `SSH_PORT: 22` while main has `SSH_PORT=2222`
-- Deploy compose uses `linbo_data` volume name; main uses `linbo_srv_data`
-
-**Prevention:**
-- Either delete `deploy/docker-compose.yml` or mark it clearly as deprecated
-- If both need to exist, document which one to use and when
-- Add validation in the Makefile that prevents accidentally using the wrong compose file
-- The install guide should reference exactly ONE compose file path
-
-**Detection:** User runs `docker compose -f deploy/docker-compose.yml up` and gets a broken system with no init container.
-
-**Phase:** Configuration management phase. Resolve before documentation.
-
----
-
-### Pitfall 11: GITHUB_TOKEN Requirement for Web Container Build
-
-**What goes wrong:** The web container's Dockerfile pulls `@edulution-io/ui-kit` from GitHub Packages, which requires a `GITHUB_TOKEN`. This token must be set in `.env` BEFORE the first `docker compose up -d --build`. If missing, the build fails with a `401 Unauthorized` error during `npm ci`. The error is buried in build output, not in container logs.
-
-**Why it happens:** The private npm package is an internal dependency of the edulution project. External users forking the repo will not have access to this package. The token requirement is documented only in TROUBLESHOOTING.md issue #20, not in the install guide.
-
-**Evidence from codebase:**
-- `containers/web/Dockerfile` passes `GITHUB_TOKEN` as build arg
-- `.env` has `GITHUB_TOKEN=ghp_...` (an actual token committed to the repo -- security issue)
-- `.env.example` does NOT include GITHUB_TOKEN
-- TROUBLESHOOTING.md issue #20 documents this as a recurring problem
+**Evidence from docs/hooks.md:** "Hook-Fehler erzeugen WARNING, brechen Build nicht ab" — this is correct behavior but creates an observability gap.
 
 **Consequences:**
-- Fresh installs fail at web container build with no clear message
-- External contributors cannot build without requesting a token
-- The committed token in `.env` is a security risk (it may be revoked at any time)
+- A hook that patches init.sh for the serverid fix fails silently after an LMN update (init.sh changed)
+- The Plymouth theme hook silently skips if `/root/linbo-docker/plymouth/linbo-splash` doesn't exist
+- Build status marker reports `build|OK` even though hooks failed
 
 **Prevention:**
-- Add GITHUB_TOKEN to `.env.example` with instructions on how to obtain one
-- Consider making `@edulution-io/ui-kit` a public package, or vendoring it
-- Add a pre-build check in the web Dockerfile that prints a clear error if GITHUB_TOKEN is missing
-- Remove the committed token from `.env` (rotate it, as it is now in git history)
+- Distinguish between "advisory" hooks (failure = warning, build continues) and "critical" hooks (failure = build fails)
+- Add a `HOOK_REQUIRED=true` header convention that hooks can use to declare themselves critical
+- Write hook warnings to the `.linbofs-patch-status` file so the API and UI can surface them: `build|OK|warnings:hook_01_failed`
+- For init.sh patches specifically: implement explicit idempotency verification (see Pitfall 3 prevention)
 
-**Detection:** `docker compose up -d` succeeds for all services except web, which shows "build failed".
+**Detection:** `cat /srv/linbo/.linbofs-patch-status` shows `build|OK` but hook warnings appeared in container logs that no one monitors.
 
-**Phase:** Configuration management phase. Must be resolved before documentation.
+**Phase:** Hook governance phase — define the criticality model before adding any new hooks.
+
+---
+
+### Pitfall 7: The Size-Check Threshold Is Not Sensitive Enough for Regression Detection
+
+**What goes wrong:** update-linbofs.sh validates that the new linbofs64 is at least 10MB. This catches catastrophic failures (empty cpio, failed compression) but not regressions. A linbofs64 that is missing kernel modules might be 45MB instead of 55MB — still well above 10MB, still passes the check. The double-XZ bug from Session 33 produced a 172MB linbofs64, which also passed the check.
+
+**Evidence:** Session 33 found the double-XZ bug only because 172MB was visually suspicious. The 10MB minimum would never catch this or the inverse case (missing large module set).
+
+**Consequences:**
+- A modules.tar.xz that fails to extract silently produces a linbofs64 with no modules
+- Clients boot to kernel but cannot load NIC drivers, enter Remote Control Mode
+- The build log says "OK", the size check passes, MD5 is written
+
+**Prevention:**
+- Add a size sanity range check: not just minimum but also maximum (e.g., warn if > 80MB, fail if > 200MB)
+- Add a content check: after rebuild, verify that `lib/modules` contains at least one `.ko` file if kernel variant injection was expected
+- Compare size against previous build: warn if the new size differs from the previous by more than 20%
+- Log the size breakdown: cpio entries count, estimated module size, estimated firmware size
+
+**Detection:** `ls -lh /srv/linbo/linbofs64` shows a size that doesn't match expected range. Also: `xzcat linbofs64 | cpio -t 2>/dev/null | grep '^lib/modules.*\.ko' | wc -l` should be > 0.
+
+**Phase:** Update regression testing phase — improve verification before adding transparency features.
+
+---
+
+### Pitfall 8: Atomic Symlink Swap Does Not Prevent a Race Window During Kernel Update
+
+**What goes wrong:** The linbo-update flow uses an atomic symlink swap for kernel variant sets: `current.new -> mv -> current`. This prevents a half-written kernel set from being used. But between the symlink swap (Step 3b, Phase 3b in the upgrade flow) and the linbofs64 rebuild (Phase 4), there is a window where linbo64 (the kernel binary) has been updated but linbofs64 still contains the old kernel's modules. If a client boots during this window, it gets kernel 6.18.5 with modules compiled for 6.18.4 — a module version mismatch that causes kernel panics.
+
+**Why it happens:** The upgrade flow in `linbo-upgrade-flow.md` sequences these as separate phases with separate error handling. Phase 3b failure does not prevent Phase 4 from running, but Phase 4 failure could leave Phase 3b's kernel update deployed with old modules.
+
+**Consequences:**
+- During a linbo7 update (which typically takes 30-90 seconds), any PXE boot that happens during Phase 3b-to-Phase 4 transition gets a mismatched kernel/modules combination
+- School environments with scheduled mass-reboots (8am class start) could have many clients simultaneously hit this window
+
+**Prevention:**
+- Treat the kernel binary copy (Step 15 in update-linbofs.sh) and the linbofs64 rebuild as an atomic unit: do not update linbo64 in LINBO_DIR until AFTER linbofs64.new is successfully built
+- The current update-linbofs.sh already does this correctly (linbo64 is copied at Step 15, after linbofs64 is built and verified), but this property must be explicitly documented and protected against future refactoring
+- Add a correlation check: the kernel version embedded in linbofs64 (`lib/modules/` directory name) must match the version of linbo64 (`strings linbo64 | grep 'Linux version'`)
+
+**Detection:** Client kernel panic on boot with `module: <name>: kernel taint flags: E` or version mismatch errors in dmesg. Only occurs during the update window.
+
+**Phase:** Update regression testing — document this as an invariant to preserve.
+
+---
+
+### Pitfall 9: LMN APT Repo Down Makes Docker Unable to Build linbofs64 on Fresh Install
+
+**What goes wrong:** Docker's init container downloads the linbo7 .deb from `deb.linuxmuster.net`. If this repo is unreachable (school network, DNS failure, repo maintenance), the init container fails, all dependent containers wait, and the system never starts. There is a cached .deb mechanism (v1.1 improvement), but on a true fresh install with no prior cache, no linbofs64.xz template exists. update-linbofs.sh has a fallback: it uses the existing linbofs64 if no template is found. But on a fresh install there is no existing linbofs64 either.
+
+**Evidence from update-linbofs.sh (Step 6):**
+```
+if [ -f "$LINBOFS_TEMPLATE" ]; then
+    echo "Extracting linbofs template (linbofs64.xz)..."
+else
+    echo "WARNING: linbofs64.xz template not found, using current linbofs64"
+    xzcat "$LINBOFS" | ...
+fi
+```
+And Step 1 prerequisite check: `if [ ! -f "$LINBOFS" ]; then echo "ERROR: $LINBOFS not found!" ; exit 1; fi`
+
+**Consequence:** On a fresh install where `deb.linuxmuster.net` is unreachable, the entire system fails with a cryptic init container error. The linbofs64 prerequisite check exits immediately with no recovery path.
+
+**Prevention:**
+- Ship a minimal fallback linbofs64 in the Docker image itself (could be a very old version, just enough to boot to Remote Control Mode so an admin can diagnose)
+- Or document clearly: "first install requires internet access to deb.linuxmuster.net" — and add this to the setup.sh prerequisites check
+- Add the APT repo connectivity check to `make doctor` alongside the 24 existing checks
+
+**Detection:** `docker logs linbo-init` shows download failure. All other containers in "waiting" state. `make doctor` should flag this before startup.
+
+**Phase:** Documentation (fresh install prerequisites) and possibly bootstrap resilience phase.
+
+---
+
+### Pitfall 10: Overwriting linbofs64 During Active Client Downloads
+
+**What goes wrong:** update-linbofs.sh uses a temporary file (`$LINBOFS.new`) then atomically renames it to `$LINBOFS`. However, the Web container (Nginx) serves linbofs64 via HTTP. If a client begins downloading linbofs64 just before the rename, it downloads from a file descriptor that is now the old inode. A new client starting immediately after the rename downloads the new file. Both are correct. But if the Nginx worker caches the file or keeps the file open across requests (unlikely with Nginx, which re-opens files per request), a client could get a half-written file.
+
+The actual risk is different: the `linbofs64` path in the Docker volume is accessed by both the rebuild script (via container exec) AND the Nginx container (via volume mount). The atomic rename ensures that after Step 13, the file is complete. But during the rename, inode creation is atomic at the filesystem level only if both the source and destination are on the same filesystem (same volume). Docker volumes guarantee this.
+
+**Why this matters for transparency:** When adding diff/monitoring tooling that reads linbofs64, any tool that opens the file for analysis during a rebuild could read a partial state if it holds the file descriptor open across the rename boundary.
+
+**Prevention:**
+- Monitoring/diff tools should always read `linbofs64.md5` first, then open `linbofs64` — if the MD5 does not match after opening, retry
+- Document that the rebuild process is safe for active HTTP downloads (atomic rename) but NOT for long-running analysis processes
+
+**Detection:** MD5 verification failure on a downloaded linbofs64. `cat linbofs64.md5` vs `md5sum linbofs64` mismatch during an active rebuild.
+
+**Phase:** Minor — awareness item for transparency tooling phase.
 
 ---
 
 ## Minor Pitfalls
 
-### Pitfall 12: rsyncd.secrets Default Credentials
+---
 
-**What goes wrong:** `config/rsyncd.secrets` ships with default credentials `linbo:Muster!`. If the user does not change them, rsync provides read/write access to `/srv/linbo` (boot files, images) with known credentials.
+### Pitfall 11: depmod Inside Container May Disagree With depmod Results on Bare Metal
 
-**Prevention:** Already addressed in v1.0 PROD-05 (rsyncd.secrets.example). Verify this is actually implemented. Add a startup check that warns if rsyncd.secrets contains "Muster!".
+**What goes wrong:** update-linbofs.sh runs `depmod -a -b . "$MOD_KVER"` inside the Docker container (which runs a different Ubuntu kernel than the LINBO modules). depmod is version-independent in practice for generating dependency maps, but if the container's depmod binary is very old compared to the kernel modules, it may generate incomplete or incorrect `modules.dep.bin` files.
 
-**Detection:** Security audit flags default credentials.
+**Prevention:**
+- Verify that `depmod -V` output in the API container is close to the kernel module version
+- Check that `lib/modules/$KVERS/modules.dep` exists and is non-empty after the rebuild
 
-**Phase:** Configuration management phase (verification).
+**Detection:** LINBO client fails to load a module even though it exists in linbofs64. `dmesg | grep 'unknown symbol'` shows dependency resolution failures.
+
+**Phase:** Awareness item for module injection phase.
 
 ---
 
-### Pitfall 13: PostgreSQL Volume Password Mismatch After Recreate
+### Pitfall 12: Hook Path Hardcodes `/root/linbo-docker/` — Not Portable for Other Operators
 
-**What goes wrong:** PostgreSQL stores the password in its data volume on first initialization. If the user changes `POSTGRES_PASSWORD` in `.env` and recreates the container (but not the volume), authentication fails because the stored password does not match.
-
-**Evidence from codebase:** TROUBLESHOOTING.md issue #5 documents this exact scenario.
+**What goes wrong:** The example Plymouth hook in `docs/hooks.md` hardcodes `THEME_SRC="/root/linbo-docker/plymouth/linbo-splash"`. This path is specific to the edulution internal deployment. An external operator deploying the Docker image as documented will have a different checkout path.
 
 **Prevention:**
-- Document this in the admin guide with both solutions (volume delete vs ALTER USER)
-- Add a healthcheck validation that catches "authentication failed" errors specifically
-- Consider using a startup script that checks password match
+- Hooks should derive paths from exported variables (`LINBO_DIR`, `CONFIG_DIR`) rather than hardcoding `/root/linbo-docker/`
+- Or: store hook-required assets in `$CONFIG_DIR` (which is Docker-volume-mounted and thus survives container rebuilds)
+- Update the hook example in docs/hooks.md to use `$CONFIG_DIR` as the source
 
-**Detection:** API logs show "Authentication failed against database server".
+**Detection:** Hook runs on external operator's server and silently skips (because `[ -d "$THEME_SRC" ] || exit 0` exits gracefully).
 
-**Phase:** Documentation phase.
+**Phase:** Documentation phase — fix example before v1.2 ships.
 
 ---
 
-### Pitfall 14: Nginx Reverse Proxy Assumes API Container Hostname
+### Pitfall 13: Update Regression Test Must Test a Real Boot, Not Just the Build
 
-**What goes wrong:** The web container's Nginx config proxies `/api/*` and `/ws` to the API container using its Docker hostname (`linbo-api`). If the API container is renamed, uses a different network, or the web container starts before the API is reachable via DNS, requests fail with 502 Bad Gateway.
-
-**Prevention:**
-- Ensure the `depends_on: api: condition: service_healthy` dependency is maintained
-- Document that container names are significant and should not be changed
-- Add a healthcheck in the web container that verifies API reachability
-
-**Detection:** Frontend loads but shows "Network Error" for all API calls.
-
-**Phase:** Documentation phase (admin guide, "do not rename containers").
-
----
-
-### Pitfall 15: Missing Firmware Volume Mount on Fresh Install
-
-**What goes wrong:** The API container mounts `/lib/firmware:/lib/firmware:ro` from the Docker host. On a minimal VM or cloud instance, the host may not have `/lib/firmware` at all, or it may contain firmware for irrelevant hardware. If a user configures firmware injection in linbofs64, the update-linbofs.sh script fails with "WARN: not found" for every firmware entry.
+**What goes wrong:** After an LMN linbo7 update, it is tempting to verify "does update-linbofs.sh complete successfully?" and call it done. But the actual regressions (wrong module set — Session 32, wrong DHCP serverid — described in Session 32, wrong injection path — Pitfall 4) are all invisible until a client actually boots. A passing build does not guarantee a booting client.
 
 **Prevention:**
-- Document that firmware injection requires the Docker host to have the relevant firmware packages installed
-- Add a check in update-linbofs.sh that logs a clear warning if `/lib/firmware` is empty or missing
-- Consider shipping a minimal firmware bundle in the init container for common Intel NICs
+- The update regression test must include: (1) run update-linbofs.sh, (2) boot a real PXE client (physical or KVM VM), (3) verify rsync completes from the correct Docker server, (4) verify SSH access from server to client
+- Automated checks that can be scripted without a real boot: verify module list matches LMN reference, verify injection paths exist, verify linbofs64 size range
+- A boot test on real hardware cannot be automated but must be part of the operator runbook for any linbo7 update
 
-**Detection:** update-linbofs.sh logs many "WARN: not found" messages; LINBO clients boot but NIC firmware fails.
+**Detection:** The only reliable detection is: "client boots correctly and can be SSH'd by the server."
 
-**Phase:** Bootstrap flow phase (firmware handling) and documentation phase.
+**Phase:** Update regression testing — define the test runbook before implementing anything else.
 
 ---
 
@@ -387,40 +307,41 @@ Mistakes that cause rewrites, broken deployments, or stranded users.
 
 | Phase Topic | Likely Pitfall | Mitigation |
 |-------------|---------------|------------|
-| Bootstrap flow | Init container fails on proxied networks | Add HTTP_PROXY/HTTPS_PROXY support, document proxy setup |
-| Bootstrap flow | Partial boot files after interrupted init | Add idempotent checkpoints and file verification |
-| Bootstrap flow | TFTP blocks forever after failed rebuild | Add timeout to TFTP marker wait, write FAILED status |
-| Configuration mgmt | .env.example does not match docker-compose.yml | Single source of truth, automated drift detection |
-| Configuration mgmt | LINBO_SERVER_IP wrong, PXE boot fails | Startup validation against local interfaces |
-| Configuration mgmt | Two compose files confuse users | Delete or clearly mark the deploy/docker-compose.yml |
-| Configuration mgmt | GITHUB_TOKEN not documented | Add to .env.example, consider making ui-kit public |
-| Error handling | Over-strict validation blocks dev mode | Follow existing validateSecrets() pattern: fatal=prod, warn=dev |
-| Error handling | Silent permission failures | Startup write-permission checks on shared volumes |
-| Error handling | Rebuild marker state machine stuck | Timeouts, FAILED status markers, manual recovery command |
-| Documentation | Install guide assumes developer environment | Test on fresh VM, include prerequisites check |
-| Documentation | restart vs up -d confusion | Prominent callout, make reconfigure target |
-| Documentation | Two compose files, undocumented which to use | Single reference in install guide |
+| Diff documentation | Misclassifying intentional differences as bugs | Three-column format: LMN behavior / Docker behavior / Justification |
+| Diff documentation | Incomplete list if LMN original is not read directly | Always diff against the LMN .deb script, not memory or old notes |
+| Module selection analysis | Concluding modules are equivalent because version matches | Compare name lists, not just counts — same count, different modules (Session 32) |
+| init.sh serverid fix | Hook-based patch breaking silently after LMN update | Use idempotency verification; document LMN version patch was designed for |
+| init.sh serverid fix | Choosing text-based patch over GRUB cmdline approach | Evaluate GRUB cmdline approach first — it avoids vanilla file modification entirely |
+| linbofs64 format docs | Missing the concatenated XZ segment for device nodes | Document and verify both XZ segments in the transparency report |
+| Hook governance | Hook failures not surfaced to API/UI | Extend `.linbofs-patch-status` to include hook warning summary |
+| Update regression | Only testing build success, not client boot | Define and follow the boot test runbook for every linbo7 update |
+| Update regression | Race window between kernel binary update and module injection | Document Step 15 (linbo64 copy happens AFTER linbofs64 is verified) as a protected invariant |
+| Size verification | 10MB threshold catching catastrophic failure but not regressions | Add size range check and module count verification |
 
 ---
 
 ## Sources
 
 ### Project-Internal (HIGH confidence)
-- Codebase analysis: `docker-compose.yml`, `deploy/docker-compose.yml`, `.env`, `.env.example`, `containers/init/entrypoint.sh`, `scripts/server/update-linbofs.sh`, `containers/api/src/index.js`
-- `.planning/codebase/CONCERNS.md` -- security and fragility analysis
-- `.planning/codebase/INTEGRATIONS.md` -- external service dependencies
-- `.planning/codebase/ARCHITECTURE.md` -- container architecture
-- `docs/TROUBLESHOOTING.md` -- 25 documented operational incidents
 
-### External (MEDIUM confidence)
-- [Docker Compose environment variable best practices](https://docs.docker.com/compose/how-tos/environment-variables/best-practices/) -- official Docker guidance on .env management
-- [Docker Compose in production](https://docs.docker.com/compose/how-tos/production/) -- official production deployment guidance
-- [Common Docker Compose mistakes](https://moldstud.com/articles/p-avoid-these-common-docker-compose-pitfalls-tips-and-best-practices) -- community patterns for compose pitfalls
-- [PXE boot with Docker containers](https://jpetazzo.github.io/2013/12/07/pxe-netboot-docker/) -- foundational reference for Docker PXE challenges
-- [DHCP/PXE Docker setup](https://betelgeuse.work/dhcp-pxe-server/) -- network boot Docker patterns
-- [Docker compose restart does not reload env](https://docs.docker.com/compose/how-tos/environment-variables/set-environment-variables/) -- official documentation on env var lifecycle
-- [Docker remove obsolete version keys](https://adamj.eu/tech/2025/05/05/docker-remove-obsolete-compose-version/) -- deploy/docker-compose.yml uses deprecated `version` key
+- `scripts/server/update-linbofs.sh` — current Docker implementation, full source read
+- `docs/linbo-upgrade-flow.md` — complete upgrade flow with risk table
+- `docs/debug/linbo/08-kernel-schutz.md` — kernel variant architecture, historical host-kernel removal
+- `docs/debug/linbo/09-kernel-version-bug.md` — kernel version mismatch incident (Session 19), atomic deployment lesson
+- `docs/hooks.md` — hook system specification and LMN compatibility table
+- `.planning/PROJECT.md` — v1.2 milestone definition, constraints
+- `.planning/codebase/CONCERNS.md` — fragile areas analysis including marker state machine and volume permissions
+- `.planning/research/PITFALLS.md` (prior version, 2026-03-08) — v1.1 pitfalls, several still relevant (marker state machine, Docker volume paths)
+- MEMORY.md Session 32 entry — module selection divergence root cause
+- MEMORY.md Session 33 entry — DEVNODES_CPIO bug and double-XZ template bug
+- MEMORY.md constraints — "LINBO-Kern: Vanilla — keine Änderungen an init.sh, linbo.sh"
+
+### Derived (HIGH confidence — inferred from verified incidents)
+
+- Module selection divergence is non-deterministic at same version: derived from Session 32 findings (identical version string, identical count, different boot behavior, fixed by swapping template source)
+- CPIO concatenation format fragility: derived from Session 33 DEVNODES_CPIO bug fix and the resulting two-segment XZ format
+- Injection path staleness risk: derived from the general principle that LMN can change paths in any .deb release combined with the known injection path list
 
 ---
 
-*Pitfalls analysis: 2026-03-08*
+*Pitfalls analysis: 2026-03-10*
