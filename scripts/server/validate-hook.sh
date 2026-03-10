@@ -126,7 +126,7 @@ if [ "${1:-}" = "--all" ]; then
     HOOK_FILES=""
     for dir in "$PRE_DIR" "$POST_DIR"; do
         if [ -d "$dir" ]; then
-            found=$(find "$dir" -type f 2>/dev/null | sort)
+            found=$(find "$dir" -maxdepth 1 -type f -not -name '.*' 2>/dev/null | sort)
             if [ -n "$found" ]; then
                 HOOK_FILES="${HOOK_FILES}${HOOK_FILES:+ }${found}"
             fi

@@ -114,7 +114,7 @@ if [ "$ADDED_COUNT" -gt 0 ]; then
         if [ "$ADDED_MODULES" -le 20 ]; then
             grep -E '\.(ko|ko\.xz)$' "$TMPDIR/added.list" | sed 's/^/    /'
         else
-            grep -E '\.(ko|ko\.xz)$' "$TMPDIR/added.list" | head -10 | sed 's/^/    /'
+            { grep -E '\.(ko|ko\.xz)$' "$TMPDIR/added.list" || true; } | head -10 | sed 's/^/    /'
             echo "    ... and $((ADDED_MODULES - 10)) more"
         fi
         echo ""
@@ -126,7 +126,7 @@ if [ "$ADDED_COUNT" -gt 0 ]; then
         if [ "$ADDED_FIRMWARE" -le 20 ]; then
             grep '^lib/firmware/' "$TMPDIR/added.list" | sed 's/^/    /'
         else
-            grep '^lib/firmware/' "$TMPDIR/added.list" | head -10 | sed 's/^/    /'
+            { grep '^lib/firmware/' "$TMPDIR/added.list" || true; } | head -10 | sed 's/^/    /'
             echo "    ... and $((ADDED_FIRMWARE - 10)) more"
         fi
         echo ""

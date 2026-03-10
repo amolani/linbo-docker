@@ -162,6 +162,7 @@ services:
     volumes:
       - linbo_srv_data:/srv/linbo
       - linbo_config:/etc/linuxmuster/linbo
+      - ./config/hooks:/etc/linuxmuster/linbo/hooks
       - linbo_log:/var/log/linuxmuster/linbo
       - linbo_kernel_data:/var/lib/linuxmuster/linbo
       - linbo_driver_data:/var/lib/linbo/drivers

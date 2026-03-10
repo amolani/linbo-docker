@@ -652,13 +652,24 @@ async function startServer() {
   for (const { path: p, desc } of criticalPaths) {
     if (!sanityFs.existsSync(p)) {
       try {
-        sanityFs.mkdirSync(p, { recursive: true });
+        sanityFs.mkdirSync(p, { recursive: true, mode: 0o755 });
         console.log(`  ${desc}: ${p} (created)`);
       } catch (mkErr) {
         console.warn(`  ⚠ WARNING: ${desc} missing and could not create: ${p} — ${mkErr.message}`);
       }
     } else {
-      console.log(`  ${desc}: ${p} ✓`);
+      // Ensure directories are traversable (fix 644 → 755)
+      try {
+        const st = sanityFs.statSync(p);
+        if (st.isDirectory() && (st.mode & 0o111) === 0) {
+          sanityFs.chmodSync(p, 0o755);
+          console.log(`  ${desc}: ${p} (fixed permissions → 755)`);
+        } else {
+          console.log(`  ${desc}: ${p} ✓`);
+        }
+      } catch {
+        console.log(`  ${desc}: ${p} ✓`);
+      }
     }
   }
 

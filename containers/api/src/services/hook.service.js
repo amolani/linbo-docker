@@ -49,9 +49,13 @@ async function getHooks() {
     files.sort();
 
     for (const name of files) {
+      // Skip dotfiles and non-hook entries
+      if (name.startsWith('.')) continue;
       const fullPath = path.join(dirPath, name);
       try {
         const stat = await fs.stat(fullPath);
+        // Only list regular files (not directories)
+        if (!stat.isFile()) continue;
         hooks.push({
           name,
           type,
