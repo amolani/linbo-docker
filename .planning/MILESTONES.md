@@ -1,5 +1,31 @@
 # Project Milestones: LINBO Docker
 
+## v1.2 linbofs Boot-Pipeline Transparency (Shipped: 2026-03-10)
+
+**Delivered:** Full transparency and control over the linbofs64 build pipeline — admins can see exactly what Docker changes, hooks are observable via API, and package updates either pass integrity checks or fail loudly.
+
+**Phases completed:** 13-15 (6 plans total)
+
+**Key accomplishments:**
+- LMN original update-linbofs.sh pinned as reference; `make linbofs-audit` and `make linbofs-diff` for linbofs64 introspection
+- 16-row divergence catalog (docs/UNTERSCHIEDE-ZU-LINBO.md) documenting every Docker vs LMN difference with justification
+- Build manifest JSON + `GET /system/hooks` API for hook observability; validate-hook.sh and new-hook.sh for hook lifecycle
+- Build log retention (last 3 builds) and hook warning summary in .linbofs-patch-status
+- Pre-injection path validation, size guards (80MB warn/200MB reject), and post-rebuild CPIO verification in update-linbofs.sh
+- Module-diff script, APT repo check in doctor.sh, and 12 new tests (partial failure, concurrent 409, version edge cases)
+
+**Stats:**
+- 18 requirements, all complete
+- 38 files created/modified, +6,300 / -204 lines
+- 3 phases, 6 plans, 27 commits
+- 1 day (2026-03-10)
+
+**Git range:** `feat(13-01)` → `test(15-02)`
+
+**What's next:** v2.0 — Security hardening (token revocation, execFile, API-key optimization), missing features (multicast, torrent, image versioning)
+
+---
+
 ## v1.1 Fresh Install & Production Readiness (Shipped: 2026-03-10)
 
 **Delivered:** A competent sysadmin can go from `git clone` to a working LINBO Docker deployment on a fresh VM — with reliable bootstrap, clear configuration, production-grade observability, and complete documentation.

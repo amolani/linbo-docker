@@ -69,11 +69,32 @@ LINBO als eigenständige, Docker-basierte Lösung mit modernem Web-Interface bet
 - ✓ **DOC-02**: Architektur-Übersicht für Admins — v1.1 Phase 12
 - ✓ **DOC-03**: Netzwerk-Diagramm mit Ports und Firewall-Regeln — v1.1 Phase 12
 
+### Validated (v1.2 linbofs Boot-Pipeline Transparency)
+
+- ✓ **DIFF-01**: LMN-Original update-linbofs als Referenz gepinnt — v1.2 Phase 13
+- ✓ **DIFF-02**: `make linbofs-audit` zeigt linbofs64-Inhalt — v1.2 Phase 13
+- ✓ **DIFF-03**: `make linbofs-diff` vergleicht Template vs. Built — v1.2 Phase 13
+- ✓ **DIFF-04**: Divergenz-Katalog (16 Zeilen, 3 Spalten) — v1.2 Phase 13
+- ✓ **DIFF-05**: CPIO-Concat-Format in Header dokumentiert — v1.2 Phase 13
+- ✓ **HOOK-01**: Build-Manifest JSON nach jedem Rebuild — v1.2 Phase 14
+- ✓ **HOOK-02**: Build-Log Retention (letzte 3 Builds) — v1.2 Phase 14
+- ✓ **HOOK-03**: GET /system/hooks API-Endpoint — v1.2 Phase 14
+- ✓ **HOOK-04**: validate-hook.sh (5 Checks) — v1.2 Phase 14
+- ✓ **HOOK-05**: Hook-Scaffold-Generator (make new-hook) — v1.2 Phase 14
+- ✓ **HOOK-06**: Patch-Status Hook-Warning-Summary — v1.2 Phase 14
+- ✓ **UPD-01**: Test-Coverage für Partial-Failure, Concurrent 409, Version-Edges — v1.2 Phase 15
+- ✓ **UPD-02**: Pre-Injection Path Check — v1.2 Phase 15
+- ✓ **UPD-03**: Size-Guards (80MB warn, 200MB reject) + Modul-Count — v1.2 Phase 15
+- ✓ **UPD-04**: Post-Rebuild CPIO-Verifikation — v1.2 Phase 15
+- ✓ **UPD-05**: Module-Diff Script — v1.2 Phase 15
+- ✓ **UPD-06**: Boot-Test-Runbook — v1.2 Phase 15
+- ✓ **UPD-07**: APT-Repo-Check in doctor.sh — v1.2 Phase 15
+
 ### Active
 
 <!-- Current scope. Building toward these. -->
 
-(Defined in REQUIREMENTS.md for v1.2)
+(No active milestone — run `/gsd:new-milestone` to start next)
 
 ### Out of Scope
 
@@ -86,23 +107,21 @@ LINBO als eigenständige, Docker-basierte Lösung mit modernem Web-Interface bet
 - Sophomorix/LDAP — Nicht geplant, LMN-seitig
 - LINBO-Kern modifizieren — Prinzip: nur Hooks, nie init.sh/linbo.sh ändern
 
-## Current Milestone: v1.2 linbofs Boot-Pipeline Transparency
+## Current State
 
-**Goal:** Volle Transparenz und Kontrolle über die linbofs64-Build-Pipeline — genau wissen was Docker vs. Vanilla-LMN ändert, sicherstellen dass Updates sauber durchlaufen, und Hooks nachvollziehbar machen.
+**Shipped:** v1.2 linbofs Boot-Pipeline Transparency (2026-03-10)
+**Next milestone:** Not yet planned — run `/gsd:new-milestone` to start
 
-**Target features:**
-- Systematischer Diff: Docker update-linbofs.sh vs. LMN-Original mit Begründungen
-- Update-Sicherheit: linbo7-Paket-Updates laufen sauber durch ohne Regressionen
-- Hook-Kontrolle: Hooks dokumentiert, nachvollziehbar, update-sicher
-- init.sh DHCP-serverid-Patch als Hook (falls sauber machbar)
+All three milestones (v1.0 Hardening, v1.1 Fresh Install, v1.2 Pipeline Transparency) shipped. The system is production-ready with full boot pipeline observability.
 
 ## Context
 
 - **Codebase:** 33+ Sessions, ~9.3k LOC JS/TS, ~6k LOC Shell, 7 Docker-Container, 23 API-Services, 14 React-Pages
 - **Produktion:** Läuft auf Testserver 10.0.0.13, verifiziert auf echter Hardware (Lenovo L16, Intel Core Ultra 5)
 - **Upstream:** linuxmuster-linbo7 4.3.31-0, LMN 7.3
-- **Shipped:** v1.0 Hardening (2026-03-08), v1.1 Fresh Install (2026-03-10)
+- **Shipped:** v1.0 Hardening (2026-03-08), v1.1 Fresh Install (2026-03-10), v1.2 Pipeline Transparency (2026-03-10)
 - **Boot-Erkenntnis:** Vanilla LINBO funktioniert ohne Patches — alle 9 ursprünglichen Boot-Patches waren unnötig (Session 30)
+- **Pipeline-Erkenntnis:** linbofs64 Build-Pipeline jetzt vollständig gehärtet — Pfad-Validierung, Size-Guards, CPIO-Verifikation, Hook-Manifest, APT-Check
 - **Codebase Map:** `.planning/codebase/` mit 7 Dokumenten (Stack, Architecture, Structure, Conventions, Testing, Integrations, Concerns)
 
 ## Constraints
@@ -128,6 +147,11 @@ LINBO als eigenständige, Docker-basierte Lösung mit modernem Web-Interface bet
 | .env.example konsolidiert (33 Zeilen) | Nur user-facing Variablen, weniger Verwirrung | ✓ Good |
 | doctor.sh statt integrierte Health-UI | CLI-Tool reicht für Admin-Diagnose, kein UI-Overhead | ✓ Good |
 | INSTALL.md + ADMIN-GUIDE.md getrennt | Install-Guide = Schritt-für-Schritt, Admin-Guide = Referenz | ✓ Good |
+| LMN-Original als Referenz pinnen | Drift-Detection per simple diff möglich | ✓ Good |
+| printf-JSON statt jq in Shell | jq nicht im Container, printf reicht für Build-Manifest | ✓ Good |
+| Hook-API read-only ohne requireRole | Konsistent mit linbofs-status, nur Lesezugriff | ✓ Good |
+| Size-Guards 80MB/200MB | Kalibriert an ~55MB Produktion, fängt Bloat früh ab | ✓ Good |
+| init.sh SERVERID Patch deferred | Ansatz (Hook vs GRUB cmdline) noch nicht entschieden | — Pending |
 
 ---
-*Last updated: 2026-03-10 after v1.2 milestone start*
+*Last updated: 2026-03-10 after v1.2 milestone completion*
