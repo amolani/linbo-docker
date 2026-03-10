@@ -103,6 +103,12 @@ done
 # Scripts are executed in sorted order. Key variables (LINBO_DIR, CONFIG_DIR,
 # KTYPE, KVERS, WORKDIR) are exported so hooks can use them.
 
+# Hook observability counters (accumulated across pre + post hooks)
+HOOK_RESULTS=""
+HOOK_WARNINGS=0
+HOOK_COUNT=0
+HOOK_WARNING_DETAIL=""
+
 exec_hooks() {
     case "$1" in
         pre|post) ;;
@@ -113,11 +119,56 @@ exec_hooks() {
     local hook_files
     hook_files=$(find "$hookdir" -type f -executable 2>/dev/null | sort)
     [ -z "$hook_files" ] && return 0
-    local file
+    local file hookname exit_code files_before files_after files_delta
     for file in $hook_files; do
-        echo "Executing $1 hook: $(basename "$file")"
-        "$file" || echo "  WARNING: hook $(basename "$file") exited with $?"
+        hookname=$(basename "$file")
+        echo "Executing $1 hook: $hookname"
+
+        # Count files before hook
+        files_before=$(find . -type f 2>/dev/null | wc -l)
+
+        # Run hook, capture exit code (safe under set -e)
+        "$file" && exit_code=0 || exit_code=$?
+
+        # Count files after hook
+        files_after=$(find . -type f 2>/dev/null | wc -l)
+        files_delta=$((files_after - files_before))
+
+        if [ "$exit_code" -ne 0 ]; then
+            echo "  WARNING: hook $hookname exited with $exit_code"
+            HOOK_WARNINGS=$((HOOK_WARNINGS + 1))
+            HOOK_WARNING_DETAIL="${HOOK_WARNING_DETAIL}${hookname}(exit=${exit_code}) "
+        fi
+
+        # Accumulate JSON entries (comma-separated)
+        if [ -n "$HOOK_RESULTS" ]; then
+            HOOK_RESULTS="${HOOK_RESULTS},"
+        fi
+        HOOK_RESULTS="${HOOK_RESULTS}{\"name\":\"${hookname}\",\"type\":\"$1\",\"exitCode\":${exit_code},\"filesDelta\":${files_delta}}"
+
+        HOOK_COUNT=$((HOOK_COUNT + 1))
     done
+}
+
+write_build_manifest() {
+    local manifest_tmp manifest_path build_ts kvers_val
+    manifest_path="${LINBO_DIR}/.linbofs-build-manifest.json"
+    manifest_tmp="${manifest_path}.tmp"
+    build_ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    kvers_val="${KVERS:-unknown}"
+
+    printf '{\n' > "$manifest_tmp"
+    printf '  "buildTimestamp": "%s",\n' "$build_ts" >> "$manifest_tmp"
+    printf '  "kernelVariant": "%s",\n' "$KTYPE" >> "$manifest_tmp"
+    printf '  "kernelVersion": "%s",\n' "$kvers_val" >> "$manifest_tmp"
+    printf '  "hookCount": %d,\n' "$HOOK_COUNT" >> "$manifest_tmp"
+    printf '  "hookWarnings": %d,\n' "$HOOK_WARNINGS" >> "$manifest_tmp"
+    printf '  "hooks": [%s]\n' "$HOOK_RESULTS" >> "$manifest_tmp"
+    printf '}\n' >> "$manifest_tmp"
+
+    mv "$manifest_tmp" "$manifest_path"
+    chmod 644 "$manifest_path"
+    echo "Build manifest: $manifest_path"
 }
 
 # =============================================================================
@@ -566,6 +617,13 @@ echo "  - MD5: $(cat ${LINBOFS}.md5)"
 {
     echo "# Build Status — $(date -u +%Y-%m-%dT%H:%M:%SZ)"
     echo "build|OK"
+    if [ "$HOOK_COUNT" -eq 0 ]; then
+        echo "hooks|none"
+    elif [ "$HOOK_WARNINGS" -eq 0 ]; then
+        echo "hooks|${HOOK_COUNT} run, 0 warnings"
+    else
+        echo "hooks|${HOOK_COUNT} run, ${HOOK_WARNINGS} warnings: ${HOOK_WARNING_DETAIL}"
+    fi
 } > "${LINBO_DIR}/.linbofs-patch-status"
 chmod 644 "${LINBO_DIR}/.linbofs-patch-status"
 
@@ -579,7 +637,8 @@ if [ -d "$DOCKER_VOLUME" ] && [ "$LINBO_DIR" != "$DOCKER_VOLUME" ]; then
     cp "$LINBOFS" "$DOCKER_VOLUME/linbofs64"
     cp "${LINBOFS}.md5" "$DOCKER_VOLUME/linbofs64.md5"
     cp "${LINBO_DIR}/.linbofs-patch-status" "$DOCKER_VOLUME/.linbofs-patch-status" 2>/dev/null || true
-    chown 1001:1001 "$DOCKER_VOLUME/linbofs64" "$DOCKER_VOLUME/linbofs64.md5" 2>/dev/null || true
+    cp "${LINBO_DIR}/.linbofs-build-manifest.json" "$DOCKER_VOLUME/.linbofs-build-manifest.json" 2>/dev/null || true
+    chown 1001:1001 "$DOCKER_VOLUME/linbofs64" "$DOCKER_VOLUME/linbofs64.md5" "$DOCKER_VOLUME/.linbofs-build-manifest.json" 2>/dev/null || true
     echo "  - Copied to $DOCKER_VOLUME/linbofs64"
 elif [ "$LINBO_DIR" = "$DOCKER_VOLUME" ]; then
     echo "LINBO_DIR is Docker volume, no sync needed."
@@ -602,6 +661,12 @@ fi
 # =============================================================================
 
 exec_hooks post
+
+# =============================================================================
+# Step 15.7: Write build manifest
+# =============================================================================
+
+write_build_manifest
 
 # =============================================================================
 # Summary
