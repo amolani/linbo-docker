@@ -71,8 +71,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 14-01-PLAN.md — Shell-side: manifest recording in exec_hooks(), validate-hook.sh, new-hook.sh, Makefile targets, patch-status extension
-- [ ] 14-02-PLAN.md — API-side: hook.service.js, GET /system/hooks route, build log retention in linbofs.service.js
+- [x] 14-01-PLAN.md — Shell-side: manifest recording in exec_hooks(), validate-hook.sh, new-hook.sh, Makefile targets, patch-status extension
+- [x] 14-02-PLAN.md — API-side: hook.service.js, GET /system/hooks route, build log retention in linbofs.service.js
 
 ### Phase 15: Update Regression Hardening
 **Goal**: A linbo7 package update either completes with verified integrity or fails loudly before clients attempt to boot a broken linbofs64
@@ -84,11 +84,11 @@ Plans:
   3. A linbofs64 build that exceeds 200MB is rejected; one exceeding 80MB produces a warning; a build with zero kernel modules (`.ko` files) is rejected
   4. After every rebuild, both XZ segments of the concatenated linbofs64 are verified as valid cpio archives and `dev/console` is confirmed present — failure aborts with a clear message
   5. `make doctor` includes an APT repo connectivity check that reports whether `deb.linuxmuster.net` is reachable
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 15-01: TBD
-- [ ] 15-02: TBD
+- [ ] 15-01-PLAN.md — Shell-side: pre-injection path validation, size/module guards, CPIO verification, module-diff script, doctor.sh APT check, boot-test runbook
+- [ ] 15-02-PLAN.md — Test-side: expand linbo-update.service.test.js with partial failure, concurrent 409, and version edge case tests
 
 ## Progress
 
@@ -110,5 +110,5 @@ Phases execute in numeric order: 13 -> 14 -> 15
 | 11. Production Hardening & Observability | v1.1 | 1/1 | Complete | 2026-03-08 |
 | 12. Admin Documentation | v1.1 | 2/2 | Complete | 2026-03-10 |
 | 13. Pipeline Diff Documentation | v1.2 | 2/2 | Complete | 2026-03-10 |
-| 14. Hook Observability | 2/2 | Complete    | 2026-03-10 | - |
-| 15. Update Regression Hardening | v1.2 | 0/? | Not started | - |
+| 14. Hook Observability | v1.2 | 2/2 | Complete | 2026-03-10 |
+| 15. Update Regression Hardening | v1.2 | 0/2 | Not started | - |
