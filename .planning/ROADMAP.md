@@ -38,7 +38,7 @@
 
 - [x] **Phase 13: Pipeline Diff Documentation** - Catalogue every Docker divergence from upstream LMN and build audit/diff tooling (completed 2026-03-10)
 - [x] **Phase 14: Hook Observability** - Make the hook system visible, auditable, and safely extensible via manifest, API, and validation (completed 2026-03-10)
-- [ ] **Phase 15: Update Regression Hardening** - Automated verification layer that catches silent regressions after linbo7 package updates
+- [x] **Phase 15: Update Regression Hardening** - Automated verification layer that catches silent regressions after linbo7 package updates (completed 2026-03-10)
 
 ## Phase Details
 
@@ -111,4 +111,4 @@ Phases execute in numeric order: 13 -> 14 -> 15
 | 12. Admin Documentation | v1.1 | 2/2 | Complete | 2026-03-10 |
 | 13. Pipeline Diff Documentation | v1.2 | 2/2 | Complete | 2026-03-10 |
 | 14. Hook Observability | v1.2 | 2/2 | Complete | 2026-03-10 |
-| 15. Update Regression Hardening | v1.2 | 0/2 | Not started | - |
+| 15. Update Regression Hardening | 2/2 | Complete   | 2026-03-10 | - |

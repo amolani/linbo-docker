@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: linbofs Boot-Pipeline Transparency
 status: completed
-stopped_at: Completed 14-02-PLAN.md
-last_updated: "2026-03-10T12:45:21.818Z"
-last_activity: 2026-03-10 — Completed 14-02 (hook observability API layer)
+stopped_at: Completed 15-02-PLAN.md
+last_updated: "2026-03-10T13:25:55.790Z"
+last_activity: 2026-03-10 — Completed 15-01 (shell-side update regression hardening)
 progress:
   total_phases: 3
-  completed_phases: 2
-  total_plans: 4
-  completed_plans: 4
-  percent: 67
+  completed_phases: 3
+  total_plans: 6
+  completed_plans: 6
+  percent: 83
 ---
 
 # Project State
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-10)
 
 **Core value:** LINBO als eigenstaendige Docker-Loesung mit modernem Web-Interface, ohne den LINBO-Kern zu veraendern
-**Current focus:** Phase 14 complete, Phase 15 next
+**Current focus:** Phase 15 in progress (Update Regression Hardening)
 
 ## Current Position
 
-Phase: 14 of 15 (Hook Observability) -- COMPLETE
-Plan: 2 of 2 complete
-Status: Phase 14 complete, Phase 15 pending
-Last activity: 2026-03-10 — Completed 14-02 (hook observability API layer)
+Phase: 15 of 15 (Update Regression Hardening) -- IN PROGRESS
+Plan: 1 of 2 complete
+Status: 15-01 complete, 15-02 pending
+Last activity: 2026-03-10 — Completed 15-01 (shell-side update regression hardening)
 
-Progress: [██████░░░░] 67%
+Progress: [████████░░] 83%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4 (v1.2)
+- Total plans completed: 5 (v1.2)
 - Average duration: 4min
-- Total execution time: 17min
+- Total execution time: 20min
 
 **By Phase:**
 
@@ -45,7 +45,8 @@ Progress: [██████░░░░] 67%
 |-------|-------|-------|----------|
 | 13. Pipeline Diff Documentation | 2/2 | 9min | 5min |
 | 14. Hook Observability | 2/2 | 8min | 4min |
-| 15. Update Regression Hardening | 0/? | — | — |
+| 15. Update Regression Hardening | 1/2 | 3min | 3min |
+| Phase 15 P02 | 3min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -60,6 +61,8 @@ Decisions logged in PROJECT.md Key Decisions table.
 - 13-02: Removed phantom "Modifizierte Vanilla-Dateien" ToC entry that had no body section
 - 14-01: printf-based JSON manifest generation (no jq in container), atomic write via tmp+mv, hook warning detail tracking
 - 14-02: No requireRole on GET /hooks (read-only, consistent with linbofs-status), build log rotation before rebuild, getPatchStatus() backward-compatible hook field extension
+- 15-01: Pre-injection checks validate bin/ and etc/ only (not lib/usr), size thresholds 80MB warn / 200MB reject, module-diff runs inside Docker container with optional reference path
+- [Phase 15]: Partial failure tested via mock verification + proven download-failure pattern; concurrent 409 tested via Redis lock pre-seeding; version edge cases with dpkg try/catch
 
 ### Pending Todos
 
@@ -67,11 +70,11 @@ None.
 
 ### Blockers/Concerns
 
-- Module diff (UPD-05) needs LMN-generated linbofs64 as comparison target (available on 10.0.0.11)
-- Size thresholds (UPD-03: 80MB warn, 200MB fail) need calibration against historical build sizes
+- Module diff (UPD-05) implemented; admin needs to copy LMN linbofs64 to /srv/linbo/linbofs64.lmn-reference for comparison
+- Size thresholds (UPD-03) implemented: 80MB warn, 200MB fail -- calibrated against ~55MB production size
 
 ## Session Continuity
 
-Last session: 2026-03-10T12:37:52Z
-Stopped at: Completed 14-02-PLAN.md
-Resume file: Phase 15 planning needed
+Last session: 2026-03-10T13:25:55.781Z
+Stopped at: Completed 15-02-PLAN.md
+Resume file: None

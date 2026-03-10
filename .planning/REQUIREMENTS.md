@@ -26,7 +26,7 @@ Requirements for linbofs Boot-Pipeline Transparency. Each maps to roadmap phases
 
 ### Update-Hardening
 
-- [ ] **UPD-01**: `linbo-update.service.test.js` erweitert (Partial-Failure, Concurrent Update 409, Version-Edge-Cases)
+- [x] **UPD-01**: `linbo-update.service.test.js` erweitert (Partial-Failure, Concurrent Update 409, Version-Edge-Cases)
 - [ ] **UPD-02**: Pre-Injection Path Check in update-linbofs.sh (Zielverzeichnisse existieren im extrahierten linbofs)
 - [ ] **UPD-03**: Size-Range-Check (warn >80MB, fail >200MB) + Modul-Count-Verifikation (`.ko` > 0)
 - [ ] **UPD-04**: Post-Rebuild CPIO-Verifikation (beide XZ-Segmente valide, `dev/console` vorhanden)
@@ -78,7 +78,7 @@ Requirements for linbofs Boot-Pipeline Transparency. Each maps to roadmap phases
 | HOOK-04 | Phase 14 | Complete |
 | HOOK-05 | Phase 14 | Complete |
 | HOOK-06 | Phase 14 | Complete |
-| UPD-01 | Phase 15 | Pending |
+| UPD-01 | Phase 15 | Complete |
 | UPD-02 | Phase 15 | Pending |
 | UPD-03 | Phase 15 | Pending |
 | UPD-04 | Phase 15 | Pending |
