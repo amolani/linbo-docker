@@ -113,8 +113,11 @@ app.get('/health', async (req, res) => {
     },
   };
 
-  // Check database connection (optional in DB-free mode)
-  if (prisma) {
+  // Check database connection (skip in sync mode — no DB needed)
+  const isSyncMode = process.env.SYNC_ENABLED === 'true';
+  if (isSyncMode) {
+    health.services.database = 'disabled (sync mode)';
+  } else if (prisma) {
     try {
       await prisma.$queryRaw`SELECT 1`;
       health.services.database = 'up';
@@ -164,8 +167,8 @@ app.get('/ready', async (req, res) => {
       throw new Error('Redis not ready');
     }
 
-    // Check DB if available (optional in DB-free mode)
-    if (prisma) {
+    // Check DB if available (skip in sync mode — no DB needed)
+    if (prisma && process.env.SYNC_ENABLED !== 'true') {
       await prisma.$queryRaw`SELECT 1`;
     }
 
