@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Fresh Install & Production Readiness
-status: executing
-stopped_at: Completed 12-02-PLAN.md
-last_updated: "2026-03-10T08:33:35.888Z"
-last_activity: 2026-03-10 -- Completed Phase 12 Plan 02 (Admin Guide)
+status: completed
+stopped_at: Completed 12-01-PLAN.md (Phase 12 complete, all phases complete)
+last_updated: "2026-03-10T08:34:21.837Z"
+last_activity: 2026-03-10 -- Completed Phase 12 Plan 01 (Install Guide & README Update)
 progress:
   total_phases: 12
   completed_phases: 12
   total_plans: 19
   completed_plans: 19
-  percent: 95
+  percent: 100
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-08)
 
 **Core value:** LINBO als eigenstaendige Docker-Loesung mit modernem Web-Interface, ohne den LINBO-Kern zu veraendern
-**Current focus:** Phase 12 Admin Documentation in progress
+**Current focus:** All phases complete (v1.1 milestone)
 
 ## Current Position
 
-Phase: 12 of 12 (Admin Documentation)
-Plan: 2 of 2 (12-02 complete, 12-01 pending)
-Status: In progress
-Last activity: 2026-03-10 -- Completed Phase 12 Plan 02 (Admin Guide)
+Phase: 12 of 12 (Admin Documentation) -- COMPLETE
+Plan: 2 of 2 complete
+Status: All phases complete
+Last activity: 2026-03-10 -- Completed Phase 12 Plan 01 (Install Guide & README Update)
 
-Progress: [██████████] 95%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -50,6 +50,7 @@ Progress: [██████████] 95%
 *Updated after each plan completion*
 | Phase 11 P01 | 3min | 2 tasks | 4 files |
 | Phase 12 P02 | 3min | 1 task | 1 file |
+| Phase 12 P01 | 4min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -68,6 +69,7 @@ Recent decisions affecting current work:
 - 11-01: Created wait-ready.sh (150 lines) health gate and doctor.sh (215 lines, 24 checks, 6 categories) diagnostics
 - 11-01: Added deploy.resources.limits to all 8 docker-compose services (64M-512M memory, 0.5-2.0 CPUs)
 - 12-02: Created docs/ADMIN-GUIDE.md (516 lines) with container architecture, Mermaid network diagram, firewall rules, DHCP config, design rationale, operations guide
+- [Phase 12]: 12-01: Created docs/INSTALL.md (498 lines) complete install guide from prerequisites to PXE boot, updated README.md with correct DHCP filenames and INSTALL.md links
 
 ### Pending Todos
 
@@ -79,6 +81,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-10T08:33:35.879Z
-Stopped at: Completed 12-02-PLAN.md
+Last session: 2026-03-10T08:34:21.827Z
+Stopped at: Completed 12-01-PLAN.md (Phase 12 complete, all phases complete)
 Resume file: None
