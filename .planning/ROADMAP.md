@@ -52,11 +52,11 @@
   3. `docs/UNTERSCHIEDE-ZU-LINBO.md` contains every intentional divergence in a three-column table (LMN behavior / Docker behavior / justification) that a new maintainer can consult before modifying update-linbofs.sh
   4. The LMN original script is pinned in the repo at `scripts/server/update-linbofs-lmn-original.sh` so future drift can be detected with a simple diff
   5. The concatenated CPIO+XZ format is documented in update-linbofs.sh header comments so no one accidentally breaks the two-segment structure
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 13-01: TBD
-- [ ] 13-02: TBD
+- [ ] 13-01-PLAN.md — Pin LMN original, create linbofs-audit.sh and linbofs-diff.sh, add Makefile targets
+- [ ] 13-02-PLAN.md — Document CPIO+XZ format in update-linbofs.sh header, add 3-column divergence table to UNTERSCHIEDE-ZU-LINBO.md
 
 ### Phase 14: Hook Observability
 **Goal**: Every hook execution is recorded, inspectable via API, and new hooks can be validated and scaffolded safely before installation
@@ -109,6 +109,6 @@ Phases execute in numeric order: 13 -> 14 -> 15
 | 10. Configuration & Install Script | v1.1 | 1/1 | Complete | 2026-03-08 |
 | 11. Production Hardening & Observability | v1.1 | 1/1 | Complete | 2026-03-08 |
 | 12. Admin Documentation | v1.1 | 2/2 | Complete | 2026-03-10 |
-| 13. Pipeline Diff Documentation | v1.2 | 0/? | Not started | - |
+| 13. Pipeline Diff Documentation | v1.2 | 0/2 | Not started | - |
 | 14. Hook Observability | v1.2 | 0/? | Not started | - |
 | 15. Update Regression Hardening | v1.2 | 0/? | Not started | - |
