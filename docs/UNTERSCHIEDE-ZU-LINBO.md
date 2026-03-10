@@ -9,7 +9,7 @@ Dieses Dokument beschreibt alle Abweichungen und Erweiterungen, die LINBO Docker
 ## Inhaltsverzeichnis
 
 1. [Uebersicht](#1-uebersicht)
-- [Was ist LINBO?](#was-ist-linbo)
+   - [Was ist LINBO?](#was-ist-linbo)
 2. [Docker-exklusive Features](#2-docker-exklusive-features)
    - [2.1 Patchclass — Automatische Windows-Treiber-Installation](#21-patchclass--automatische-windows-treiber-installation)
    - [2.2 Firmware Auto-Detection](#22-firmware-auto-detection)
@@ -22,8 +22,7 @@ Dieses Dokument beschreibt alle Abweichungen und Erweiterungen, die LINBO Docker
    - [3.1 Auto-Key-Provisioning](#31-auto-key-provisioning)
    - [3.2 TFTP Race Condition Fix](#32-tftp-race-condition-fix)
 4. [Boot-Kompatibilitaet](#4-boot-kompatibilitaet)
-5. [Zusammenfassung](#5-zusammenfassung)
-5. [Modifizierte Vanilla-Dateien](#5-modifizierte-vanilla-dateien)
+5. [Build-Pipeline: Strukturelle Unterschiede](#5-build-pipeline-strukturelle-unterschiede-update-linbofssh)
 6. [Zusammenfassung](#6-zusammenfassung)
 
 ---
@@ -581,7 +580,34 @@ Die Nutzung des Host-Kernels statt des Paket-Kernels ist **kein** Docker-spezifi
 
 ---
 
-## 5. Zusammenfassung
+## 5. Build-Pipeline: Strukturelle Unterschiede (update-linbofs.sh)
+
+Die folgende Tabelle zeigt alle strukturellen Unterschiede zwischen dem originalen LMN `update-linbofs` Script (Paket `linuxmuster-cachingserver-linbo7` v4.3.31) und der Docker-Variante (`scripts/server/update-linbofs.sh`). Das LMN-Original ist als Referenz gepinnt unter `scripts/server/update-linbofs-lmn-original.sh`.
+
+> **Hinweis:** Diese Tabelle betrifft nur den Build-Prozess (update-linbofs.sh), nicht die Docker-exklusiven Features (Patchclass, Firmware-Scan, Web-UI etc.), die in den obigen Abschnitten beschrieben sind.
+
+| # | Bereich | LMN Original | Docker | Begruendung |
+|---|---------|-------------|--------|-------------|
+| 1 | Abhaengigkeiten | `source helperfunctions.sh` (braucht vollen LMN-Stack) | Eigenstaendiger Config-Block | Docker hat kein linuxmuster-base7-Paket |
+| 2 | Lock-Mechanismus | Datei-basiert (`/tmp/.update-linbofs.lock`, touch+rm) | flock-basiert (fd 8, `CONFIG_DIR/.rebuild.lock`) | Race-Condition-sicher fuer shared Docker Volumes |
+| 3 | Firmware-Provisioning | Download von kernel.org + Parsen von LINBO-Client-Logs | Config-Datei-basiert mit Pfad-Traversal-Schutz, zst-Dekompression, Symlink-Checks | Kein Client-Log-Zugriff in Docker; Security-gehaertet |
+| 4 | Locale-Injection | `copy_locale()` -- volle Locale-Unterstuetzung mit chroot locale-gen | Nicht injiziert | Docker-Clients brauchen keine Locale im linbofs |
+| 5 | CPIO-Format | Ein XZ-Segment: `find . \| cpio \| xz` | Zwei XZ-Segmente: Hauptinhalt + Device-Nodes | Non-Root-Build (uid 1001) kann kein mknod |
+| 6 | CPIO-Ownership | Laeuft als root, kein --owner-Flag noetig | `--owner 0:0` Flag | Garantiert Root-Ownership trotz Non-Root-Build |
+| 7 | GUI-Themes | Paket-Themes, kein Injektionsmechanismus | Theme-Injection aus `$LINBO_DIR/gui-themes/` | Docker unterstuetzt Custom-Branding |
+| 8 | Custom linbo_gui | Kein Custom-Binary-Support | Optionaler Binary-Override aus `$CONFIG_DIR/linbo_gui` | Docker unterstuetzt Custom-GUI-Builds |
+| 9 | Build-Status-Marker | Kein Marker | `.linbofs-patch-status` nach erfolgreichem Build | TFTP-Container wartet auf diesen Marker |
+| 10 | Docker-Volume-Sync | Nicht anwendbar | Kopiert zu Docker-Volume-Mountpoint falls abweichend von LINBO_DIR | Stellt sicher, dass TFTP aktualisierte Dateien ausliefert |
+| 11 | efipxe devicenames | Kopiert `efipxe` nach `usr/share/linbo` | Nicht kopiert | Docker nutzt GRUB HTTP Boot, efipxe nicht noetig |
+| 12 | Custom inittab | Unterstuetzt Anfuegen von `$LINBOSYSDIR/inittab` | Nicht unterstuetzt | Docker-linbofs nutzt Standard-inittab |
+| 13 | ISO-Erstellung | Ruft `make-linbo-iso.sh` nach Build auf | Keine ISO-Erstellung | Docker liefert via TFTP/HTTP, kein ISO noetig |
+| 14 | Backup vor Rebuild | Kein Backup | Erstellt `linbofs64.bak` vor Rebuild | Rollback-Faehigkeit fuer Docker-Deployments |
+| 15 | Groessenverifikation | Keine Groessenpruefung | Minimum 10MB-Check auf neue Datei | Verhindert Deploy von korruptem/leerem linbofs64 |
+| 16 | Hook-Ausfuehrung | Unsortiertes find, keine exportierten Vars, Fehler koennen Build stoppen | Sortierte Ausfuehrung, exportierte Vars, Fehler warnen aber stoppen nicht | Verbesserte Zuverlaessigkeit und Hook-Developer-Experience |
+
+---
+
+## 6. Zusammenfassung
 
 ### Docker-exklusive Features sind Mehrwert
 
@@ -593,5 +619,5 @@ LINBO Docker modifiziert **keine einzige Vanilla-Datei** im linbofs64-Archiv. Da
 
 ---
 
-*Letzte Aktualisierung: 2026-03-05*
+*Letzte Aktualisierung: 2026-03-10*
 *LINBO Docker Version: Aktueller Stand auf `main` Branch*
