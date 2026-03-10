@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: linbofs Boot-Pipeline Transparency
 status: executing
-stopped_at: Completed 13-02-PLAN.md
-last_updated: "2026-03-10T11:42:00Z"
-last_activity: 2026-03-10 — Completed 13-02 (format + divergence documentation)
+stopped_at: Completed 13-01-PLAN.md and 13-02-PLAN.md
+last_updated: "2026-03-10T11:45:00Z"
+last_activity: 2026-03-10 — Completed 13-01 (linbofs audit/diff tooling) and 13-02 (format + divergence documentation)
 progress:
   total_phases: 3
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
-  percent: 17
+  completed_plans: 2
+  percent: 33
 ---
 
 # Project State
@@ -27,23 +27,23 @@ See: .planning/PROJECT.md (updated 2026-03-10)
 
 Phase: 13 of 15 (Pipeline Diff Documentation)
 Plan: 2 of 2 complete
-Status: Executing phase 13
-Last activity: 2026-03-10 — Completed 13-02 (format + divergence documentation)
+Status: Phase 13 complete
+Last activity: 2026-03-10 — Completed both 13-01 and 13-02
 
-Progress: [█░░░░░░░░░] 17%
+Progress: [███░░░░░░░] 33%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1 (v1.2)
-- Average duration: 3min
-- Total execution time: 3min
+- Total plans completed: 2 (v1.2)
+- Average duration: 5min
+- Total execution time: 9min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 13. Pipeline Diff Documentation | 1/2 | 3min | 3min |
+| 13. Pipeline Diff Documentation | 2/2 | 9min | 5min |
 | 14. Hook Observability | 0/? | — | — |
 | 15. Update Regression Hardening | 0/? | — | — |
 
@@ -55,6 +55,7 @@ Decisions logged in PROJECT.md Key Decisions table.
 
 - v1.2 scope: 18 requirements across 3 categories (DIFF/HOOK/UPD), init.sh SERVERID patch deferred
 - Phase ordering: Documentation first (13), then observability (14), then hardening (15) — each phase builds on prior deliverables
+- 13-01: BusyBox-compatible shell patterns established: { grep || true; } | wc -l for pipefail-safe counting, awk fallback for numfmt, sed instead of grep -P
 - 13-02: CPIO format docs placed as pure header comments (no behavioral change), acceptable per CLAUDE.md rules
 - 13-02: Removed phantom "Modifizierte Vanilla-Dateien" ToC entry that had no body section
 
@@ -69,6 +70,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-10T11:42:00Z
-Stopped at: Completed 13-02-PLAN.md
-Resume file: .planning/phases/13-pipeline-diff-documentation/13-02-SUMMARY.md
+Last session: 2026-03-10T11:45:00Z
+Stopped at: Completed Phase 13 (both plans)
+Resume file: .planning/phases/13-pipeline-diff-documentation/13-01-SUMMARY.md

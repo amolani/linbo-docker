@@ -36,7 +36,7 @@
 
 **Milestone Goal:** Full transparency and control over the linbofs64 build pipeline — know exactly what Docker changes vs vanilla LMN, ensure package updates pass cleanly, and make hooks observable and auditable.
 
-- [ ] **Phase 13: Pipeline Diff Documentation** - Catalogue every Docker divergence from upstream LMN and build audit/diff tooling
+- [x] **Phase 13: Pipeline Diff Documentation** - Catalogue every Docker divergence from upstream LMN and build audit/diff tooling (completed 2026-03-10)
 - [ ] **Phase 14: Hook Observability** - Make the hook system visible, auditable, and safely extensible via manifest, API, and validation
 - [ ] **Phase 15: Update Regression Hardening** - Automated verification layer that catches silent regressions after linbo7 package updates
 
@@ -109,6 +109,6 @@ Phases execute in numeric order: 13 -> 14 -> 15
 | 10. Configuration & Install Script | v1.1 | 1/1 | Complete | 2026-03-08 |
 | 11. Production Hardening & Observability | v1.1 | 1/1 | Complete | 2026-03-08 |
 | 12. Admin Documentation | v1.1 | 2/2 | Complete | 2026-03-10 |
-| 13. Pipeline Diff Documentation | 1/2 | In Progress|  | - |
+| 13. Pipeline Diff Documentation | 2/2 | Complete   | 2026-03-10 | - |
 | 14. Hook Observability | v1.2 | 0/? | Not started | - |
 | 15. Update Regression Hardening | v1.2 | 0/? | Not started | - |

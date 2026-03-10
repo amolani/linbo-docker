@@ -9,9 +9,9 @@ Requirements for linbofs Boot-Pipeline Transparency. Each maps to roadmap phases
 
 ### Pipeline-Transparenz
 
-- [ ] **DIFF-01**: LMN-Original `update-linbofs` als Referenzdatei im Repo gepinnt (`scripts/server/update-linbofs-lmn-original.sh`)
-- [ ] **DIFF-02**: `make linbofs-audit` zeigt linbofs64-Inhalt (Kernel-Version, Modul-Anzahl, SSH-Key-Fingerprints, Firmware, Hook-modifizierte Dateien)
-- [ ] **DIFF-03**: `make linbofs-diff` vergleicht Template-linbofs64.xz mit gebautem linbofs64 (was hat Docker geaendert?)
+- [x] **DIFF-01**: LMN-Original `update-linbofs` als Referenzdatei im Repo gepinnt (`scripts/server/update-linbofs-lmn-original.sh`)
+- [x] **DIFF-02**: `make linbofs-audit` zeigt linbofs64-Inhalt (Kernel-Version, Modul-Anzahl, SSH-Key-Fingerprints, Firmware, Hook-modifizierte Dateien)
+- [x] **DIFF-03**: `make linbofs-diff` vergleicht Template-linbofs64.xz mit gebautem linbofs64 (was hat Docker geaendert?)
 - [x] **DIFF-04**: Divergenz-Katalog in `docs/UNTERSCHIEDE-ZU-LINBO.md` (3-Spalten: LMN / Docker / Begruendung)
 - [x] **DIFF-05**: CPIO-Concat-Format dokumentiert in update-linbofs.sh Header-Kommentaren
 
@@ -67,9 +67,9 @@ Requirements for linbofs Boot-Pipeline Transparency. Each maps to roadmap phases
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DIFF-01 | Phase 13 | Pending |
-| DIFF-02 | Phase 13 | Pending |
-| DIFF-03 | Phase 13 | Pending |
+| DIFF-01 | Phase 13 | Complete |
+| DIFF-02 | Phase 13 | Complete |
+| DIFF-03 | Phase 13 | Complete |
 | DIFF-04 | Phase 13 | Complete |
 | DIFF-05 | Phase 13 | Complete |
 | HOOK-01 | Phase 14 | Pending |
