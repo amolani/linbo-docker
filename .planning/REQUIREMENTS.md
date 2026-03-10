@@ -27,12 +27,12 @@ Requirements for linbofs Boot-Pipeline Transparency. Each maps to roadmap phases
 ### Update-Hardening
 
 - [x] **UPD-01**: `linbo-update.service.test.js` erweitert (Partial-Failure, Concurrent Update 409, Version-Edge-Cases)
-- [ ] **UPD-02**: Pre-Injection Path Check in update-linbofs.sh (Zielverzeichnisse existieren im extrahierten linbofs)
-- [ ] **UPD-03**: Size-Range-Check (warn >80MB, fail >200MB) + Modul-Count-Verifikation (`.ko` > 0)
-- [ ] **UPD-04**: Post-Rebuild CPIO-Verifikation (beide XZ-Segmente valide, `dev/console` vorhanden)
-- [ ] **UPD-05**: Module-Diff Script (Docker vs LMN linbofs64 Modul-Liste vergleichen)
-- [ ] **UPD-06**: Boot-Test-Runbook in `docs/linbo-upgrade-flow.md`
-- [ ] **UPD-07**: `make doctor` um APT-Repo-Connectivity-Check erweitern
+- [x] **UPD-02**: Pre-Injection Path Check in update-linbofs.sh (Zielverzeichnisse existieren im extrahierten linbofs)
+- [x] **UPD-03**: Size-Range-Check (warn >80MB, fail >200MB) + Modul-Count-Verifikation (`.ko` > 0)
+- [x] **UPD-04**: Post-Rebuild CPIO-Verifikation (beide XZ-Segmente valide, `dev/console` vorhanden)
+- [x] **UPD-05**: Module-Diff Script (Docker vs LMN linbofs64 Modul-Liste vergleichen)
+- [x] **UPD-06**: Boot-Test-Runbook in `docs/linbo-upgrade-flow.md`
+- [x] **UPD-07**: `make doctor` um APT-Repo-Connectivity-Check erweitern
 
 ## Future Requirements
 
@@ -79,12 +79,12 @@ Requirements for linbofs Boot-Pipeline Transparency. Each maps to roadmap phases
 | HOOK-05 | Phase 14 | Complete |
 | HOOK-06 | Phase 14 | Complete |
 | UPD-01 | Phase 15 | Complete |
-| UPD-02 | Phase 15 | Pending |
-| UPD-03 | Phase 15 | Pending |
-| UPD-04 | Phase 15 | Pending |
-| UPD-05 | Phase 15 | Pending |
-| UPD-06 | Phase 15 | Pending |
-| UPD-07 | Phase 15 | Pending |
+| UPD-02 | Phase 15 | Complete |
+| UPD-03 | Phase 15 | Complete |
+| UPD-04 | Phase 15 | Complete |
+| UPD-05 | Phase 15 | Complete |
+| UPD-06 | Phase 15 | Complete |
+| UPD-07 | Phase 15 | Complete |
 
 **Coverage:**
 - v1.2 requirements: 18 total

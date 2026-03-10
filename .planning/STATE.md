@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: linbofs Boot-Pipeline Transparency
 status: completed
-stopped_at: Completed 15-02-PLAN.md
-last_updated: "2026-03-10T13:25:55.790Z"
+stopped_at: Completed 15-01-PLAN.md
+last_updated: "2026-03-10T13:26:46.045Z"
 last_activity: 2026-03-10 — Completed 15-01 (shell-side update regression hardening)
 progress:
   total_phases: 3
-  completed_phases: 3
+  completed_phases: 2
   total_plans: 6
-  completed_plans: 6
+  completed_plans: 5
   percent: 83
 ---
 
@@ -46,7 +46,6 @@ Progress: [████████░░] 83%
 | 13. Pipeline Diff Documentation | 2/2 | 9min | 5min |
 | 14. Hook Observability | 2/2 | 8min | 4min |
 | 15. Update Regression Hardening | 1/2 | 3min | 3min |
-| Phase 15 P02 | 3min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -75,6 +74,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-10T13:25:55.781Z
-Stopped at: Completed 15-02-PLAN.md
+Last session: 2026-03-10T13:26:46.036Z
+Stopped at: Completed 15-01-PLAN.md
 Resume file: None
