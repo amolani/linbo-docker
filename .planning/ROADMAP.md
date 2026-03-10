@@ -111,4 +111,4 @@ Phases execute in numeric order: 13 -> 14 -> 15
 | 12. Admin Documentation | v1.1 | 2/2 | Complete | 2026-03-10 |
 | 13. Pipeline Diff Documentation | v1.2 | 2/2 | Complete | 2026-03-10 |
 | 14. Hook Observability | v1.2 | 2/2 | Complete | 2026-03-10 |
-| 15. Update Regression Hardening | 1/2 | In Progress|  | - |
+| 15. Update Regression Hardening | 1/2 | Complete    | 2026-03-10 | - |

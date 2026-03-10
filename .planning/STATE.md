@@ -4,13 +4,13 @@ milestone: v1.2
 milestone_name: linbofs Boot-Pipeline Transparency
 status: completed
 stopped_at: Completed 15-01-PLAN.md
-last_updated: "2026-03-10T13:26:46.045Z"
+last_updated: "2026-03-10T13:30:48.330Z"
 last_activity: 2026-03-10 — Completed 15-01 (shell-side update regression hardening)
 progress:
   total_phases: 3
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
   percent: 83
 ---
 
